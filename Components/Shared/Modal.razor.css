@@ -1,0 +1,17 @@
+.modal-icono {
+    display: inline-grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: .6rem;
+    font-size: 1rem;
+}
+
+.modal-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+}
+
+.modal-content {
+    border-radius: .9rem;
+}

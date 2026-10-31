@@ -1,0 +1,348 @@
+@page "/configuracion/correo"
+@attribute [Authorize(Policy = "Tarea:correo")]
+
+@using System.Globalization
+@using CFDIManager.Web.Services.Correo
+@using CFDIParser.Models
+@using CFDIParser.Services
+
+@inject CorreoService Correo
+@inject PostgreSqlRepository Repo
+@inject AccesoEmpresasService Acceso
+
+<PageTitle>Correo</PageTitle>
+
+<div class="config-page d-flex flex-column gap-3 pb-4">
+    <header class="d-flex flex-wrap justify-content-between align-items-end gap-3">
+        <div>
+            <span class="eyebrow">CONFIGURACIÓN</span>
+            <h1 class="h2 mb-1">Correo</h1>
+            <p class="text-body-secondary mb-0">Servidor con el que CFDI Manager envía bienvenidas, contraseñas y reportes.</p>
+        </div>
+
+        <span class="badge rounded-pill fs-6 fw-semibold px-3 py-2 @(Modelo.EstaConfigurado ? "text-bg-success" : "text-bg-secondary")">
+            <i class="bi @(Modelo.EstaConfigurado ? "bi-check-circle" : "bi-pause-circle") me-1"></i>
+            @(Modelo.EstaConfigurado ? "Envío activo" : "Envío desactivado")
+        </span>
+    </header>
+
+    @if (!string.IsNullOrEmpty(Exito))
+    {
+        <div class="alert alert-success alert-dismissible d-flex gap-2 mb-0" role="status">
+            <i class="bi bi-check-circle-fill"></i>
+            <span>@Exito</span>
+            <button type="button" class="btn-close" @onclick="() => Exito = null"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <div class="alert alert-danger alert-dismissible d-flex gap-2 mb-0" role="alert">
+            <i class="bi bi-x-octagon-fill"></i>
+            <span>@Error</span>
+            <button type="button" class="btn-close" @onclick="() => Error = null"></button>
+        </div>
+    }
+
+    <div class="row g-3">
+        <div class="col-xl-7">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-body d-flex align-items-center justify-content-between py-3">
+                    <div>
+                        <span class="eyebrow">SERVIDOR SMTP</span>
+                        <h2 class="h5 mb-0">Datos de conexión</h2>
+                    </div>
+
+                    <div class="form-check form-switch m-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="habilitado" @bind="Modelo.Habilitado" />
+                        <label class="form-check-label small fw-semibold" for="habilitado">Habilitado</label>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <span class="small text-body-secondary align-self-center me-1">Valores comunes:</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick='() => Preestablecer("smtp.office365.com", 587, "STARTTLS")'>Microsoft 365</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick='() => Preestablecer("smtp.gmail.com", 587, "STARTTLS")'>Gmail / Workspace</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick='() => Preestablecer(Modelo.Servidor, 465, "SSL")'>SSL 465</button>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label small fw-semibold" for="servidor">Servidor</label>
+                            <input id="servidor" class="form-control" placeholder="smtp.empresa.com" @bind="Modelo.Servidor" />
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label small fw-semibold" for="puerto">Puerto</label>
+                            <input id="puerto" type="number" class="form-control" @bind="Modelo.Puerto" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold" for="seguridad">Seguridad</label>
+                            <select id="seguridad" class="form-select" @bind="Modelo.Seguridad">
+                                <option value="AUTO">Automática</option>
+                                <option value="STARTTLS">STARTTLS (587)</option>
+                                <option value="SSL">SSL/TLS (465)</option>
+                                <option value="NINGUNA">Sin cifrado</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold" for="usuario-smtp">Usuario</label>
+                            <input id="usuario-smtp" class="form-control" autocomplete="off" placeholder="facturacion@empresa.com" @bind="Modelo.Usuario" />
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label small fw-semibold" for="password-smtp">Contraseña</label>
+                            <div class="input-group">
+                                <input id="password-smtp"
+                                       type="@(VerPassword ? "text" : "password")"
+                                       class="form-control"
+                                       autocomplete="new-password"
+                                       placeholder="@(TienePassword ? "•••••••• (guardada; escribe para cambiarla)" : "Contraseña o contraseña de aplicación")"
+                                       @bind="PasswordNueva" />
+                                <button type="button" class="btn btn-outline-secondary" title="Mostrar" @onclick="() => VerPassword = !VerPassword">
+                                    <i class="bi @(VerPassword ? "bi-eye-slash" : "bi-eye")"></i>
+                                </button>
+                            </div>
+                            <div class="form-text">Se guarda cifrada. En Microsoft 365 y Gmail con verificación en dos pasos usa una contraseña de aplicación.</div>
+                        </div>
+
+                        <div class="col-12"><hr class="my-1" /></div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold" for="remitente">Correo remitente</label>
+                            <input id="remitente" type="email" class="form-control" placeholder="no-responder@empresa.com" @bind="Modelo.RemitenteEmail" />
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold" for="remitente-nombre">Nombre del remitente</label>
+                            <input id="remitente-nombre" class="form-control" @bind="Modelo.RemitenteNombre" />
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label small fw-semibold" for="url">Dirección de la aplicación</label>
+                            <input id="url" class="form-control" placeholder="https://cfdi.empresa.com" @bind="Modelo.UrlAplicacion" />
+                            <div class="form-text">Se usa en el botón "Entrar a CFDI Manager" de los correos de bienvenida.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-footer bg-body d-flex justify-content-end gap-2 py-3">
+                    <button type="button" class="btn btn-primary px-4" @onclick="Guardar" disabled="@Ocupado">
+                        <i class="bi bi-save me-2"></i>Guardar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-5 d-flex flex-column gap-3">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <span class="eyebrow">PRUEBA</span>
+                    <h2 class="h5">Enviar correo de prueba</h2>
+                    <p class="small text-body-secondary">Usa los datos del formulario (aunque no estén guardados) para confirmar que la conexión funciona.</p>
+
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-at"></i></span>
+                        <input class="form-control" placeholder="destinatario@empresa.com" @bind="DestinoPrueba" />
+                        <button type="button" class="btn btn-outline-primary" @onclick="EnviarPrueba" disabled="@Ocupado">
+                            @if (Probando)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-send me-1"></i>
+                            }
+                            Probar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm flex-grow-1">
+                <div class="card-header bg-body d-flex justify-content-between align-items-center py-3">
+                    <div>
+                        <span class="eyebrow">BITÁCORA</span>
+                        <h2 class="h5 mb-0">Últimos envíos</h2>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" title="Actualizar" @onclick="CargarBitacora">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+
+                <div class="list-group list-group-flush bitacora">
+                    @if (Bitacora.Count == 0)
+                    {
+                        <div class="list-group-item text-body-secondary small py-4 text-center">Todavía no se ha enviado ningún correo.</div>
+                    }
+
+                    @foreach (CorreoEnviadoDto c in Bitacora)
+                    {
+                        <div class="list-group-item py-2">
+                            <div class="d-flex justify-content-between gap-2">
+                                <span class="small fw-semibold text-truncate" title="@c.Asunto">
+                                    <i class="bi @(c.Enviado ? "bi-check-circle-fill text-success" : "bi-x-circle-fill text-danger") me-1"></i>
+                                    @c.Asunto
+                                </span>
+                                <span class="badge bg-body-secondary text-body border text-nowrap">@c.Tipo</span>
+                            </div>
+                            <div class="small text-body-secondary text-truncate" title="@c.Destinatarios">
+                                @c.Fecha.ToString("dd MMM HH:mm", Mx) · @c.Destinatarios
+                            </div>
+                            @if (!c.Enviado)
+                            {
+                                <div class="small text-danger text-truncate" title="@c.Error">@c.Error</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private static readonly CultureInfo Mx = new("es-MX");
+
+    private ConfiguracionCorreoDto Modelo = new();
+    private List<CorreoEnviadoDto> Bitacora = new();
+
+    private string PasswordNueva = "";
+    private bool TienePassword;
+    private bool VerPassword;
+    private string DestinoPrueba = "";
+
+    private bool Guardando;
+    private bool Probando;
+    private bool Ocupado => Guardando || Probando;
+
+    private string? Exito;
+    private string? Error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Modelo = Correo.ObtenerConfiguracion();
+            TienePassword = !string.IsNullOrEmpty(Modelo.Password);
+            CargarBitacora();
+
+            var usuario = await Acceso.ObtenerUsuarioActualAsync();
+
+            if (AccesoEmpresasService.ObtenerUsuarioId(usuario) is long id)
+                DestinoPrueba = Repo.ObtenerUsuarioPorId(id)?.Email ?? "";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+    }
+
+    private void CargarBitacora() => Bitacora = Repo.ObtenerCorreosEnviados(15);
+
+    private void Preestablecer(string servidor, int puerto, string seguridad)
+    {
+        Modelo.Servidor = servidor;
+        Modelo.Puerto = puerto;
+        Modelo.Seguridad = seguridad;
+    }
+
+    private void Validar()
+    {
+        if (string.IsNullOrWhiteSpace(Modelo.Servidor))
+            throw new InvalidOperationException("Escribe el servidor SMTP.");
+
+        if (Modelo.Puerto is <= 0 or > 65535)
+            throw new InvalidOperationException("El puerto no es válido.");
+
+        if (!CorreoService.EsCorreoValido(Modelo.RemitenteEmail))
+            throw new InvalidOperationException("Escribe un correo remitente válido.");
+
+        if (!string.IsNullOrWhiteSpace(Modelo.UrlAplicacion) &&
+            !Uri.TryCreate(Modelo.UrlAplicacion.Trim(), UriKind.Absolute, out _))
+            throw new InvalidOperationException("La dirección de la aplicación debe ser completa, p. ej. https://cfdi.empresa.com");
+
+        Modelo.Servidor = Modelo.Servidor.Trim();
+        Modelo.Usuario = Modelo.Usuario.Trim();
+        Modelo.RemitenteEmail = Modelo.RemitenteEmail.Trim();
+        Modelo.UrlAplicacion = Modelo.UrlAplicacion.Trim();
+    }
+
+    private void Guardar()
+    {
+        Exito = Error = null;
+        Guardando = true;
+
+        try
+        {
+            Validar();
+            Correo.GuardarConfiguracion(Modelo, PasswordNueva);
+            TienePassword |= !string.IsNullOrEmpty(PasswordNueva);
+            PasswordNueva = "";
+            Modelo = Correo.ObtenerConfiguracion();
+            Exito = "La configuración de correo se guardó.";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Guardando = false;
+        }
+    }
+
+    private async Task EnviarPrueba()
+    {
+        Exito = Error = null;
+        Probando = true;
+
+        try
+        {
+            Validar();
+
+            if (!CorreoService.EsCorreoValido(DestinoPrueba))
+                throw new InvalidOperationException("Escribe el correo al que se enviará la prueba.");
+
+            // Si no se escribió contraseña nueva se usa la guardada.
+            ConfiguracionCorreoDto prueba = Correo.ObtenerConfiguracion();
+            prueba.Servidor = Modelo.Servidor;
+            prueba.Puerto = Modelo.Puerto;
+            prueba.Seguridad = Modelo.Seguridad;
+            prueba.Usuario = Modelo.Usuario;
+            prueba.RemitenteEmail = Modelo.RemitenteEmail;
+            prueba.RemitenteNombre = Modelo.RemitenteNombre;
+
+            (string html, string texto) = PlantillaCorreo.Construir(new PlantillaCorreo.Contenido
+            {
+                Titulo = "Correo de prueba",
+                Parrafos = ["Si recibiste este mensaje, CFDI Manager ya puede enviar correos con esta configuración."],
+                Datos = [("Servidor", $"{Modelo.Servidor}:{Modelo.Puerto}"), ("Seguridad", Modelo.Seguridad), ("Fecha", DateTime.Now.ToString("dd/MM/yyyy HH:mm"))]
+            });
+
+            await Correo.EnviarAsync(new MensajeCorreo
+            {
+                Tipo = "Prueba",
+                Para = [DestinoPrueba.Trim()],
+                Asunto = "Prueba de correo · CFDI Manager",
+                CuerpoHtml = html,
+                CuerpoTexto = texto,
+                EnviadoPor = (await Acceso.ObtenerUsuarioActualAsync()).Identity?.Name ?? ""
+            }, prueba, PasswordNueva);
+
+            Exito = $"Se envió el correo de prueba a {DestinoPrueba}. Revisa la bandeja de entrada (y la de spam).";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Probando = false;
+            CargarBitacora();
+        }
+    }
+}

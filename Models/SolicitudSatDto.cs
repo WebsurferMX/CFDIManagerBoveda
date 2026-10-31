@@ -33,6 +33,12 @@ public class SolicitudSatDto
     /// <summary>La creó la descarga automática; sus periodos ya no se vuelven a pedir.</summary>
     public bool Automatica { get; set; }
 
+    /// <summary>
+    /// Quién la pidió dentro de la descarga automática: "Ventana" (horarios del día, últimos días) o
+    /// "Cierre" (cierre de mes); vacío para las demás.
+    /// </summary>
+    public string Origen { get; set; } = "";
+
     public string TipoComprobante { get; set; } =
         "";
 
@@ -87,5 +93,6 @@ public class SolicitudSatDto
             : $"{(Recibidos ? "Recibidos" : "Emitidos")} · {(Metadatos ? "Metadatos" : "XML")}" +
               (TipoComprobante != "" ? $" · {TipoComprobante}" : "") +
               (RfcContraparte != "" ? $" · {RfcContraparte}" : "") +
-              (Automatica ? " · Automática" : "");
+              (Automatica ? " · Automática" : "") +
+              (Origen != "" ? $" · {Origen}" : "");
 }

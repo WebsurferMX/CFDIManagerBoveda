@@ -1,4 +1,5 @@
 @page "/exportaciones"
+@attribute [Authorize(Policy = "Tarea:exportaciones")]
 @implements IDisposable
 
 @using Microsoft.JSInterop
@@ -58,16 +59,12 @@
             <div class="filters-grid">
                 <div class="field">
                     <label for="fecha-inicio">Fecha inicial</label>
-                    <InputDate id="fecha-inicio"
-                               class="form-control"
-                               @bind-Value="FechaInicio" />
+                    <FechaInput Id="fecha-inicio" @bind-Valor="FechaInicio" />
                 </div>
 
                 <div class="field">
                     <label for="fecha-fin">Fecha final</label>
-                    <InputDate id="fecha-fin"
-                               class="form-control"
-                               @bind-Value="FechaFin" />
+                    <FechaInput Id="fecha-fin" @bind-Valor="FechaFin" />
                 </div>
 
                 <div class="field">
@@ -219,6 +216,13 @@
                         descargado en el navegador.
                     </p>
                 </div>
+
+                <button type="button"
+                        class="btn btn-primary d-inline-flex align-items-center gap-2 text-nowrap"
+                        @onclick="() => MostrarCorreo = true">
+                    <i class="bi bi-envelope-paper"></i>
+                    Enviar por correo
+                </button>
             </div>
 
             <div class="generated-files">
@@ -248,7 +252,24 @@
     }
 </div>
 
+<EnviarCorreoModal Visible="MostrarCorreo"
+                   Adjuntos="AdjuntosCorreo"
+                   AsuntoSugerido="@($"Reporte de CFDI {EmpresaContext.NombreEmpresa} · {PeriodoGenerado}")"
+                   Datos="@([("Empresa", EmpresaContext.NombreEmpresa), ("RFC", EmpresaContext.Rfc), ("Periodo", PeriodoGenerado), ("CFDI incluidos", TotalExportado.ToString("N0"))])"
+                   EmpresaId="EmpresaContext.EmpresaId"
+                   OnCerrar="() => MostrarCorreo = false"
+                   OnEnviado="texto => Mensaje = texto" />
+
 @code {
+    private bool MostrarCorreo;
+
+    private string PeriodoGenerado = "";
+
+    private List<CFDIManager.Web.Services.Correo.AdjuntoCorreo> AdjuntosCorreo =>
+        UltimosResultados
+            .Select(r => new CFDIManager.Web.Services.Correo.AdjuntoCorreo(r.NombreArchivo, r.TipoContenido, r.Contenido))
+            .ToList();
+
     private DateTime FechaInicio { get; set; }
 
     private DateTime FechaFin { get; set; }
@@ -318,9 +339,7 @@
             hoy.Month,
             1);
 
-        FechaFin = FechaInicio
-            .AddMonths(1)
-            .AddDays(-1);
+        FechaFin = DateTime.Today;
     }
 
     private async Task GenerarArchivos()
@@ -361,6 +380,8 @@
                 await DescargarArchivo(resultado);
                 UltimosResultados.Add(resultado);
             }
+
+            PeriodoGenerado = $"{FechaInicio:dd/MM/yyyy} al {FechaFin:dd/MM/yyyy}";
 
             int totalCfdi = resultados.Sum(
                 resultado => resultado.TotalRegistros);

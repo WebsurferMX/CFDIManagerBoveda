@@ -1,0 +1,180 @@
+/* Complementos de Bootstrap para Usuarios; colores y tema (claro/oscuro) salen de las variables --bs-*. */
+
+.eyebrow {
+    color: #0891b2;
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .12em;
+}
+
+.indicador-icono {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: .75rem;
+    font-size: 1.2rem;
+}
+
+.buscador {
+    width: min(300px, 100%);
+}
+
+.tabla-usuarios thead th {
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.tabla-usuarios tbody tr {
+    cursor: pointer;
+}
+
+.tabla-usuarios td {
+    font-size: .85rem;
+}
+
+/* Bootstrap pinta el fondo de la fila con box-shadow; se suma la marca sin perderlo. */
+.tabla-usuarios tr.seleccionado td:first-child {
+    box-shadow: inset 3px 0 0 #0891b2, inset 0 0 0 9999px var(--bs-table-active-bg);
+}
+
+.avatar {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    color: #fff;
+    font-size: .75rem;
+    font-weight: 700;
+}
+
+.avatar-primary {
+    background: var(--bs-primary);
+}
+
+.avatar-info {
+    background: #0891b2;
+}
+
+.avatar-success {
+    background: var(--bs-success);
+}
+
+.avatar-secondary {
+    background: var(--bs-secondary);
+}
+
+.estado {
+    font-size: .8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.estado .bi-circle-fill {
+    font-size: .5rem;
+    vertical-align: middle;
+}
+
+/* ---------- Formulario ---------- */
+
+.formulario {
+    position: sticky;
+    top: 1rem;
+}
+
+.seccion {
+    margin-bottom: 1.25rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--bs-border-color-translucent);
+}
+
+.seccion.mb-0 {
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+.seccion-titulo {
+    margin-bottom: .65rem;
+    color: var(--bs-emphasis-color);
+    font-size: .8rem;
+    font-weight: 700;
+}
+
+.seccion-titulo .bi {
+    margin-right: .3rem;
+    color: #0891b2;
+}
+
+.roles .list-group-item {
+    cursor: pointer;
+    font-size: .85rem;
+}
+
+.roles .active-rol {
+    position: relative;
+    z-index: 1;
+    border-color: #0891b2;
+    background: rgb(8 145 178 / 8%);
+}
+
+.empresas-lista {
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.empresas-lista .list-group-item {
+    cursor: pointer;
+}
+
+.credencial {
+    background: var(--bs-tertiary-bg);
+}
+
+@media (max-width: 1199.98px) {
+    .formulario {
+        position: static;
+    }
+}
+
+html[data-theme="dark"] .eyebrow {
+    color: #a0e6f7;
+}
+
+html[data-theme="dark"] .roles .active-rol {
+    border-color: #22b8d6;
+    background: rgb(34 184 214 / 12%);
+}
+
+/* ---------- Tareas ---------- */
+
+.tareas {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: .5rem .75rem;
+    padding: .65rem .75rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+}
+
+.tareas-grupo-titulo {
+    margin-bottom: .2rem;
+    color: var(--bs-secondary-color);
+    font-size: .66rem;
+    font-weight: 700;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.tarea {
+    margin-bottom: .15rem;
+    font-size: .82rem;
+    cursor: pointer;
+}

@@ -1,11 +1,11 @@
 ﻿@inherits LayoutComponentBase
+@implements IDisposable
 
 @using CFDIManager.Web.Services
 @using CFDIParser.Models
-@using CFDIParser.Services
 
 @inject NavigationManager Navigation
-@inject PostgreSqlRepository Repo
+@inject AccesoEmpresasService Acceso
 @inject EmpresaContext EmpresaContext
 
 <div class="page">
@@ -19,6 +19,14 @@
         </div>
 
         <article class="content px-4">
+            @if (SinEmpresas)
+            {
+                <div class="sin-empresas" role="status">
+                    <i class="bi bi-building-lock" aria-hidden="true"></i>
+                    No tienes empresas asignadas. Pide al administrador que te asigne al menos una en Configuración → Usuarios.
+                </div>
+            }
+
             @Body
         </article>
     </main>
@@ -40,15 +48,30 @@
 
 @code
 {
-    protected override void OnInitialized()
+    private bool SinEmpresas;
+
+    protected override async Task OnInitializedAsync()
     {
         EmpresaContext.OnChange += ContextChanged;
+
+        // Con contraseña temporal no se usa la aplicación hasta elegir una personal.
+        if ((await Acceso.ObtenerUsuarioActualAsync()).HasClaim(c => c.Type == UsuarioClaimsFactory.DebeCambiarPassword))
+        {
+            string actual = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+            Navigation.NavigateTo($"cuenta/cambiar-password?returnUrl={Uri.EscapeDataString(actual)}", forceLoad: true);
+            return;
+        }
 
         if (EmpresaContext.TieneEmpresaActiva)
             return;
 
+        // Solo empresas asignadas al usuario (el Administrador ve todas).
         List<EmpresaDto> empresas =
-            Repo.ObtenerEmpresasActivas();
+            await Acceso.ObtenerEmpresasPermitidasAsync();
+
+        SinEmpresas =
+            empresas.Count == 0 &&
+            (await Acceso.ObtenerUsuarioActualAsync()).Identity?.IsAuthenticated == true;
 
         EmpresaDto? empresa =
             empresas.FirstOrDefault();

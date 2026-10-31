@@ -1,0 +1,23 @@
+.fecha-input {
+    position: relative;
+    flex-wrap: nowrap;
+    width: auto;
+    min-width: 150px;
+}
+
+.fecha-input .form-control {
+    font-variant-numeric: tabular-nums;
+}
+
+/* El selector nativo solo sirve para abrir el calendario: invisible pero presente (showPicker lo requiere). */
+.selector-oculto {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+}

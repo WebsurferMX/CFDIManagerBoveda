@@ -1,4 +1,5 @@
 @page "/sat-descargas"
+@attribute [Authorize(Policy = "Tarea:descargas-sat")]
 @implements IDisposable
 
 @using CFDIManager.Web.Models
@@ -22,6 +23,8 @@
 }
 else
 {
+    <CierreMesPanel />
+
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
             <button type="button" class="nav-link @(Modo == "fiel" ? "active" : "")" @onclick='() => Modo = "fiel"'>
@@ -98,12 +101,12 @@ else
 
             <div class="col-md-2">
                 <label class="form-label">Fecha inicial</label>
-                <InputDate class="form-control" @bind-Value="FechaInicial" />
+                <FechaInput @bind-Valor="FechaInicial" />
             </div>
 
             <div class="col-md-2">
                 <label class="form-label">Fecha final</label>
-                <InputDate class="form-control" @bind-Value="FechaFinal" />
+                <FechaInput @bind-Valor="FechaFinal" />
             </div>
 
             <div class="col-md-2">
@@ -342,7 +345,7 @@ else
     // fiel: descarga masiva con e.firma (web service) · ciec: portal del SAT con contraseña.
     private string Modo = "fiel";
 
-    private DateTime FechaInicial = DateTime.Today.AddDays(-30);
+    private DateTime FechaInicial = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
 
     private DateTime FechaFinal = DateTime.Today;
 

@@ -1,0 +1,130 @@
+@typeparam TValor
+@inject IJSRuntime JS
+
+@* Fecha en dd/mm/aaaa sin depender del idioma del navegador (el <input type="date"> nativo muestra el formato
+   de Windows/Chrome). Se escribe a mano o se elige en el calendario nativo. TValor: DateTime o DateTime?. *@
+<div class="input-group fecha-input @Tamano @Class">
+    <input type="text"
+           id="@Id"
+           class="form-control @(Invalida ? "is-invalid" : "")"
+           placeholder="dd/mm/aaaa"
+           inputmode="numeric"
+           maxlength="10"
+           autocomplete="off"
+           value="@Texto"
+           disabled="@Disabled"
+           @onchange="CambiarTexto" />
+
+    <button type="button" class="btn btn-outline-secondary" title="Elegir en el calendario" tabindex="-1"
+            disabled="@Disabled" @onclick="AbrirCalendario">
+        <i class="bi bi-calendar3"></i>
+    </button>
+
+    <input type="date"
+           class="selector-oculto"
+           tabindex="-1"
+           aria-hidden="true"
+           @ref="_selector"
+           value="@ValorIso"
+           @onchange="CambiarSelector" />
+</div>
+
+@code {
+    private static readonly string[] Formatos =
+    [
+        "dd/MM/yyyy", "d/M/yyyy", "dd/M/yyyy", "d/MM/yyyy",
+        "dd-MM-yyyy", "d-M-yyyy", "dd.MM.yyyy", "d.M.yyyy", "ddMMyyyy"
+    ];
+
+    private ElementReference _selector;
+    private string Texto = "";
+    private bool Invalida;
+
+    [Parameter] public TValor? Valor { get; set; }
+
+    [Parameter] public EventCallback<TValor?> ValorChanged { get; set; }
+
+    [Parameter] public string? Id { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>input-group-sm o input-group-lg.</summary>
+    [Parameter] public string Tamano { get; set; } = "";
+
+    [Parameter] public bool Disabled { get; set; }
+
+    private DateTime? Fecha => Valor switch
+    {
+        DateTime f => f,
+        _ => null
+    };
+
+    private string ValorIso => Fecha?.ToString("yyyy-MM-dd") ?? "";
+
+    private static bool Anulable => Nullable.GetUnderlyingType(typeof(TValor)) is not null;
+
+    protected override void OnParametersSet()
+    {
+        Texto = Fecha?.ToString("dd/MM/yyyy") ?? "";
+        Invalida = false;
+    }
+
+    private async Task CambiarTexto(ChangeEventArgs e)
+    {
+        string texto = (e.Value?.ToString() ?? "").Trim();
+
+        if (texto == "" && Anulable)
+        {
+            await Asignar(null);
+            return;
+        }
+
+        if (DateTime.TryParseExact(texto, Formatos, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out DateTime fecha))
+        {
+            await Asignar(fecha.Date);
+            return;
+        }
+
+        // Inválida: se marca y se regresa al valor anterior.
+        Invalida = true;
+        Texto = texto;
+        StateHasChanged();
+        await Task.Delay(1500);
+        Texto = Fecha?.ToString("dd/MM/yyyy") ?? "";
+        Invalida = false;
+    }
+
+    private Task CambiarSelector(ChangeEventArgs e) =>
+        DateTime.TryParse(e.Value?.ToString(), System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out DateTime fecha)
+            ? Asignar(fecha.Date)
+            : Task.CompletedTask;
+
+    private async Task Asignar(DateTime? fecha)
+    {
+        Texto = fecha?.ToString("dd/MM/yyyy") ?? "";
+        Invalida = false;
+
+        // DateTime? acepta null; DateTime conserva el valor anterior si se borra el texto.
+        if (fecha is null && !Anulable)
+        {
+            Texto = Fecha?.ToString("dd/MM/yyyy") ?? "";
+            return;
+        }
+
+        await ValorChanged.InvokeAsync((TValor?)(object?)fecha);
+    }
+
+    private async Task AbrirCalendario()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("cfdiFecha.abrir", _selector);
+        }
+        catch (JSException)
+        {
+            // Navegadores sin showPicker: queda escribir la fecha.
+        }
+    }
+}

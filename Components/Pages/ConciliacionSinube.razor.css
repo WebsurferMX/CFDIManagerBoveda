@@ -1,0 +1,81 @@
+/* La tabla es ancha: que haga scroll dentro de su tarjeta en vez de ensanchar la página. */
+.conciliacion-page,
+.conciliacion-page > .card {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.eyebrow {
+    color: #0891b2;
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .12em;
+}
+
+.indicador {
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-body-bg);
+    cursor: pointer;
+    transition: .15s ease;
+}
+
+.indicador:hover {
+    border-color: var(--bs-primary-border-subtle);
+}
+
+.indicador.activo {
+    border-color: #0891b2;
+    box-shadow: 0 0 0 1px #0891b2 inset !important;
+}
+
+.indicador-icono {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: .6rem;
+    font-size: 1rem;
+}
+
+.buscador {
+    width: min(300px, 100%);
+}
+
+.tabla-contenedor {
+    max-height: calc(100vh - 25rem);
+    min-height: 260px;
+}
+
+.tabla-conciliacion {
+    font-size: .8rem;
+}
+
+.tabla-conciliacion thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+    font-size: .68rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.tabla-conciliacion td {
+    white-space: nowrap;
+}
+
+.tabla-conciliacion .razon {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tabla-conciliacion tr.no-conciliada > td {
+    --bs-table-bg-state: var(--bs-warning-bg-subtle);
+}
+
+html[data-theme="dark"] .eyebrow {
+    color: #a0e6f7;
+}

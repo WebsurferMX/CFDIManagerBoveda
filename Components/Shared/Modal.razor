@@ -1,0 +1,69 @@
+@* Modal de Bootstrap controlado desde Blazor (sin bootstrap.js): se muestra mientras Visible sea true. *@
+@if (Visible)
+{
+    <div class="modal fade show d-block"
+         tabindex="-1"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="@_idTitulo"
+         @onkeydown="Tecla">
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable @Tamano">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header">
+                    <h5 class="modal-title d-flex align-items-center gap-2" id="@_idTitulo">
+                        @if (!string.IsNullOrEmpty(Icono))
+                        {
+                            <span class="modal-icono @ClaseIcono"><i class="bi @Icono"></i></span>
+                        }
+                        @Titulo
+                    </h5>
+                    <button type="button" class="btn-close" aria-label="Cerrar" @onclick="Cerrar" disabled="@Ocupado"></button>
+                </div>
+
+                <div class="modal-body">
+                    @ChildContent
+                </div>
+
+                @if (Pie is not null)
+                {
+                    <div class="modal-footer">
+                        @Pie
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    private readonly string _idTitulo = $"modal-{Guid.NewGuid():N}";
+
+    [Parameter] public bool Visible { get; set; }
+
+    [Parameter] public string Titulo { get; set; } = "";
+
+    [Parameter] public string? Icono { get; set; }
+
+    /// <summary>primary, danger, warning o success: color del icono del encabezado.</summary>
+    [Parameter] public string Variante { get; set; } = "primary";
+
+    /// <summary>modal-sm, modal-lg o modal-xl.</summary>
+    [Parameter] public string Tamano { get; set; } = "";
+
+    /// <summary>Mientras es true no se puede cerrar (p. ej. enviando un correo).</summary>
+    [Parameter] public bool Ocupado { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public RenderFragment? Pie { get; set; }
+
+    [Parameter] public EventCallback OnCerrar { get; set; }
+
+    private string ClaseIcono => $"text-{Variante} bg-{Variante}-subtle";
+
+    private Task Cerrar() => Ocupado ? Task.CompletedTask : OnCerrar.InvokeAsync();
+
+    private Task Tecla(KeyboardEventArgs e) => e.Key == "Escape" ? Cerrar() : Task.CompletedTask;
+}

@@ -142,16 +142,30 @@ public class AdministracionXmlService
         return meses.Count switch
         {
             0 => $"{anio}",
+            1 when !f.Acumular && f.Dias.Count > 0 => $"{Dias(f.Dias)} {Mes(meses[0])} {anio}",
             1 when !f.Acumular => $"{Mes(meses[0])} {anio}",
             1 => $"ENE-{Mes(meses[0])} {anio}",
             _ => $"{Mes(meses[0])}-{Mes(meses[^1])} {anio}"
         };
     }
 
+    // "30", "28-30" si son seguidos, o "1, 5, 9".
+    private static string Dias(List<int> dias)
+    {
+        List<int> orden = dias.Order().ToList();
+
+        return orden.Count == 1 ? $"{orden[0]}"
+            : orden[^1] - orden[0] == orden.Count - 1 ? $"{orden[0]}-{orden[^1]}"
+            : string.Join(", ", orden);
+    }
+
     public string NombreReporte(EmpresaDto empresa, AdminXmlFiltroDto f, string reporte)
     {
         string dir = f.Clasificacion == "RECIBIDO" ? "Recibidos" : "Emitidos";
         string periodo = f.Anio is int a ? $"{a}{(f.Meses.Count > 0 ? "_" + string.Join("-", f.Meses.Order().Select(m => m.ToString("00"))) : "")}" : "todo";
+
+        if (f.Anio is not null && f.Meses.Count == 1 && !f.Acumular && f.Dias.Count > 0)
+            periodo += "_d" + string.Join("-", f.Dias.Order().Select(d => d.ToString("00")));
         string tipo = reporte == "general" ? "" : "_" + reporte.Replace(':', '_');
         return $"{empresa.Rfc}_{dir}_{periodo}{tipo}.xlsx";
     }

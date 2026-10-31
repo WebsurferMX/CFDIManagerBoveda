@@ -40,12 +40,12 @@ else
         <div class="row g-3 align-items-end">
             <div class="col-md-2">
                 <label class="form-label">Fecha inicial</label>
-                <InputDate class="form-control" @bind-Value="Desde" />
+                <FechaInput @bind-Valor="Desde" />
             </div>
 
             <div class="col-md-2">
                 <label class="form-label">Fecha final</label>
-                <InputDate class="form-control" @bind-Value="Hasta" />
+                <FechaInput @bind-Valor="Hasta" />
             </div>
 
             <div class="col-md-2">
@@ -188,7 +188,7 @@ else
 @code {
     private bool TieneCiec;
 
-    private DateTime Desde = DateTime.Today.AddDays(-7);
+    private DateTime Desde = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
     private DateTime Hasta = DateTime.Today;
     private string Tipo = "emitidos";
     private string Estado = "-1";

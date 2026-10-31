@@ -34,12 +34,12 @@
     <section class="period-panel">
         <div class="field">
             <label>Fecha inicial</label>
-            <InputDate @bind-Value="FechaInicio" class="date-input" />
+            <FechaInput @bind-Valor="FechaInicio" />
         </div>
 
         <div class="field">
             <label>Fecha final</label>
-            <InputDate @bind-Value="FechaFin" class="date-input" />
+            <FechaInput @bind-Valor="FechaFin" />
         </div>
 
         <button class="button-primary"
@@ -220,7 +220,7 @@
         new();
 
     private DateTime FechaInicio { get; set; } =
-        new DateTime(2026, 1, 1);
+        new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
 
     private DateTime FechaFin { get; set; } =
         DateTime.Today;

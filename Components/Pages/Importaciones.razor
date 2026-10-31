@@ -1,6 +1,7 @@
 @using CFDIManager.Web.Components.Layout
 
 @page "/importaciones"
+@attribute [Authorize(Policy = "Tarea:importaciones")]
 @rendermode InteractiveServer
 @implements IDisposable
 

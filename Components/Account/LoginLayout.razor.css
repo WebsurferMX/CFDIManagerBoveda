@@ -1,0 +1,7 @@
+.login-fondo {
+    display: grid;
+    place-items: center;
+    min-height: 100vh;
+    padding: 1.5rem 1rem;
+    background: linear-gradient(160deg, #071b52 0%, #052767 55%, #0e7490 100%);
+}

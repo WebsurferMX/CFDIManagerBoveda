@@ -1,0 +1,100 @@
+.usuario-menu {
+    position: relative;
+    padding-left: .75rem;
+    border-left: 1px solid #d3d9e1;
+}
+
+.usuario-boton {
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    padding: .25rem .4rem;
+    border: 0;
+    border-radius: .65rem;
+    background: transparent;
+    text-align: left;
+}
+
+.usuario-boton:hover {
+    background: rgb(15 23 42 / 6%);
+}
+
+.avatar {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #0891b2;
+    color: #fff;
+    font-size: .72rem;
+    font-weight: 800;
+}
+
+.datos {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+}
+
+.datos strong {
+    color: #0f172a;
+    font-size: .76rem;
+}
+
+.datos small {
+    color: #64748b;
+    font-size: .66rem;
+}
+
+.flecha {
+    color: #64748b;
+    font-size: .7rem;
+}
+
+.menu-fondo {
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+}
+
+.menu-usuario {
+    position: absolute;
+    top: calc(100% + .4rem);
+    right: 0;
+    z-index: 1050;
+    min-width: 230px;
+    font-size: .82rem;
+}
+
+@media (max-width: 640px) {
+    .usuario-menu {
+        padding-left: 0;
+        border-left: 0;
+    }
+
+    .datos {
+        display: none;
+    }
+}
+
+/* ===== MODO OSCURO ===== */
+
+html[data-theme="dark"] .usuario-menu {
+    border-left-color: #2e415b;
+}
+
+html[data-theme="dark"] .usuario-boton:hover {
+    background: rgb(255 255 255 / 6%);
+}
+
+html[data-theme="dark"] .datos strong {
+    color: #e8ecf7;
+}
+
+html[data-theme="dark"] .datos small,
+html[data-theme="dark"] .flecha {
+    color: #b3bbc8;
+}
+
+/* ===== FIN MODO OSCURO ===== */

@@ -13,16 +13,28 @@
     <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="lib/bootstrap-icons/font/bootstrap-icons.min.css" />
     <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="css/cuenta.css" />
     <link rel="stylesheet" href="CFDIManager.Web.styles.css" />
-    <HeadOutlet @rendermode="InteractiveServer" />
+    <HeadOutlet @rendermode="RenderModeForPage" />
 </head>
 
 
 <body>
-    <Routes @rendermode="InteractiveServer" />
+    <Routes @rendermode="RenderModeForPage" />
 
     <script src="js/descargas.js"></script>
+    <script src="js/fecha.js"></script>
     <script src="_framework/blazor.web.js"></script>
 </body>
 
 </html>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    // El login se procesa sin interactividad (necesita HttpContext para escribir la cookie);
+    // el resto de la aplicación sigue siendo InteractiveServer.
+    private IComponentRenderMode? RenderModeForPage =>
+        HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;
+}

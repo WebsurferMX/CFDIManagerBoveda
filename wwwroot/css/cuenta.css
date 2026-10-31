@@ -1,0 +1,185 @@
+/* Tarjeta de las pantallas de cuenta (login, cambiar contraseña). */
+
+.login-card {
+    width: min(400px, 100%);
+    padding: 2rem 1.75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 24px 60px rgb(2 6 23 / 35%);
+    color: #0f172a;
+}
+
+.login-card .marca {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin-bottom: 1.5rem;
+}
+
+.login-card .marca strong {
+    display: block;
+    font-size: 1.05rem;
+}
+
+.login-card .marca small {
+    color: #64748b;
+    font-size: .74rem;
+}
+
+.login-card .logo {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: .8rem;
+    background: #0891b2;
+    color: #fff;
+    font-size: 1.3rem;
+}
+
+.login-card h1 {
+    margin: 0 0 1rem;
+    font-size: 1.3rem;
+    font-weight: 800;
+}
+
+.login-card .campo {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    margin-bottom: .9rem;
+}
+
+.login-card .campo label {
+    color: #475569;
+    font-size: .74rem;
+    font-weight: 750;
+}
+
+.login-card input[type="text"],
+.login-card input[type="password"],
+.login-card input:not([type]) {
+    width: 100%;
+    min-height: 42px;
+    padding: .55rem .75rem;
+    border: 1px solid #cbd5e1;
+    border-radius: .65rem;
+    background: #fff;
+    color: #0f172a;
+}
+
+.login-card .validation-message {
+    color: #b91c1c;
+    font-size: .72rem;
+}
+
+.login-card .recordar {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: 1.25rem;
+    color: #475569;
+    font-size: .78rem;
+    cursor: pointer;
+}
+
+.login-card .entrar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid #0891b2;
+    border-radius: .65rem;
+    background: #0891b2;
+    color: #fff;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.login-card .entrar:hover {
+    background: #0e7490;
+}
+
+.login-card .mensaje-error {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: 1rem;
+    padding: .7rem .85rem;
+    border: 1px solid #fecaca;
+    border-radius: .65rem;
+    background: #fef2f2;
+    color: #b91c1c;
+    font-size: .8rem;
+}
+
+/* ===== MODO OSCURO ===== */
+
+html[data-theme="dark"] .login-card {
+    border: 1px solid #2a3b52;
+    background: #121c2b;
+    color: #e8ecf7;
+}
+
+html[data-theme="dark"] .login-card .marca small,
+html[data-theme="dark"] .login-card .campo label,
+html[data-theme="dark"] .login-card .recordar {
+    color: #b3bbc8;
+}
+
+html[data-theme="dark"] .login-card input[type="text"],
+html[data-theme="dark"] .login-card input[type="password"],
+html[data-theme="dark"] .login-card input:not([type]) {
+    border: 1px solid #34465b;
+    background: #0d1624;
+    color: #e8ecf7;
+}
+
+html[data-theme="dark"] .login-card .mensaje-error {
+    border: 1px solid #5e2323;
+    background: #331111;
+    color: #f09999;
+}
+
+/* ===== FIN MODO OSCURO ===== */
+
+.login-card .mensaje-info {
+    display: flex;
+    gap: .5rem;
+    margin-bottom: 1rem;
+    padding: .7rem .85rem;
+    border: 1px solid #bae6fd;
+    border-radius: .65rem;
+    background: #f0f9ff;
+    color: #075985;
+    font-size: .8rem;
+}
+
+.login-card .ayuda {
+    margin: -.25rem 0 1rem;
+    color: #64748b;
+    font-size: .72rem;
+}
+
+.login-card .cancelar {
+    display: block;
+    margin-top: .75rem;
+    color: #64748b;
+    font-size: .8rem;
+    text-align: center;
+    text-decoration: none;
+}
+
+html[data-theme="dark"] .login-card .mensaje-info {
+    border: 1px solid #1e4a66;
+    background: #0e2433;
+    color: #a5d8f3;
+}
+
+html[data-theme="dark"] .login-card .ayuda,
+html[data-theme="dark"] .login-card .cancelar {
+    color: #b3bbc8;
+}

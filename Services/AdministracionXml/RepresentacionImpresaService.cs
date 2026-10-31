@@ -126,7 +126,7 @@ public class RepresentacionImpresaService
             {
                 col.Item().Text(Titulos.GetValueOrDefault(c.TipoComprobante, "CFDI")).Bold().FontSize(12).FontColor(Acento);
                 col.Item().Text($"Serie y folio: {string.Join("-", new[] { c.Serie, c.Folio }.Where(x => !string.IsNullOrWhiteSpace(x)))}");
-                col.Item().Text($"Fecha: {c.FechaEmision:yyyy-MM-dd HH:mm:ss}");
+                col.Item().Text($"Fecha: {c.FechaEmision:dd/MM/yyyy HH:mm:ss}");
                 col.Item().Text("Folio fiscal:");
                 col.Item().Text(c.UUID);
                 col.Item().Text($"CFDI {c.Version} · Certificado: {c.NoCertificado}");
@@ -263,7 +263,7 @@ public class RepresentacionImpresaService
                 Bloque("Sello digital del CFDI", selloCfd);
                 Bloque("Sello del SAT", c.SelloSat);
                 Bloque("Cadena original del complemento de certificación digital del SAT", cadena);
-                col.Item().Text($"Certificado del SAT: {c.NoCertificadoSat}   ·   Fecha de certificación: {c.FechaTimbrado:yyyy-MM-dd HH:mm:ss}   ·   PAC: {c.RfcProvCertif}").FontSize(6.5f);
+                col.Item().Text($"Certificado del SAT: {c.NoCertificadoSat}   ·   Fecha de certificación: {c.FechaTimbrado:dd/MM/yyyy HH:mm:ss}   ·   PAC: {c.RfcProvCertif}").FontSize(6.5f);
             });
         });
     }

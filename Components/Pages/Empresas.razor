@@ -1,4 +1,5 @@
 ﻿@page "/configuracion/empresas"
+@attribute [Authorize(Policy = "Tarea:empresas")]
 
 @using System.Text.RegularExpressions
 @using CFDIManager.Web.Services
@@ -15,6 +16,7 @@
 @inject RutaXmlService Rutas
 @inject ConstanciaFiscalService Constancias
 @inject ArchivosSatService ArchivosSat
+@inject AccesoEmpresasService Acceso
 
 
 
@@ -29,12 +31,15 @@
             <p>Registra y administra los RFC disponibles en CFDI Manager.</p>
         </div>
 
-        <button type="button"
-                class="secondary-button"
-                @onclick="NuevaEmpresa"
-                disabled="@Guardando">
-            Nueva empresa
-        </button>
+        @if (PuedeDarDeAlta)
+        {
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="NuevaEmpresa"
+                    disabled="@Guardando">
+                Nueva empresa
+            </button>
+        }
     </header>
 
     @if (!string.IsNullOrWhiteSpace(MensajeError))
@@ -78,7 +83,7 @@
                                 Opinión SAT: @opinionSel.Sentido
                                 @if (opinionSel.FechaEmision is DateTime emitida)
                                 {
-                                    <small><i class="bi bi-clock"></i> @emitida.ToString("dd MMM yyyy", Mx)</small>
+                                    <small><i class="bi bi-clock"></i> @emitida.ToString("dd/MM/yyyy")</small>
                                 }
                             </span>
                         }
@@ -540,8 +545,14 @@
             .OrderBy(empresa => empresa.EmpresaId)
             .ToList();
 
-    protected override void OnInitialized()
+    // El Supervisor solo ve y edita sus empresas asignadas; el alta es del Administrador.
+    private HashSet<long>? EmpresasPermitidas;
+
+    private bool PuedeDarDeAlta => EmpresasPermitidas is null;
+
+    protected override async Task OnInitializedAsync()
     {
+        EmpresasPermitidas = await Acceso.ObtenerIdsPermitidosAsync();
         CargarEmpresas();
     }
 
@@ -552,7 +563,9 @@
 
         try
         {
-            ListaEmpresas = Repo.ObtenerEmpresas();
+            ListaEmpresas = Repo.ObtenerEmpresas()
+                .Where(empresa => EmpresasPermitidas is null || EmpresasPermitidas.Contains(empresa.EmpresaId))
+                .ToList();
             RfcFiel = ListaEmpresas
                 .Where(empresa => empresa.TieneFiel)
                 .ToDictionary(empresa => empresa.EmpresaId, LeerRfcFiel);
@@ -664,6 +677,9 @@
 
         try
         {
+            if (!Editando && !PuedeDarDeAlta)
+                throw new InvalidOperationException("Solo el Administrador puede dar de alta empresas.");
+
             NormalizarModelo();
             ValidarModelo();
 

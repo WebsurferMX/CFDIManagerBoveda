@@ -1,0 +1,253 @@
+@using CFDIManager.Web.Services.Correo
+@using CFDIParser.Services
+
+@inject CorreoService Correo
+@inject PostgreSqlRepository Repo
+@inject AccesoEmpresasService Acceso
+
+@* Envía por correo los archivos de un reporte (Exportaciones, Administración de XML…). *@
+<Modal Visible="Visible"
+       Titulo="Enviar reporte por correo"
+       Icono="bi-envelope-paper"
+       Tamano="modal-lg"
+       Ocupado="Enviando"
+       OnCerrar="Cerrar">
+
+    <ChildContent>
+        @if (!Configurado)
+        {
+            <div class="alert alert-warning d-flex gap-2 mb-0">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <div>
+                    <strong>El envío de correos no está configurado.</strong>
+                    <div class="small">
+                        <AuthorizeView Policy="@Permisos.AdministrarUsuarios">
+                            <Authorized>Configúralo en <a href="configuracion/correo" class="alert-link">Configuración → Correo</a>.</Authorized>
+                            <NotAuthorized>Pide al administrador que configure el servidor de correo.</NotAuthorized>
+                        </AuthorizeView>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            @if (!string.IsNullOrEmpty(Error))
+            {
+                <div class="alert alert-danger d-flex gap-2 py-2">
+                    <i class="bi bi-x-octagon-fill"></i>
+                    <span>@Error</span>
+                </div>
+            }
+
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="form-label small fw-semibold" for="correo-para">Para</label>
+                    <input id="correo-para"
+                           class="form-control"
+                           placeholder="contador@empresa.com, direccion@empresa.com"
+                           @bind="Para"
+                           disabled="@Enviando" />
+                    <div class="form-text">Separa varias direcciones con coma o punto y coma.</div>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label small fw-semibold" for="correo-cc">Con copia (CC)</label>
+                    <input id="correo-cc" class="form-control" @bind="Cc" disabled="@Enviando" />
+                </div>
+
+                <div class="col-md-6 d-flex align-items-end">
+                    @if (!string.IsNullOrEmpty(MiCorreo))
+                    {
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="correo-copia" @bind="CopiaParaMi" disabled="@Enviando" />
+                            <label class="form-check-label small" for="correo-copia">Enviarme una copia (@MiCorreo)</label>
+                        </div>
+                    }
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small fw-semibold" for="correo-asunto">Asunto</label>
+                    <input id="correo-asunto" class="form-control" @bind="Asunto" disabled="@Enviando" />
+                </div>
+
+                <div class="col-12">
+                    <label class="form-label small fw-semibold" for="correo-mensaje">Mensaje</label>
+                    <textarea id="correo-mensaje" class="form-control" rows="4" @bind="Mensaje" disabled="@Enviando"></textarea>
+                </div>
+
+                <div class="col-12">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="form-label small fw-semibold mb-0">Archivos adjuntos</span>
+                        <span class="badge rounded-pill @(ExcedeLimite ? "text-bg-danger" : "text-bg-secondary")">
+                            @FormatoTamano(TotalBytes) de 20 MB
+                        </span>
+                    </div>
+
+                    <ul class="list-group">
+                        @foreach (AdjuntoCorreo adjunto in Adjuntos)
+                        {
+                            <li class="list-group-item d-flex align-items-center gap-2 small">
+                                <i class="bi @IconoArchivo(adjunto.Nombre) fs-5"></i>
+                                <span class="text-truncate flex-grow-1">@adjunto.Nombre</span>
+                                <span class="text-body-secondary">@FormatoTamano(adjunto.Contenido.Length)</span>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+    </ChildContent>
+
+    <Pie>
+        <button type="button" class="btn btn-outline-secondary" @onclick="Cerrar" disabled="@Enviando">Cancelar</button>
+
+        @if (Configurado)
+        {
+            <button type="button" class="btn btn-primary" @onclick="Enviar" disabled="@(Enviando || ExcedeLimite || Adjuntos.Count == 0)">
+                @if (Enviando)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                    <span>Enviando…</span>
+                }
+                else
+                {
+                    <i class="bi bi-send me-2"></i>
+                    <span>Enviar</span>
+                }
+            </button>
+        }
+    </Pie>
+</Modal>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+
+    [Parameter] public IReadOnlyList<AdjuntoCorreo> Adjuntos { get; set; } = [];
+
+    [Parameter] public string AsuntoSugerido { get; set; } = "";
+
+    /// <summary>Datos que aparecen en el cuerpo del correo (empresa, periodo, etc.).</summary>
+    [Parameter] public IReadOnlyList<(string Etiqueta, string Valor)> Datos { get; set; } = [];
+
+    [Parameter] public long? EmpresaId { get; set; }
+
+    [Parameter] public EventCallback OnCerrar { get; set; }
+
+    /// <summary>Se invoca con el texto de confirmación al terminar el envío.</summary>
+    [Parameter] public EventCallback<string> OnEnviado { get; set; }
+
+    private bool _visibleAnterior;
+    private bool Configurado;
+    private bool Enviando;
+    private string? Error;
+
+    private string Para = "";
+    private string Cc = "";
+    private string Asunto = "";
+    private string Mensaje = "";
+    private bool CopiaParaMi;
+    private string MiCorreo = "";
+    private string MiNombre = "";
+
+    private long TotalBytes => Adjuntos.Sum(a => (long)a.Contenido.Length);
+
+    private bool ExcedeLimite => TotalBytes > CorreoService.LimiteAdjuntosBytes;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Al abrir se reinicia el formulario.
+        if (Visible && !_visibleAnterior)
+        {
+            Configurado = Correo.EstaConfigurado();
+            Error = null;
+            Para = "";
+            Cc = "";
+            Asunto = AsuntoSugerido;
+            Mensaje = "Buen día:\nTe comparto el reporte adjunto generado en CFDI Manager.\nSaludos.";
+
+            var usuario = await Acceso.ObtenerUsuarioActualAsync();
+            MiNombre = usuario.FindFirst(UsuarioClaimsFactory.NombreCompleto)?.Value ?? usuario.Identity?.Name ?? "";
+
+            MiCorreo = AccesoEmpresasService.ObtenerUsuarioId(usuario) is long id
+                ? Repo.ObtenerUsuarioPorId(id)?.Email ?? ""
+                : "";
+            CopiaParaMi = !string.IsNullOrEmpty(MiCorreo);
+        }
+
+        _visibleAnterior = Visible;
+    }
+
+    private async Task Enviar()
+    {
+        Error = null;
+        Enviando = true;
+
+        try
+        {
+            List<string> para = CorreoService.SepararCorreos(Para);
+            List<string> cc = CorreoService.SepararCorreos(Cc);
+
+            if (para.Count == 0)
+                throw new InvalidOperationException("Escribe al menos un destinatario.");
+
+            if (string.IsNullOrWhiteSpace(Asunto))
+                throw new InvalidOperationException("Escribe el asunto.");
+
+            if (CopiaParaMi && !cc.Contains(MiCorreo, StringComparer.OrdinalIgnoreCase))
+                cc.Add(MiCorreo);
+
+            var parrafos = Mensaje
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList();
+
+            parrafos.Add($"Archivos adjuntos: {string.Join(", ", Adjuntos.Select(a => a.Nombre))}.");
+
+            (string html, string texto) = PlantillaCorreo.Construir(new PlantillaCorreo.Contenido
+            {
+                Titulo = Asunto.Trim(),
+                Parrafos = parrafos,
+                Datos = [.. Datos, ("Enviado por", MiNombre), ("Fecha", DateTime.Now.ToString("dd/MM/yyyy HH:mm"))]
+            });
+
+            await Correo.EnviarAsync(new MensajeCorreo
+            {
+                Tipo = "Reporte",
+                Para = para,
+                Cc = cc,
+                Asunto = Asunto.Trim(),
+                CuerpoHtml = html,
+                CuerpoTexto = texto,
+                Adjuntos = Adjuntos,
+                EnviadoPor = MiNombre,
+                EmpresaId = EmpresaId
+            });
+
+            await OnEnviado.InvokeAsync($"El reporte se envió a {string.Join(", ", para)}.");
+            await OnCerrar.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Enviando = false;
+        }
+    }
+
+    private Task Cerrar() => OnCerrar.InvokeAsync();
+
+    private static string FormatoTamano(long bytes) =>
+        bytes >= 1024 * 1024
+            ? $"{bytes / 1024d / 1024d:N1} MB"
+            : $"{Math.Max(1, bytes / 1024d):N0} KB";
+
+    private static string IconoArchivo(string nombre) => Path.GetExtension(nombre).ToLowerInvariant() switch
+    {
+        ".xlsx" or ".xls" => "bi-file-earmark-excel text-success",
+        ".pdf" => "bi-file-earmark-pdf text-danger",
+        ".zip" => "bi-file-earmark-zip text-warning",
+        ".xml" => "bi-file-earmark-code text-primary",
+        _ => "bi-file-earmark"
+    };
+}

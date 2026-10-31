@@ -177,8 +177,7 @@
                             Vencimiento
                         </label>
 
-                        <InputDate class="form-control"
-                                   @bind-Value="FechaVencimiento" />
+                        <FechaInput @bind-Valor="FechaVencimiento" />
 
                     </div>
 
@@ -233,10 +232,7 @@
                 <div class="col-md-6">
                     <label class="form-label" for="descarga-desde">Descargar desde</label>
 
-                    <InputDate id="descarga-desde"
-                               class="form-control"
-                               @bind-Value="DescargaDesde"
-                               disabled="@(!DescargaAutomatica)" />
+                    <FechaInput Id="descarga-desde" @bind-Valor="DescargaDesde" Disabled="@(!DescargaAutomatica)" />
 
                     <small class="text-body-secondary">
                         La primera vez se pide mes por mes desde esa fecha; después, cada ciclo

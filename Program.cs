@@ -7,8 +7,17 @@ using CFDIManager.Web.Services.AdministracionXml;
 using CFDIManager.Web.Services.Storage;
 using CFDIParser.Models;
 using Microsoft.AspNetCore.DataProtection;
+using CFDIManager.Web.Services.Seguridad;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Cultura de la app: fechas dd/MM/yyyy (también para servicios en segundo plano).
+var CulturaMexico = new System.Globalization.CultureInfo("es-MX");
+System.Globalization.CultureInfo.DefaultThreadCurrentCulture = CulturaMexico;
+System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = CulturaMexico;
 
 // Servicios
 
@@ -54,6 +63,9 @@ builder.Services.AddHostedService<SincronizacionStorageHostedService>();
 
 // Descarga masiva automática del SAT para las empresas que la tienen encendida.
 builder.Services.AddSingleton<CFDIManager.Web.Services.Sat.EstadoDescargaAutomaticaSat>();
+
+// Cierre de mes del SAT (metadatos + XML faltantes); lo lanza la descarga automática o Descargas SAT.
+builder.Services.AddSingleton<CFDIManager.Web.Services.Sat.CierreMesSatService>();
 
 builder.Services.AddHostedService<CFDIManager.Web.Services.Sat.DescargaAutomaticaSatHostedService>();
 
@@ -107,6 +119,17 @@ builder.Services.AddHttpClient(
 
 builder.Services.AddScoped<CFDIManager.Web.Services.Sinube.SinubeService>();
 
+// Consultas de solo lectura a la base de SINUBE (getpost) para la conciliación SINUBE vs SAT.
+builder.Services.AddHttpClient(
+    CFDIManager.Web.Services.Sinube.SinubeDatosService.ClienteHttp,
+    cliente => cliente.Timeout = TimeSpan.FromMinutes(3));
+
+builder.Services.AddScoped<CFDIManager.Web.Services.Sinube.SinubeDatosService>();
+
+builder.Services.AddScoped<CFDIManager.Web.Services.Sinube.SatMetadatosService>();
+
+builder.Services.AddScoped<CFDIManager.Web.Services.Sinube.ConciliacionSinubeService>();
+
 builder.Services.AddScoped<PostgreSqlRepository>(
     serviceProvider =>
     {
@@ -136,11 +159,67 @@ builder.Services.AddScoped<PostgreSqlRepository>(
             connectionBuilder.ConnectionString);
     });
 
+// Usuarios, roles y empresas por usuario: ASP.NET Identity sobre las tablas de PostgreSQL
+// (usuarios, roles, usuario_roles, usuario_empresas). Ver Services\Seguridad.
+builder.Services
+    .AddIdentity<UsuarioDto, RolDto>(opciones =>
+    {
+        opciones.Password.RequiredLength = 8;
+        opciones.Password.RequireNonAlphanumeric = false;
+        opciones.Lockout.MaxFailedAccessAttempts = 5;
+        opciones.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+    })
+    .AddUserStore<UsuarioStore>()
+    .AddRoleStore<RolStore>()
+    .AddClaimsPrincipalFactory<UsuarioClaimsFactory>()
+    .AddErrorDescriber<ErroresIdentityEs>();
+
+builder.Services.ConfigureApplicationCookie(opciones =>
+{
+    opciones.Cookie.Name = "CFDIManager.Sesion";
+    opciones.LoginPath = "/cuenta/login";
+    opciones.LogoutPath = "/cuenta/logout";
+    opciones.AccessDeniedPath = "/cuenta/acceso-denegado";
+    opciones.ExpireTimeSpan = TimeSpan.FromHours(10);
+    opciones.SlidingExpiration = true;
+});
+
+// Desactivar un usuario o cambiarle el rol/contraseña invalida sus sesiones en minutos.
+builder.Services.Configure<SecurityStampValidatorOptions>(
+    opciones => opciones.ValidationInterval = TimeSpan.FromMinutes(5));
+
+builder.Services.AddAuthorization(opciones =>
+{
+    Permisos.Registrar(opciones);
+    // Una política por opción del menú: rol + tareas quitadas al usuario (Configuración → Usuarios).
+    Tareas.Registrar(opciones);
+});
+
+builder.Services.AddMemoryCache();
+
+builder.Services.AddSingleton<TareasUsuarioCache>();
+
+builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler, TareaHandler>();
+
+builder.Services.AddCascadingAuthenticationState();
+
+builder.Services.AddScoped<AuthenticationStateProvider, RevalidacionSesionProvider>();
+
+builder.Services.AddScoped<AccesoEmpresasService>();
+
+builder.Services.AddScoped<CuentasUsuarioService>();
+
+// Correo SMTP (Configuración → Correo): bienvenidas, contraseñas temporales y envío de reportes.
+builder.Services.AddScoped<CFDIManager.Web.Services.Correo.CorreoService>();
+
 builder.Services
     .AddRazorComponents()
     .AddInteractiveServerComponents();
 
 var app = builder.Build();
+
+// Rutas de XML guardadas en otro equipo se buscan en la carpeta local (CFDIParser.Services.RutaXmlLocal).
+RutaXmlLocal.CarpetaGeneral = app.Services.GetRequiredService<RutaXmlService>().CarpetaGeneral;
 
 // El mismo CFDI puede pertenecer a dos empresas del grupo (emitido en una, recibido
 // en la otra): el UUID es único por empresa, no en toda la tabla.
@@ -181,6 +260,33 @@ using (IServiceScope scope = app.Services.CreateScope())
     {
         app.Logger.LogError(ex, "No se pudieron crear las tablas de Exportación a SINUBE.");
     }
+
+    try
+    {
+        scope.ServiceProvider.GetRequiredService<PostgreSqlRepository>().AsegurarSatMetadatos();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "No se pudieron crear las tablas de metadatos del SAT.");
+    }
+
+    try
+    {
+        scope.ServiceProvider.GetRequiredService<PostgreSqlRepository>().AsegurarCorreo();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "No se pudieron crear las tablas de correo.");
+    }
+
+    try
+    {
+        await SeguridadInicial.AsegurarAsync(scope.ServiceProvider, app.Configuration, app.Logger);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "No se pudieron crear las tablas de usuarios y roles.");
+    }
 }
 
 if (!app.Environment.IsDevelopment())
@@ -192,16 +298,62 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+// Fechas y números con la cultura de México (dd/MM/yyyy) en toda la app, sin depender del servidor ni del navegador.
+app.UseRequestLocalization(new RequestLocalizationOptions
+{
+    DefaultRequestCulture = new Microsoft.AspNetCore.Localization.RequestCulture(CulturaMexico),
+    SupportedCultures = [CulturaMexico],
+    SupportedUICultures = [CulturaMexico]
+});
+
 app.UseHttpsRedirection();
+
+app.UseAuthentication();
+
+app.UseAuthorization();
 
 app.UseAntiforgery();
 
 app.MapStaticAssets();
 
+// [FromForm] obliga a validar el token antiforgery del formulario de "Cerrar sesión".
+app.MapPost(
+    "/cuenta/logout",
+    async ([FromForm] string? returnUrl, SignInManager<UsuarioDto> signInManager) =>
+    {
+        await signInManager.SignOutAsync();
+        return Results.LocalRedirect("/cuenta/login");
+    });
+
+// Todo /api exige sesión; las rutas por empresa además validan que el usuario la tenga asignada.
+RouteGroupBuilder api = app.MapGroup("/api").RequireAuthorization();
+
+api.AddEndpointFilter(async (contexto, siguiente) =>
+{
+    HttpContext http = contexto.HttpContext;
+
+    if (http.Request.RouteValues.TryGetValue("empresaId", out object? valor) &&
+        long.TryParse(valor?.ToString(), out long empresaId) &&
+        !http.RequestServices.GetRequiredService<AccesoEmpresasService>().PuedeAcceder(http.User, empresaId))
+    {
+        return Results.Forbid();
+    }
+
+    // XML inexistente, CFDI de otra empresa, etc.: mensaje legible en vez de la página de error.
+    try
+    {
+        return await siguiente(contexto);
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.Text(ex.Message, "text/plain; charset=utf-8", statusCode: StatusCodes.Status404NotFound);
+    }
+});
+
 // XML y PDF de un CFDI. Las usan las pantallas de consulta, EFOS y Administración de XML;
 // ?descargar=1 entrega el archivo como descarga en vez de mostrarlo.
-app.MapGet(
-    "/api/empresa/{empresaId:long}/cfdi/{cfdiId:long}/xml",
+api.MapGet(
+    "/empresa/{empresaId:long}/cfdi/{cfdiId:long}/xml",
     (long empresaId, long cfdiId, bool? descargar, AdministracionXmlService admin) =>
     {
         var empresa = new EmpresaDto { EmpresaId = empresaId };
@@ -213,8 +365,8 @@ app.MapGet(
             : Results.File(contenido, "text/plain; charset=utf-8");
     });
 
-app.MapGet(
-    "/api/empresa/{empresaId:long}/cfdi/{cfdiId:long}/pdf",
+api.MapGet(
+    "/empresa/{empresaId:long}/cfdi/{cfdiId:long}/pdf",
     (long empresaId, long cfdiId, bool? descargar, AdministracionXmlService admin) =>
     {
         var empresa = new EmpresaDto { EmpresaId = empresaId };
@@ -227,8 +379,8 @@ app.MapGet(
     });
 
 // PDF de los archivos SAT de una empresa: cif, opinion-sat, opinion-imss o declaracion-{id}.
-app.MapGet(
-    "/api/empresa/{empresaId:long}/archivos-sat/{clave}",
+api.MapGet(
+    "/empresa/{empresaId:long}/archivos-sat/{clave}",
     (long empresaId, string clave, bool? descargar,
      CFDIManager.Web.Services.Cif.ConstanciaFiscalService constancias,
      CFDIManager.Web.Services.Cif.ArchivosSatService archivos) =>
@@ -247,8 +399,8 @@ app.MapGet(
             : Results.File(File.ReadAllBytes(ruta), "application/pdf", descargar == true ? Path.GetFileName(ruta) : null);
     });
 
-app.MapGet(
-    "/api/logos/{rfc}",
+api.MapGet(
+    "/logos/{rfc}",
     (string rfc, CatalogoLogosService logos) =>
         logos.Leer(rfc) is byte[] imagen
             ? Results.File(imagen, logos.TipoContenido(rfc)!)

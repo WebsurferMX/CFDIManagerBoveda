@@ -121,7 +121,8 @@ public class SatDescargaService : ISatDescargaService
         EmpresaDto empresa,
         ParametrosSolicitudSat p,
         CancellationToken cancelacion = default,
-        bool automatica = false)
+        bool automatica = false,
+        string origen = "")
     {
         if (p.FechaFinal < p.FechaInicial)
         {
@@ -150,6 +151,7 @@ public class SatDescargaService : ISatDescargaService
             Recibidos = p.Recibidos,
             Metadatos = p.Metadatos,
             Automatica = automatica,
+            Origen = origen,
             TipoComprobante = p.TipoComprobante,
             RfcContraparte = (p.RfcContraparte ?? "").Trim().ToUpperInvariant(),
             Estado = r.Aceptada ? "Aceptada" : "Rechazada",
@@ -237,7 +239,9 @@ public class SatDescargaService : ISatDescargaService
         EmpresaDto empresa,
         string solicitudId,
         IProgress<string>? progreso = null,
-        CancellationToken cancelacion = default)
+        CancellationToken cancelacion = default,
+        IReadOnlySet<string>? soloUuids = null,
+        bool soloNuevos = false)
     {
         SolicitudSatDto solicitud = await ObtenerAsync(empresa.EmpresaId, solicitudId);
 
@@ -275,7 +279,7 @@ public class SatDescargaService : ISatDescargaService
 
             if (!solicitud.Metadatos)
             {
-                ImportarPaquete(empresa, solicitud, rutaZip, progreso);
+                ImportarPaquete(empresa, solicitud, rutaZip, progreso, soloUuids, soloNuevos);
             }
 
             solicitud.PaquetesDescargados.Add(paquete);
@@ -381,7 +385,8 @@ public class SatDescargaService : ISatDescargaService
 
     public List<SatCfdiDto> LeerMetadatos(
         EmpresaDto empresa,
-        string solicitudId)
+        string solicitudId,
+        bool marcarImportados = true)
     {
         string carpetaPaquetes =
             Path.Combine(CarpetaEmpresa(empresa.EmpresaId), "Paquetes");
@@ -423,9 +428,12 @@ public class SatDescargaService : ISatDescargaService
             }
         }
 
-        foreach (SatCfdiDto cfdi in resultado)
+        if (marcarImportados)
         {
-            cfdi.YaImportado = _repo.ExisteCfdi(empresa.EmpresaId, cfdi.Uuid);
+            foreach (SatCfdiDto cfdi in resultado)
+            {
+                cfdi.YaImportado = _repo.ExisteCfdi(empresa.EmpresaId, cfdi.Uuid);
+            }
         }
 
         return resultado;
@@ -435,7 +443,9 @@ public class SatDescargaService : ISatDescargaService
         EmpresaDto empresa,
         SolicitudSatDto solicitud,
         string rutaZip,
-        IProgress<string>? progreso)
+        IProgress<string>? progreso,
+        IReadOnlySet<string>? soloUuids = null,
+        bool soloNuevos = false)
     {
         string carpetaTemporal =
             Path.Combine(_ambiente.ContentRootPath, "Storage", "Temporal", Guid.NewGuid().ToString("N"));
@@ -446,12 +456,27 @@ public class SatDescargaService : ISatDescargaService
         {
             using ZipArchive zip = ZipFile.OpenRead(rutaZip);
 
+            // El SAT nombra cada XML del paquete con su UUID (en minúsculas): con soloUuids (en mayúsculas)
+            // se omiten los demás sin leerlos.
             List<ZipArchiveEntry> xmls =
-                zip.Entries.Where(e => e.Name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)).ToList();
+                zip.Entries
+                    .Where(e => e.Name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                    .Where(e => soloUuids is null || soloUuids.Contains(Path.GetFileNameWithoutExtension(e.Name).ToUpperInvariant()))
+                    .ToList();
+
+            // Ventanas que se traslapan: lo que ya está en la bóveda ni se extrae ni se vuelve a importar.
+            // Un solo query; la base guarda UUID en mayúsculas y minúsculas, por eso se compara en mayúsculas.
+            HashSet<string>? existentes = soloNuevos ? _repo.ObtenerUuidsEmpresa(empresa.EmpresaId) : null;
 
             for (int i = 0; i < xmls.Count; i++)
             {
                 ZipArchiveEntry entrada = xmls[i];
+
+                if (existentes is not null && existentes.Contains(Path.GetFileNameWithoutExtension(entrada.Name).ToUpperInvariant()))
+                {
+                    solicitud.Actualizados++;
+                    continue;
+                }
 
                 // Path.GetFileName evita rutas dentro del ZIP que salgan de la carpeta temporal.
                 string rutaXml = Path.Combine(carpetaTemporal, Path.GetFileName(entrada.Name));

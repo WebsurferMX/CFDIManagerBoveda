@@ -92,7 +92,8 @@ public class SinubeService
         _repo.GuardarConfiguracionSinube(configuracion);
     }
 
-    private string Password(SinubeConfiguracionDto configuracion)
+    /// <summary>Contraseña en claro; también la usa SinubeDatosService (consultas getpost).</summary>
+    internal string Password(SinubeConfiguracionDto configuracion)
     {
         string? guardada = configuracion.Password;
 

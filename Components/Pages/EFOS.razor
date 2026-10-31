@@ -1,4 +1,5 @@
 @page "/efos"
+@attribute [Authorize(Policy = "Tarea:efos")]
 @implements IDisposable
 
 @using CFDIParser.Models

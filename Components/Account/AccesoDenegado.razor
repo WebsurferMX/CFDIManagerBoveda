@@ -1,0 +1,8 @@
+@page "/cuenta/acceso-denegado"
+@layout LoginLayout
+@attribute [AllowAnonymous]
+
+@* Destino de la cookie cuando una petición directa (URL o /api) no tiene el permiso. *@
+<PageTitle>Sin acceso · CFDI Manager</PageTitle>
+
+<AccesoDenegadoMensaje />

@@ -15,11 +15,13 @@ public interface ISatDescargaService
         EmpresaDto empresa,
         CancellationToken cancelacion = default);
 
+    /// <param name="origen">Ventana o Cierre en las de la descarga automática (ver SolicitudSatDto.Origen).</param>
     Task<SolicitudSatDto> CrearSolicitudAsync(
         EmpresaDto empresa,
         ParametrosSolicitudSat parametros,
         CancellationToken cancelacion = default,
-        bool automatica = false);
+        bool automatica = false,
+        string origen = "");
 
     Task<SolicitudSatDto> CrearSolicitudPorUuidAsync(
         EmpresaDto empresa,
@@ -35,11 +37,15 @@ public interface ISatDescargaService
     /// Descarga los paquetes pendientes. Los XML se importan a CFDI Manager;
     /// los metadatos quedan disponibles con <see cref="LeerMetadatos"/>.
     /// </summary>
+    /// <param name="soloUuids">Si se indica, del paquete solo se importan esos UUID (el resto ni se lee).</param>
+    /// <param name="soloNuevos">Omite sin abrirlos los XML cuyo UUID ya está en la bóveda (ventanas que se traslapan).</param>
     Task<SolicitudSatDto> DescargarAsync(
         EmpresaDto empresa,
         string solicitudId,
         IProgress<string>? progreso = null,
-        CancellationToken cancelacion = default);
+        CancellationToken cancelacion = default,
+        IReadOnlySet<string>? soloUuids = null,
+        bool soloNuevos = false);
 
     Task<List<SolicitudSatDto>> ListarSolicitudesAsync(
         long empresaId);
@@ -57,7 +63,9 @@ public interface ISatDescargaService
         long empresaId,
         string solicitudId);
 
+    /// <param name="marcarImportados">Consulta la base por cada UUID para llenar YaImportado (lento con miles).</param>
     List<SatCfdiDto> LeerMetadatos(
         EmpresaDto empresa,
-        string solicitudId);
+        string solicitudId,
+        bool marcarImportados = true);
 }

@@ -1,8 +1,7 @@
 @using CFDIParser.Models
-@using CFDIParser.Services
 @using CFDIManager.Web.Services
 
-@inject PostgreSqlRepository Repo
+@inject AccesoEmpresasService Acceso
 @inject EmpresaContext EmpresaContext
 
 <div class="empresa-selector">
@@ -12,7 +11,7 @@
             value="@EmpresaContext.EmpresaId"
             @onchange="CambiarEmpresa">
 
-        <option value="0">Selecciona un RFC</option>
+        <option value="0">@(Empresas.Count == 0 ? "Sin empresas asignadas" : "Selecciona un RFC")</option>
 
         @foreach (var empresa in Empresas)
         {
@@ -23,20 +22,25 @@
 
     </select>
 
-    <DescargaSatSwitch />
+    <AuthorizeView Policy="@Permisos.OperarCfdi">
+        <DescargaSatSwitch />
 
-    <ActualizarIndice />
+        <ActualizarIndice />
+    </AuthorizeView>
 
     <CambiarTema />
+
+    <UsuarioMenu />
 </div>
 
 @code
 {
+    // Solo las empresas asignadas al usuario (el Administrador ve todas).
     private List<EmpresaDto> Empresas = new();
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        Empresas = Repo.ObtenerEmpresasActivas();
+        Empresas = await Acceso.ObtenerEmpresasPermitidasAsync();
     }
 
     private void CambiarEmpresa(ChangeEventArgs args)

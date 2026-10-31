@@ -9,6 +9,7 @@
 @inject ValidacionSatLoteService ValidacionSatLote
 @inject PostgreSqlRepository Repo
 @inject EmpresaContext EmpresaContext
+@inject AccesoEmpresasService Acceso
 
 <div class="cfdi-page">
     <header class="page-heading">
@@ -38,12 +39,12 @@
 
         <div class="filter-field">
             <label>Fecha inicial</label>
-            <InputDate @bind-Value="Filtro.FechaInicio" />
+            <FechaInput @bind-Valor="Filtro.FechaInicio" />
         </div>
 
         <div class="filter-field">
             <label>Fecha final</label>
-            <InputDate @bind-Value="Filtro.FechaFin" />
+            <FechaInput @bind-Valor="Filtro.FechaFin" />
         </div>
 
         <div class="filter-field search-field">
@@ -332,19 +333,19 @@
     private string SufijoFemenino => Clasificacion == "EMITIDO" ? "emitidas" : "recibidas";
     private string SufijoMasculino => Clasificacion == "EMITIDO" ? "emitidos" : "recibidos";
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         EmpresaContext.OnChange += CambiarEmpresa;
-        InicializarEmpresa();
+        await InicializarEmpresaAsync();
         CargarDatos();
     }
 
     protected override void OnParametersSet() => Filtro.Clasificacion = NormalizarClasificacion(Clasificacion);
 
-    private void InicializarEmpresa()
+    private async Task InicializarEmpresaAsync()
     {
         if (EmpresaContext.TieneEmpresaActiva) return;
-        EmpresaDto? primeraEmpresa = Repo.ObtenerEmpresasActivas().FirstOrDefault();
+        EmpresaDto? primeraEmpresa = (await Acceso.ObtenerEmpresasPermitidasAsync()).FirstOrDefault();
         if (primeraEmpresa is not null) EmpresaContext.Seleccionar(primeraEmpresa);
     }
 
@@ -356,8 +357,7 @@
         Error = null;
         try
         {
-            InicializarEmpresa();
-            if (!EmpresaContext.TieneEmpresaActiva) throw new InvalidOperationException("No existen empresas activas registradas.");
+            if (!EmpresaContext.TieneEmpresaActiva) throw new InvalidOperationException("No tienes empresas activas asignadas.");
             Filtro.EmpresaId = EmpresaContext.EmpresaId;
             Filtro.Clasificacion = NormalizarClasificacion(Clasificacion);
             Resultado = Repo.BuscarCfdi(Filtro);
@@ -615,7 +615,7 @@
 
     private static CfdiFiltroDto CrearFiltroInicial() => new()
     {
-        FechaInicio = new DateTime(2024, 1, 1),
+        FechaInicio = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
         FechaFin = DateTime.Today,
         Pagina = 1,
         RegistrosPorPagina = 25,

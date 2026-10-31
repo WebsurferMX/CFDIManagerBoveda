@@ -1,0 +1,1058 @@
+@page "/configuracion/usuarios"
+@attribute [Authorize(Policy = "Tarea:usuarios")]
+
+@using System.Globalization
+@using CFDIManager.Web.Services.Correo
+@using CFDIParser.Models
+@using CFDIParser.Services
+@using Microsoft.AspNetCore.Identity
+
+@inject PostgreSqlRepository Repo
+@inject UserManager<UsuarioDto> UserManager
+@inject AccesoEmpresasService Acceso
+@inject CuentasUsuarioService Cuentas
+@inject CorreoService Correo
+@inject IJSRuntime JS
+@inject TareasUsuarioCache TareasCache
+
+<PageTitle>Usuarios</PageTitle>
+
+<div class="usuarios-page d-flex flex-column gap-3 pb-4">
+    <header class="d-flex flex-wrap justify-content-between align-items-end gap-3">
+        <div>
+            <span class="eyebrow">CONFIGURACIÓN</span>
+            <h1 class="h2 mb-1">Usuarios</h1>
+            <p class="text-body-secondary mb-0">Da de alta usuarios, asigna su rol y las empresas que pueden consultar.</p>
+        </div>
+
+        <button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" @onclick="NuevoUsuario" disabled="@Guardando">
+            <i class="bi bi-person-plus-fill"></i>
+            Nuevo usuario
+        </button>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(MensajeExito))
+    {
+        <div class="alert alert-success alert-dismissible d-flex align-items-center gap-2 mb-0 shadow-sm" role="status">
+            <i class="bi bi-check-circle-fill fs-5"></i>
+            <span>@MensajeExito</span>
+            <button type="button" class="btn-close" aria-label="Cerrar" @onclick="() => MensajeExito = null"></button>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(MensajeError))
+    {
+        <div class="alert alert-danger alert-dismissible d-flex align-items-center gap-2 mb-0 shadow-sm" role="alert">
+            <i class="bi bi-exclamation-octagon-fill fs-5"></i>
+            <span>@MensajeError</span>
+            <button type="button" class="btn-close" aria-label="Cerrar" @onclick="() => MensajeError = null"></button>
+        </div>
+    }
+
+    @* ---------- Indicadores ---------- *@
+    <div class="row g-3">
+        @foreach ((string titulo, int valor, string icono, string color) in Indicadores)
+        {
+            <div class="col-6 col-lg-3">
+                <div class="card shadow-sm h-100 indicador">
+                    <div class="card-body d-flex align-items-center gap-3">
+                        <span class="indicador-icono text-@color bg-@color-subtle"><i class="bi @icono"></i></span>
+                        <div>
+                            <div class="small text-body-secondary">@titulo</div>
+                            <div class="fs-4 fw-bold lh-1">@valor.ToString("N0")</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="row g-3 align-items-start">
+        @* ---------- Catálogo ---------- *@
+        <div class="col-xxl-8 col-xl-7">
+            <div class="card shadow-sm">
+                <div class="card-header bg-body d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
+                    <div>
+                        <span class="eyebrow">CATÁLOGO</span>
+                        <h2 class="h5 mb-0">Usuarios registrados</h2>
+                    </div>
+
+                    <div class="input-group input-group-sm buscador">
+                        <span class="input-group-text bg-body"><i class="bi bi-search"></i></span>
+                        <input class="form-control" placeholder="Buscar usuario, nombre o correo" @bind="Busqueda" @bind:event="oninput" />
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0 tabla-usuarios">
+                        <thead>
+                            <tr>
+                                <th>Usuario</th>
+                                <th>Rol</th>
+                                <th class="text-center">Empresas</th>
+                                <th class="text-center">Tareas</th>
+                                <th>Estado</th>
+                                <th>Último acceso</th>
+                                <th class="text-end">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (UsuariosFiltrados.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="7" class="text-center text-body-secondary py-5">
+                                        <i class="bi bi-people fs-3 d-block mb-1"></i>
+                                        No hay usuarios que coincidan con la búsqueda.
+                                    </td>
+                                </tr>
+                            }
+
+                            @foreach (UsuarioDto u in UsuariosFiltrados)
+                            {
+                                <tr class="@(u.UsuarioId == Modelo.UsuarioId ? "table-active seleccionado" : "")" @onclick="() => EditarUsuario(u)">
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="avatar avatar-@ColorRol(u.Rol)">@Iniciales(u.NombreParaMostrar)</span>
+                                            <div class="lh-sm">
+                                                <div class="fw-semibold">@u.NombreParaMostrar</div>
+                                                <div class="small text-body-secondary font-monospace">@u.NombreUsuario</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge rounded-pill bg-@ColorRol(u.Rol)-subtle text-@ColorRol(u.Rol)-emphasis border border-@ColorRol(u.Rol)-subtle">
+                                            @(string.IsNullOrEmpty(u.Rol) ? "Sin rol" : u.Rol)
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        @if (u.Rol == Roles.Administrador)
+                                        {
+                                            <span class="small text-body-secondary">Todas</span>
+                                        }
+                                        else if (u.TotalEmpresas == 0)
+                                        {
+                                            <span class="badge text-bg-warning" title="Sin empresas asignadas">0</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="fw-semibold">@u.TotalEmpresas</span>
+                                        }
+                                    </td>
+                                    <td class="text-center small">
+                                        @if (u.Rol == Roles.Administrador)
+                                        {
+                                            <span class="text-body-secondary">Todas</span>
+                                        }
+                                        else
+                                        {
+                                            int total = Tareas.AsignablesPara(u.Rol).Count();
+                                            <span class="@(u.TareasDenegadas > 0 ? "fw-semibold text-warning-emphasis" : "")"
+                                                  title="@(u.TareasDenegadas > 0 ? $"Se le quitaron {u.TareasDenegadas} tarea(s)" : "Todas las de su rol")">
+                                                @(total - Math.Min(u.TareasDenegadas, total))/@total
+                                            </span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (EstaBloqueado(u))
+                                        {
+                                            <span class="estado text-danger"><i class="bi bi-lock-fill"></i> Bloqueado</span>
+                                        }
+                                        else if (!u.Activo)
+                                        {
+                                            <span class="estado text-body-secondary"><i class="bi bi-dash-circle"></i> Inactivo</span>
+                                        }
+                                        else if (u.DebeCambiarPassword)
+                                        {
+                                            <span class="estado text-warning-emphasis" title="Tiene una contraseña temporal"><i class="bi bi-hourglass-split"></i> Pendiente</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="estado text-success"><i class="bi bi-circle-fill"></i> Activo</span>
+                                        }
+                                    </td>
+                                    <td class="small">
+                                        @if (u.UltimoAcceso is DateTime acceso)
+                                        {
+                                            <span title="@acceso.ToString("dd/MM/yyyy HH:mm")">@acceso.ToString("dd/MM/yyyy HH:mm")</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-body-secondary">Nunca</span>
+                                        }
+                                    </td>
+                                    <td class="text-end text-nowrap" @onclick:stopPropagation="true">
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-outline-secondary" title="Editar" @onclick="() => EditarUsuario(u)">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-secondary" title="Restablecer contraseña" @onclick="() => PedirRestablecer(u)">
+                                                <i class="bi bi-key"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger" title="Eliminar usuario" @onclick="() => PorEliminar = u" disabled="@(u.UsuarioId == UsuarioActualId)">
+                                                <i class="bi bi-trash3"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card-footer bg-body small text-body-secondary">
+                    Mostrando @UsuariosFiltrados.Count de @ListaUsuarios.Count usuario(s)
+                </div>
+            </div>
+        </div>
+
+        @* ---------- Formulario ---------- *@
+        <div class="col-xxl-4 col-xl-5">
+            <div class="card shadow-sm formulario">
+                <div class="card-header bg-body d-flex justify-content-between align-items-center py-3">
+                    <div>
+                        <span class="eyebrow">@(Editando ? "EDITAR USUARIO" : "NUEVO USUARIO")</span>
+                        <h2 class="h5 mb-0">@(Editando ? Modelo.NombreUsuario : "Alta de usuario")</h2>
+                    </div>
+
+                    @if (Editando)
+                    {
+                        <span class="badge text-bg-secondary">ID @Modelo.UsuarioId</span>
+                    }
+                </div>
+
+                <div class="card-body">
+                    @* Datos generales *@
+                    <div class="seccion">
+                        <div class="seccion-titulo"><i class="bi bi-person-vcard"></i> Datos generales</div>
+
+                        <div class="row g-2">
+                            <div class="col-sm-6">
+                                <label class="form-label small fw-semibold" for="nombre-usuario">Usuario</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-person"></i></span>
+                                    <input id="nombre-usuario" class="form-control" @bind="Modelo.NombreUsuario" disabled="@Editando" autocomplete="off" placeholder="jperez" />
+                                </div>
+                            </div>
+
+                            <div class="col-sm-6">
+                                <label class="form-label small fw-semibold" for="nombre-completo">Nombre completo</label>
+                                <input id="nombre-completo" class="form-control" @bind="Modelo.NombreCompleto" placeholder="Juan Pérez" />
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label small fw-semibold" for="email">Correo electrónico</label>
+                                <div class="input-group">
+                                    <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                                    <input id="email" type="email" class="form-control" @bind="Modelo.Email" @bind:after="AjustarBienvenida" placeholder="jperez@empresa.com" />
+                                </div>
+                                @if (!Editando)
+                                {
+                                    <div class="form-text">El usuario inicia sesión con su nombre de usuario; no se puede cambiar después.</div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    @* Rol *@
+                    <div class="seccion">
+                        <div class="seccion-titulo"><i class="bi bi-shield-check"></i> Rol</div>
+
+                        <div class="list-group roles">
+                            @foreach (RolDto rol in ListaRoles)
+                            {
+                                <label class="list-group-item list-group-item-action d-flex gap-2 @(Modelo.Rol == rol.Nombre ? "active-rol" : "")">
+                                    <input class="form-check-input flex-shrink-0 mt-1"
+                                           type="radio"
+                                           name="rol"
+                                           checked="@(Modelo.Rol == rol.Nombre)"
+                                           @onchange="() => Modelo.Rol = rol.Nombre" />
+                                    <span>
+                                        <span class="fw-semibold d-block">@rol.Nombre</span>
+                                        <small class="text-body-secondary">@rol.Descripcion</small>
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+
+                    @* Acceso *@
+                    <div class="seccion">
+                        <div class="seccion-titulo"><i class="bi bi-key"></i> Acceso</div>
+
+                        @if (!Editando)
+                        {
+                            <div class="d-flex flex-column gap-1 mb-2">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" id="pwd-temporal" name="tipo-password"
+                                           checked="@Modelo.GenerarTemporal" @onchange="() => Modelo.GenerarTemporal = true" />
+                                    <label class="form-check-label small" for="pwd-temporal">
+                                        Generar contraseña temporal <span class="badge bg-success-subtle text-success-emphasis ms-1">Recomendado</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" id="pwd-manual" name="tipo-password"
+                                           checked="@(!Modelo.GenerarTemporal)" @onchange="() => Modelo.GenerarTemporal = false" />
+                                    <label class="form-check-label small" for="pwd-manual">Escribir la contraseña</label>
+                                </div>
+                            </div>
+
+                            @if (Modelo.GenerarTemporal)
+                            {
+                                <div class="form-text mb-2">Se genera al guardar; el usuario deberá cambiarla en su primer inicio de sesión.</div>
+                            }
+                            else
+                            {
+                                <div class="row g-2 mb-2">
+                                    <div class="col-sm-6">
+                                        <input type="password" class="form-control" placeholder="Contraseña" autocomplete="new-password" @bind="Modelo.Password" />
+                                    </div>
+                                    <div class="col-sm-6">
+                                        <input type="password" class="form-control" placeholder="Confirmar" autocomplete="new-password" @bind="Modelo.ConfirmarPassword" />
+                                    </div>
+                                    <div class="col-12 form-text mt-1">Mínimo 8 caracteres con mayúscula, minúscula y número.</div>
+                                </div>
+                            }
+
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch" id="bienvenida"
+                                       @bind="Modelo.EnviarBienvenida" disabled="@(!PuedeEnviarBienvenida)" />
+                                <label class="form-check-label small" for="bienvenida">Enviar correo de bienvenida</label>
+                            </div>
+                            @if (!CorreoConfigurado)
+                            {
+                                <div class="form-text"><i class="bi bi-info-circle"></i> Configura el envío en <a href="configuracion/correo">Configuración → Correo</a>.</div>
+                            }
+                            else if (string.IsNullOrWhiteSpace(Modelo.Email))
+                            {
+                                <div class="form-text">Captura el correo del usuario para enviarle la bienvenida.</div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                <div class="form-check form-switch m-0">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="activo" @bind="Modelo.Activo" />
+                                    <label class="form-check-label small fw-semibold" for="activo">Usuario activo</label>
+                                </div>
+
+                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => PedirRestablecer(UsuarioSeleccionado!)" disabled="@Guardando">
+                                    <i class="bi bi-arrow-repeat me-1"></i>Restablecer contraseña
+                                </button>
+                            </div>
+
+                            @if (Modelo.Bloqueado)
+                            {
+                                <div class="alert alert-danger d-flex align-items-center justify-content-between gap-2 py-2 mt-2 mb-0 small">
+                                    <span><i class="bi bi-lock-fill me-1"></i>Bloqueado por intentos fallidos.</span>
+                                    <button type="button" class="btn btn-sm btn-danger" @onclick="Desbloquear" disabled="@Guardando">Desbloquear</button>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    @* Tareas: opciones del menú del rol; desmarcar una se la quita a este usuario. *@
+                    <div class="seccion">
+                        <div class="seccion-titulo d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-ui-checks-grid"></i> Tareas</span>
+                            @if (!EsAdministradorSeleccionado)
+                            {
+                                <span class="badge rounded-pill text-bg-primary">@TareasAsignadas / @TareasDelRol.Count</span>
+                            }
+                        </div>
+
+                        @if (EsAdministradorSeleccionado)
+                        {
+                            <div class="alert alert-info d-flex gap-2 py-2 mb-0 small">
+                                <i class="bi bi-info-circle-fill"></i>
+                                El Administrador tiene todas las tareas.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="small text-body-secondary">Las que desmarques no le aparecerán en el menú. Resumen siempre está.</span>
+                                <span class="d-flex gap-1">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => Modelo.TareasDenegadas.Clear()">Todas</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="QuitarTodasLasTareas">Ninguna</button>
+                                </span>
+                            </div>
+
+                            <div class="tareas">
+                                @foreach (var grupo in TareasDelRol.GroupBy(t => t.Grupo))
+                                {
+                                    <div class="tareas-grupo">
+                                        <div class="tareas-grupo-titulo">@grupo.Key</div>
+                                        @foreach (Tarea t in grupo)
+                                        {
+                                            <label class="form-check tarea">
+                                                <input class="form-check-input" type="checkbox"
+                                                       checked="@(!Modelo.TareasDenegadas.Contains(t.Clave))"
+                                                       @onchange="args => AlternarTarea(t.Clave, args)" />
+                                                <span class="form-check-label"><i class="bi @t.Icono me-1 text-body-secondary"></i>@t.Nombre</span>
+                                            </label>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    @* Empresas *@
+                    <div class="seccion mb-0">
+                        <div class="seccion-titulo d-flex justify-content-between align-items-center">
+                            <span><i class="bi bi-buildings"></i> Empresas asignadas</span>
+                            @if (!EsAdministradorSeleccionado)
+                            {
+                                <span class="badge rounded-pill text-bg-primary">@Modelo.Empresas.Count / @ListaEmpresas.Count</span>
+                            }
+                        </div>
+
+                        @if (EsAdministradorSeleccionado)
+                        {
+                            <div class="alert alert-info d-flex gap-2 py-2 mb-0 small">
+                                <i class="bi bi-info-circle-fill"></i>
+                                El Administrador tiene acceso a todas las empresas; no necesita asignación.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="input-group input-group-sm mb-2">
+                                <span class="input-group-text"><i class="bi bi-funnel"></i></span>
+                                <input class="form-control" placeholder="Filtrar por RFC o nombre" @bind="FiltroEmpresas" @bind:event="oninput" />
+                                <button type="button" class="btn btn-outline-secondary" @onclick="SeleccionarTodas">Todas</button>
+                                <button type="button" class="btn btn-outline-secondary" @onclick="() => Modelo.Empresas.Clear()">Ninguna</button>
+                            </div>
+
+                            <div class="list-group empresas-lista">
+                                @foreach (EmpresaDto e in EmpresasFiltradas)
+                                {
+                                    <label class="list-group-item list-group-item-action d-flex align-items-center gap-2 py-2 small">
+                                        <input class="form-check-input flex-shrink-0 m-0"
+                                               type="checkbox"
+                                               checked="@Modelo.Empresas.Contains(e.EmpresaId)"
+                                               @onchange="args => AlternarEmpresa(e.EmpresaId, args)" />
+                                        <span class="font-monospace fw-semibold">@e.Rfc</span>
+                                        <span class="text-truncate text-body-secondary flex-grow-1">@e.NombreParaMostrar</span>
+                                        @if (!e.Activa)
+                                        {
+                                            <span class="badge text-bg-secondary">Inactiva</span>
+                                        }
+                                    </label>
+                                }
+
+                                @if (EmpresasFiltradas.Count == 0)
+                                {
+                                    <div class="list-group-item small text-body-secondary text-center py-3">No hay empresas que coincidan.</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="card-footer bg-body d-flex justify-content-between gap-2 py-3">
+                    @if (Editando)
+                    {
+                        <button type="button" class="btn btn-outline-danger" @onclick="() => PorEliminar = UsuarioSeleccionado" disabled="@(Guardando || Modelo.UsuarioId == UsuarioActualId)">
+                            <i class="bi bi-trash3 me-1"></i>Eliminar
+                        </button>
+                    }
+                    else
+                    {
+                        <span></span>
+                    }
+
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-outline-secondary" @onclick="NuevoUsuario" disabled="@Guardando">Cancelar</button>
+                        <button type="button" class="btn btn-primary px-4" @onclick="Guardar" disabled="@Guardando">
+                            @if (Guardando)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                            }
+                            @(Editando ? "Guardar cambios" : "Crear usuario")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* ---------- Confirmar eliminación ---------- *@
+<Modal Visible="PorEliminar is not null"
+       Titulo="Eliminar usuario"
+       Icono="bi-trash3"
+       Variante="danger"
+       Ocupado="Guardando"
+       OnCerrar="() => PorEliminar = null">
+    <ChildContent>
+        <p class="mb-2">¿Eliminar a <strong>@PorEliminar?.NombreParaMostrar</strong> (<span class="font-monospace">@PorEliminar?.NombreUsuario</span>)?</p>
+        <p class="small text-body-secondary mb-0">
+            Se borran su acceso, su rol y sus empresas asignadas. Esta acción no se puede deshacer;
+            si solo quieres impedir que entre, mejor desactívalo.
+        </p>
+    </ChildContent>
+    <Pie>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => PorEliminar = null" disabled="@Guardando">Cancelar</button>
+        <button type="button" class="btn btn-danger" @onclick="Eliminar" disabled="@Guardando">
+            @if (Guardando)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Eliminar usuario
+        </button>
+    </Pie>
+</Modal>
+
+@* ---------- Confirmar restablecimiento ---------- *@
+<Modal Visible="PorRestablecer is not null"
+       Titulo="Restablecer contraseña"
+       Icono="bi-key"
+       Variante="warning"
+       Ocupado="Guardando"
+       OnCerrar="() => PorRestablecer = null">
+    <ChildContent>
+        <p class="mb-2">Se generará una contraseña temporal para <strong>@PorRestablecer?.NombreParaMostrar</strong>.</p>
+        <ul class="small text-body-secondary ps-3 mb-3">
+            <li>Sus sesiones abiertas se cerrarán.</li>
+            <li>Si estaba bloqueado, se desbloquea.</li>
+            <li>Deberá elegir una contraseña nueva al iniciar sesión.</li>
+        </ul>
+
+        @if (CorreoConfigurado && !string.IsNullOrWhiteSpace(PorRestablecer?.Email))
+        {
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" role="switch" id="enviar-restablecer" @bind="EnviarRestablecimiento" />
+                <label class="form-check-label small" for="enviar-restablecer">Enviar la contraseña temporal a @PorRestablecer?.Email</label>
+            </div>
+        }
+        else
+        {
+            <div class="alert alert-secondary small py-2 mb-0">
+                <i class="bi bi-info-circle me-1"></i>
+                @(CorreoConfigurado ? "El usuario no tiene correo registrado" : "El envío de correos no está configurado"); la contraseña se mostrará aquí para que la compartas.
+            </div>
+        }
+    </ChildContent>
+    <Pie>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => PorRestablecer = null" disabled="@Guardando">Cancelar</button>
+        <button type="button" class="btn btn-warning" @onclick="Restablecer" disabled="@Guardando">
+            @if (Guardando)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Restablecer
+        </button>
+    </Pie>
+</Modal>
+
+@* ---------- Contraseña temporal generada ---------- *@
+<Modal Visible="Credencial is not null"
+       Titulo="@(Credencial?.Titulo ?? "")"
+       Icono="bi-shield-lock"
+       Variante="success"
+       OnCerrar="() => Credencial = null">
+    <ChildContent>
+        @if (Credencial is not null)
+        {
+            <p class="small text-body-secondary">Comparte estos datos con el usuario por un medio seguro. La contraseña no se volverá a mostrar.</p>
+
+            <div class="credencial rounded-3 border p-3 mb-3">
+                <div class="d-flex justify-content-between small mb-2">
+                    <span class="text-body-secondary">Usuario</span>
+                    <span class="font-monospace fw-semibold">@Credencial.Usuario</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="small text-body-secondary">Contraseña temporal</span>
+                    <span class="d-flex align-items-center gap-2">
+                        <span class="font-monospace fs-5 fw-bold">@Credencial.Password</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" title="Copiar" @onclick="Copiar">
+                            <i class="bi @(Copiado ? "bi-clipboard-check text-success" : "bi-clipboard")"></i>
+                        </button>
+                    </span>
+                </div>
+            </div>
+
+            @if (Credencial.CorreoEnviado is true)
+            {
+                <div class="alert alert-success small py-2 mb-0"><i class="bi bi-envelope-check me-1"></i>También se envió por correo a @Credencial.Email.</div>
+            }
+            else if (Credencial.CorreoEnviado is false)
+            {
+                <div class="alert alert-warning small py-2 mb-0"><i class="bi bi-envelope-exclamation me-1"></i>No se pudo enviar el correo: @Credencial.ErrorCorreo</div>
+            }
+        }
+    </ChildContent>
+    <Pie>
+        <button type="button" class="btn btn-primary" @onclick="() => Credencial = null">Listo</button>
+    </Pie>
+</Modal>
+
+@code {
+    private static readonly CultureInfo Mx = new("es-MX");
+
+    private List<UsuarioDto> ListaUsuarios = new();
+    private List<RolDto> ListaRoles = new();
+    private List<EmpresaDto> ListaEmpresas = new();
+
+    private ModeloUsuario Modelo = new();
+    private UsuarioDto? UsuarioSeleccionado;
+    private long? UsuarioActualId;
+    private string MiNombre = "";
+    private bool CorreoConfigurado;
+
+    private string Busqueda = "";
+    private string FiltroEmpresas = "";
+    private bool Guardando;
+    private string? MensajeError;
+    private string? MensajeExito;
+
+    private UsuarioDto? PorEliminar;
+    private UsuarioDto? PorRestablecer;
+    private bool EnviarRestablecimiento;
+    private CredencialTemporal? Credencial;
+    private bool Copiado;
+
+    private bool Editando => Modelo.UsuarioId > 0;
+
+    private bool EsAdministradorSeleccionado => Modelo.Rol == Roles.Administrador;
+
+    // Tareas del rol elegido que se pueden quitar, y cuántas conserva el usuario.
+    private List<Tarea> TareasDelRol => Tareas.AsignablesPara(Modelo.Rol).ToList();
+
+    private int TareasAsignadas => TareasDelRol.Count(t => !Modelo.TareasDenegadas.Contains(t.Clave));
+
+    private void AlternarTarea(string clave, ChangeEventArgs args)
+    {
+        if (args.Value is true)
+            Modelo.TareasDenegadas.Remove(clave);
+        else
+            Modelo.TareasDenegadas.Add(clave);
+    }
+
+    private void QuitarTodasLasTareas() => Modelo.TareasDenegadas = TareasDelRol.Select(t => t.Clave).ToHashSet();
+
+    /// <summary>Guarda solo las quitadas que aplican a su rol; el cambio aplica de inmediato (sin cerrar su sesión).</summary>
+    private void GuardarTareas(long usuarioId)
+    {
+        HashSet<string> delRol = TareasDelRol.Select(t => t.Clave).ToHashSet();
+        Repo.GuardarTareasDenegadas(usuarioId, Modelo.TareasDenegadas.Where(delRol.Contains));
+        TareasCache.Invalidar(usuarioId);
+    }
+
+    private bool PuedeEnviarBienvenida => CorreoConfigurado && CorreoService.EsCorreoValido(Modelo.Email);
+
+    private IEnumerable<(string, int, string, string)> Indicadores =>
+    [
+        ("Usuarios", ListaUsuarios.Count, "bi-people-fill", "primary"),
+        ("Activos", ListaUsuarios.Count(u => u.Activo), "bi-person-check-fill", "success"),
+        ("Administradores", ListaUsuarios.Count(u => u.Rol == Roles.Administrador), "bi-shield-lock-fill", "info"),
+        ("Bloqueados o pendientes", ListaUsuarios.Count(u => EstaBloqueado(u) || u.DebeCambiarPassword), "bi-exclamation-triangle-fill", "warning")
+    ];
+
+    private List<UsuarioDto> UsuariosFiltrados =>
+        ListaUsuarios
+            .Where(u =>
+                string.IsNullOrWhiteSpace(Busqueda) ||
+                u.NombreUsuario.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                u.NombreCompleto.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                u.Email.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    private List<EmpresaDto> EmpresasFiltradas =>
+        ListaEmpresas
+            .Where(e =>
+                string.IsNullOrWhiteSpace(FiltroEmpresas) ||
+                e.Rfc.Contains(FiltroEmpresas.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                e.NombreParaMostrar.Contains(FiltroEmpresas.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var usuarioActual = await Acceso.ObtenerUsuarioActualAsync();
+        UsuarioActualId = AccesoEmpresasService.ObtenerUsuarioId(usuarioActual);
+        MiNombre = usuarioActual.FindFirst(UsuarioClaimsFactory.NombreCompleto)?.Value ?? usuarioActual.Identity?.Name ?? "";
+        CorreoConfigurado = Correo.EstaConfigurado();
+
+        try
+        {
+            ListaRoles = Repo.ObtenerRoles();
+            ListaEmpresas = Repo.ObtenerEmpresas()
+                .OrderByDescending(e => e.Activa)
+                .ThenBy(e => e.NombreParaMostrar)
+                .ToList();
+            CargarUsuarios();
+        }
+        catch (Exception ex)
+        {
+            MensajeError = ex.Message;
+        }
+
+        Modelo = CrearModeloVacio();
+    }
+
+    private void CargarUsuarios() => ListaUsuarios = Repo.ObtenerUsuarios();
+
+    private ModeloUsuario CrearModeloVacio() => new() { Rol = Roles.Consulta };
+
+    private static bool EstaBloqueado(UsuarioDto u) => u.LockoutFin > DateTimeOffset.UtcNow;
+
+    private static string ColorRol(string rol) => rol switch
+    {
+        Roles.Administrador => "primary",
+        Roles.Supervisor => "info",
+        Roles.Contador => "success",
+        _ => "secondary"
+    };
+
+    private static string Iniciales(string nombre) =>
+        string.Concat(nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(p => char.ToUpperInvariant(p[0])));
+
+    private void AjustarBienvenida() => Modelo.EnviarBienvenida = PuedeEnviarBienvenida;
+
+    private void NuevoUsuario()
+    {
+        LimpiarMensajes();
+        UsuarioSeleccionado = null;
+        Modelo = CrearModeloVacio();
+    }
+
+    private void EditarUsuario(UsuarioDto u)
+    {
+        LimpiarMensajes();
+        UsuarioSeleccionado = u;
+
+        Modelo = new ModeloUsuario
+        {
+            UsuarioId = u.UsuarioId,
+            NombreUsuario = u.NombreUsuario,
+            NombreCompleto = u.NombreCompleto,
+            Email = u.Email,
+            Rol = string.IsNullOrEmpty(u.Rol) ? Roles.Consulta : u.Rol,
+            RolOriginal = u.Rol,
+            Activo = u.Activo,
+            Bloqueado = EstaBloqueado(u),
+            Empresas = Repo.ObtenerEmpresasIdsDeUsuario(u.UsuarioId).ToHashSet(),
+            TareasDenegadas = Repo.ObtenerTareasDenegadas(u.UsuarioId).ToHashSet()
+        };
+    }
+
+    private void AlternarEmpresa(long empresaId, ChangeEventArgs args)
+    {
+        if (args.Value is true)
+            Modelo.Empresas.Add(empresaId);
+        else
+            Modelo.Empresas.Remove(empresaId);
+    }
+
+    private void SeleccionarTodas()
+    {
+        foreach (EmpresaDto e in EmpresasFiltradas)
+            Modelo.Empresas.Add(e.EmpresaId);
+    }
+
+    // ---------- Guardar ----------
+
+    private async Task Guardar()
+    {
+        LimpiarMensajes();
+        Guardando = true;
+
+        try
+        {
+            ValidarModelo();
+
+            if (Editando)
+            {
+                UsuarioDto usuario = await ActualizarUsuarioAsync();
+                Repo.GuardarEmpresasDeUsuario(usuario.UsuarioId, Modelo.Empresas);
+                GuardarTareas(usuario.UsuarioId);
+                Recargar(usuario.UsuarioId);
+                MensajeExito = $"Se guardaron los cambios de {usuario.NombreUsuario}.";
+            }
+            else
+            {
+                await CrearUsuarioAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            MensajeError = ex.Message;
+        }
+        finally
+        {
+            Guardando = false;
+        }
+    }
+
+    private async Task CrearUsuarioAsync()
+    {
+        string? temporal = Modelo.GenerarTemporal ? CuentasUsuarioService.GenerarPasswordTemporal() : null;
+
+        var usuario = new UsuarioDto
+        {
+            NombreUsuario = Modelo.NombreUsuario.Trim(),
+            NombreCompleto = Modelo.NombreCompleto.Trim(),
+            Email = Modelo.Email.Trim(),
+            Activo = true,
+            DebeCambiarPassword = temporal is not null
+        };
+
+        Verificar(await UserManager.CreateAsync(usuario, temporal ?? Modelo.Password));
+        Verificar(await UserManager.AddToRoleAsync(usuario, Modelo.Rol));
+        Repo.GuardarEmpresasDeUsuario(usuario.UsuarioId, Modelo.Empresas);
+        GuardarTareas(usuario.UsuarioId);
+
+        // El usuario ya existe: un fallo del correo solo se informa.
+        (bool? enviado, string? errorCorreo) = (null, null);
+
+        if (Modelo.EnviarBienvenida && PuedeEnviarBienvenida)
+        {
+            try
+            {
+                await Cuentas.EnviarBienvenidaAsync(usuario, Modelo.Rol, temporal, MiNombre);
+                enviado = true;
+            }
+            catch (Exception ex)
+            {
+                (enviado, errorCorreo) = (false, ex.Message);
+            }
+        }
+
+        Recargar(usuario.UsuarioId);
+
+        if (temporal is not null)
+        {
+            Credencial = new CredencialTemporal("Usuario creado", usuario.NombreUsuario, temporal, usuario.Email, enviado, errorCorreo);
+            Copiado = false;
+        }
+
+        MensajeExito = enviado switch
+        {
+            true => $"Se creó el usuario {usuario.NombreUsuario} y se le envió el correo de bienvenida.",
+            false => $"Se creó el usuario {usuario.NombreUsuario}, pero no se pudo enviar el correo: {errorCorreo}",
+            null => $"Se creó el usuario {usuario.NombreUsuario}."
+        };
+    }
+
+    private async Task<UsuarioDto> ActualizarUsuarioAsync()
+    {
+        UsuarioDto usuario = await UserManager.FindByIdAsync(Modelo.UsuarioId.ToString())
+            ?? throw new InvalidOperationException("El usuario ya no existe.");
+
+        ProtegerAdministradores(usuario);
+
+        // Cambiar estado o rol cierra las sesiones abiertas del usuario (sello de seguridad).
+        bool invalidarSesiones = usuario.Activo != Modelo.Activo;
+
+        usuario.NombreCompleto = Modelo.NombreCompleto.Trim();
+        usuario.Email = Modelo.Email.Trim();
+        usuario.Activo = Modelo.Activo;
+
+        Verificar(await UserManager.UpdateAsync(usuario));
+
+        IList<string> rolesActuales = await UserManager.GetRolesAsync(usuario);
+
+        if (rolesActuales.Count != 1 || rolesActuales[0] != Modelo.Rol)
+        {
+            if (rolesActuales.Count > 0)
+                Verificar(await UserManager.RemoveFromRolesAsync(usuario, rolesActuales));
+
+            Verificar(await UserManager.AddToRoleAsync(usuario, Modelo.Rol));
+            invalidarSesiones = true;
+        }
+
+        if (invalidarSesiones)
+            Verificar(await UserManager.UpdateSecurityStampAsync(usuario));
+
+        return usuario;
+    }
+
+    // Siempre debe quedar un Administrador activo, y nadie puede quitarse a sí mismo el acceso.
+    private void ProtegerAdministradores(UsuarioDto usuario)
+    {
+        bool pierdeAdministrador =
+            Modelo.RolOriginal == Roles.Administrador &&
+            usuario.Activo &&
+            (Modelo.Rol != Roles.Administrador || !Modelo.Activo);
+
+        if (!pierdeAdministrador)
+            return;
+
+        if (usuario.UsuarioId == UsuarioActualId)
+            throw new InvalidOperationException("No puedes quitarte el rol de Administrador ni desactivar tu propio usuario.");
+
+        if (!ListaUsuarios.Any(u => u.UsuarioId != usuario.UsuarioId && u.Activo && u.Rol == Roles.Administrador))
+            throw new InvalidOperationException("Debe quedar al menos un Administrador activo.");
+    }
+
+    private void ValidarModelo()
+    {
+        if (string.IsNullOrWhiteSpace(Modelo.NombreUsuario))
+            throw new InvalidOperationException("Escribe el nombre de usuario.");
+
+        if (!Roles.Todos.Contains(Modelo.Rol))
+            throw new InvalidOperationException("Selecciona un rol.");
+
+        if (!string.IsNullOrWhiteSpace(Modelo.Email) && !CorreoService.EsCorreoValido(Modelo.Email))
+            throw new InvalidOperationException("El correo electrónico no es válido.");
+
+        if (Editando || Modelo.GenerarTemporal)
+            return;
+
+        if (string.IsNullOrEmpty(Modelo.Password))
+            throw new InvalidOperationException("Escribe la contraseña del usuario.");
+
+        if (Modelo.Password != Modelo.ConfirmarPassword)
+            throw new InvalidOperationException("La contraseña y su confirmación no coinciden.");
+    }
+
+    // ---------- Restablecer, desbloquear y eliminar ----------
+
+    private void PedirRestablecer(UsuarioDto u)
+    {
+        LimpiarMensajes();
+        PorRestablecer = u;
+        EnviarRestablecimiento = CorreoConfigurado && CorreoService.EsCorreoValido(u.Email);
+    }
+
+    private async Task Restablecer()
+    {
+        Guardando = true;
+
+        try
+        {
+            UsuarioDto usuario = await UserManager.FindByIdAsync(PorRestablecer!.UsuarioId.ToString())
+                ?? throw new InvalidOperationException("El usuario ya no existe.");
+
+            string temporal = await Cuentas.RestablecerPasswordAsync(usuario);
+            (bool? enviado, string? errorCorreo) = (null, null);
+
+            if (EnviarRestablecimiento && CorreoConfigurado && CorreoService.EsCorreoValido(usuario.Email))
+            {
+                try
+                {
+                    await Cuentas.EnviarRestablecimientoAsync(usuario, temporal, MiNombre);
+                    enviado = true;
+                }
+                catch (Exception ex)
+                {
+                    (enviado, errorCorreo) = (false, ex.Message);
+                }
+            }
+
+            PorRestablecer = null;
+            Recargar(Editando ? Modelo.UsuarioId : null);
+
+            Credencial = new CredencialTemporal("Contraseña restablecida", usuario.NombreUsuario, temporal, usuario.Email, enviado, errorCorreo);
+            Copiado = false;
+        }
+        catch (Exception ex)
+        {
+            PorRestablecer = null;
+            MensajeError = ex.Message;
+        }
+        finally
+        {
+            Guardando = false;
+        }
+    }
+
+    private async Task Desbloquear()
+    {
+        LimpiarMensajes();
+
+        try
+        {
+            UsuarioDto usuario = await UserManager.FindByIdAsync(Modelo.UsuarioId.ToString())
+                ?? throw new InvalidOperationException("El usuario ya no existe.");
+
+            Verificar(await UserManager.SetLockoutEndDateAsync(usuario, null));
+            Verificar(await UserManager.ResetAccessFailedCountAsync(usuario));
+
+            Recargar(usuario.UsuarioId);
+            MensajeExito = $"Se desbloqueó a {usuario.NombreUsuario}.";
+        }
+        catch (Exception ex)
+        {
+            MensajeError = ex.Message;
+        }
+    }
+
+    private async Task Eliminar()
+    {
+        Guardando = true;
+
+        try
+        {
+            UsuarioDto usuario = await UserManager.FindByIdAsync(PorEliminar!.UsuarioId.ToString())
+                ?? throw new InvalidOperationException("El usuario ya no existe.");
+
+            await Cuentas.EliminarAsync(usuario, UsuarioActualId);
+
+            PorEliminar = null;
+            CargarUsuarios();
+
+            if (Modelo.UsuarioId == usuario.UsuarioId)
+                NuevoUsuario();
+
+            MensajeExito = $"Se eliminó el usuario {usuario.NombreUsuario}.";
+        }
+        catch (Exception ex)
+        {
+            PorEliminar = null;
+            MensajeError = ex.Message;
+        }
+        finally
+        {
+            Guardando = false;
+        }
+    }
+
+    private async Task Copiar()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", Credencial!.Password);
+        Copiado = true;
+    }
+
+    /// <summary>Recarga la lista y, si se indica, vuelve a abrir ese usuario en el formulario.</summary>
+    private void Recargar(long? usuarioId)
+    {
+        CargarUsuarios();
+
+        if (usuarioId is long id && ListaUsuarios.FirstOrDefault(u => u.UsuarioId == id) is { } usuario)
+            EditarUsuario(usuario);
+    }
+
+    private static void Verificar(IdentityResult resultado)
+    {
+        if (!resultado.Succeeded)
+            throw new InvalidOperationException(string.Join(" ", resultado.Errors.Select(e => e.Description)));
+    }
+
+    private void LimpiarMensajes()
+    {
+        MensajeError = null;
+        MensajeExito = null;
+    }
+
+    private sealed record CredencialTemporal(
+        string Titulo, string Usuario, string Password, string Email, bool? CorreoEnviado, string? ErrorCorreo);
+
+    private sealed class ModeloUsuario
+    {
+        public long UsuarioId { get; set; }
+        public string NombreUsuario { get; set; } = "";
+        public string NombreCompleto { get; set; } = "";
+        public string Email { get; set; } = "";
+        public string Rol { get; set; } = "";
+        public string RolOriginal { get; set; } = "";
+        public bool Activo { get; set; } = true;
+        public bool Bloqueado { get; set; }
+        public bool GenerarTemporal { get; set; } = true;
+        public bool EnviarBienvenida { get; set; }
+        public string Password { get; set; } = "";
+        public string ConfirmarPassword { get; set; } = "";
+        public HashSet<long> Empresas { get; set; } = new();
+        public HashSet<string> TareasDenegadas { get; set; } = new();
+    }
+}

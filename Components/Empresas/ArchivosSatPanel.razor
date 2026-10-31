@@ -19,7 +19,7 @@
                 </div>
                 @if (FechaVencimientoFiel is DateTime vence)
                 {
-                    <small>Expira: @vence.ToString("dd 'de' MMMM 'de' yyyy", Mx)@(DiasFiel is int d and >= 0 ? $" · {d} días" : "")</small>
+                    <small>Expira: @vence.ToString("dd/MM/yyyy")@(DiasFiel is int d and >= 0 ? $" · {d} días" : "")</small>
                 }
             </div>
 

@@ -1,0 +1,171 @@
+@implements IDisposable
+
+
+@using CFDIManager.Web.Services
+@using CFDIManager.Web.Services.Sat
+@using CFDIParser.Models
+@using CFDIParser.Services
+
+@inject EmpresaContext EmpresaContext
+@inject CierreMesSatService Cierres
+@inject PostgreSqlRepository Repo
+@inject IConfiguration Configuracion
+
+@* Cierre de mes: metadatos del SAT + XML faltantes. Lo lanza la descarga automática los primeros días
+   del mes; aquí se ve el historial y se puede ejecutar a mano para cualquier mes. *@
+<div class="card shadow-sm mb-3 cierre">
+    <div class="card-body">
+        <div class="d-flex flex-wrap align-items-end gap-3">
+            <div class="me-auto">
+                <div class="fw-bold"><i class="bi bi-calendar-check me-1 text-primary"></i>Cierre de mes</div>
+                <div class="small text-body-secondary">
+                    Pide al SAT los metadatos del mes y descarga los XML que falten en la bóveda.
+                    Automático los días 1 a @DiasCierre con la descarga automática encendida; ventana diaria a las @Horarios.
+                </div>
+            </div>
+
+            @* Año y mes en español (el <input type="month"> nativo sale en el idioma del navegador). *@
+            <div>
+                <label class="form-label small fw-semibold mb-1" for="cierre-anio">Año</label>
+                <select id="cierre-anio" class="form-select form-select-sm" @bind="Anio">
+                    @for (int a = DateTime.Today.Year; a >= DateTime.Today.Year - 6; a--)
+                    {
+                        <option value="@a">@a</option>
+                    }
+                </select>
+            </div>
+
+            <div>
+                <label class="form-label small fw-semibold mb-1" for="cierre-mes">Mes</label>
+                <select id="cierre-mes" class="form-select form-select-sm" @bind="NumeroMes">
+                    @for (int m = 1; m <= 12; m++)
+                    {
+                        <option value="@m">@m.ToString("00") · @Mx.DateTimeFormat.GetMonthName(m)</option>
+                    }
+                </select>
+            </div>
+
+            <button type="button" class="btn btn-sm btn-primary" @onclick="Ejecutar" disabled="@EnCurso">
+                <i class="bi bi-play-fill me-1"></i>Ejecutar cierre
+            </button>
+        </div>
+
+        @if (EnCurso)
+        {
+            <div class="alert alert-info d-flex align-items-center gap-2 py-2 mt-3 mb-0 small">
+                <span class="spinner-border spinner-border-sm"></span>
+                <span>@Avance</span>
+                <span class="ms-auto text-body-secondary">Sigue aunque cierres esta pantalla.</span>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(Mensaje))
+        {
+            <div class="alert alert-warning py-2 mt-3 mb-0 small">@Mensaje</div>
+        }
+
+        @if (Historial.Count > 0)
+        {
+            <div class="table-responsive mt-3">
+                <table class="table table-sm align-middle mb-0 small">
+                    <thead>
+                        <tr>
+                            <th>Periodo</th>
+                            <th>Estado</th>
+                            <th class="text-end">Emitidos SAT</th>
+                            <th class="text-end">Recibidos SAT</th>
+                            <th class="text-end">XML descargados</th>
+                            <th class="text-end" title="El SAT no entrega XML de recibidos cancelados">Recibidos cancelados sin XML</th>
+                            <th class="text-end">Pendientes</th>
+                            <th>Cuándo</th>
+                            <th>Detalle</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (SatCierreDto c in Historial)
+                        {
+                            <tr>
+                                <td class="fw-semibold">@c.Periodo</td>
+                                <td>
+                                    <span class="badge rounded-pill bg-@Color(c.Estado)-subtle text-@Color(c.Estado)-emphasis border border-@Color(c.Estado)-subtle">@c.Estado</span>
+                                </td>
+                                <td class="text-end">@c.MetadatosEmitidos.ToString("N0")</td>
+                                <td class="text-end">@c.MetadatosRecibidos.ToString("N0")</td>
+                                <td class="text-end">@c.XmlImportados.ToString("N0")</td>
+                                <td class="text-end">@c.CanceladosSinXml.ToString("N0")</td>
+                                <td class="text-end @(c.OtrosSinXml > 0 ? "text-danger fw-semibold" : "")">@c.OtrosSinXml.ToString("N0")</td>
+                                <td class="text-nowrap">
+                                    @c.Inicio.ToString("dd/MM HH:mm")
+                                    <span class="text-body-secondary">· @(c.Automatico ? "automático" : "manual")</span>
+                                </td>
+                                <td class="text-body-secondary">@c.Detalle</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private static readonly System.Globalization.CultureInfo Mx = new("es-MX");
+
+    // Por omisión el mes anterior: el cierre es de un mes ya terminado.
+    private int Anio = DateTime.Today.AddMonths(-1).Year;
+    private int NumeroMes = DateTime.Today.AddMonths(-1).Month;
+
+    private DateTime Mes => new(Anio, NumeroMes, 1);
+    private List<SatCierreDto> Historial = new();
+    private string? Mensaje;
+
+    private int DiasCierre => Configuracion.GetValue("DescargaAutomaticaSat:DiasCierre", 3);
+    private string Horarios => (Configuracion["DescargaAutomaticaSat:Horarios"] ?? "07:00,21:00").Replace(",", " y ");
+
+    private bool EnCurso => EmpresaContext.TieneEmpresaActiva && Cierres.EnCurso.ContainsKey(EmpresaContext.EmpresaId);
+    private string Avance => Cierres.EnCurso.TryGetValue(EmpresaContext.EmpresaId, out string? a) ? a : "";
+
+    protected override void OnInitialized()
+    {
+        Cierres.Cambio += Refrescar;
+        EmpresaContext.OnChange += Refrescar;
+        Cargar();
+    }
+
+    private void Cargar() =>
+        Historial = EmpresaContext.TieneEmpresaActiva ? Repo.ObtenerCierres(EmpresaContext.EmpresaId, 12) : [];
+
+    private void Refrescar() => InvokeAsync(() =>
+    {
+        Cargar();
+        StateHasChanged();
+    });
+
+    private void Ejecutar()
+    {
+        Mensaje = null;
+
+        if (Mes > DateTime.Today)
+        {
+            Mensaje = "El mes no puede ser futuro.";
+            return;
+        }
+
+        if (!Cierres.Iniciar(EmpresaContext.EmpresaActiva!, Mes.Year, Mes.Month, automatico: false))
+            Mensaje = "Ya hay un cierre en curso para esta empresa.";
+    }
+
+    private static string Color(string estado) => estado switch
+    {
+        "Completo" => "success",
+        "Con pendientes" => "warning",
+        "Error" => "danger",
+        _ => "info"
+    };
+
+    public void Dispose()
+    {
+        Cierres.Cambio -= Refrescar;
+        EmpresaContext.OnChange -= Refrescar;
+    }
+}

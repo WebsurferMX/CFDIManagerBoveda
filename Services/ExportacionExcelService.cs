@@ -274,7 +274,7 @@ public sealed class ExportacionExcelService
         hoja.Cell("B4").Value = empresa.Rfc;
         hoja.Cell("A5").Value = "Periodo";
         hoja.Cell("B5").Value =
-            $"{fechaInicio:yyyy-MM-dd} al {fechaFin:yyyy-MM-dd}";
+            $"{fechaInicio:dd/MM/yyyy} al {fechaFin:dd/MM/yyyy}";
         hoja.Cell("A6").Value = "Registros";
         hoja.Cell("B6").Value = registros.Count;
         hoja.Cell("A8").Value = "Tipo";
@@ -621,7 +621,7 @@ public sealed class ExportacionExcelService
     private static void Fecha(IXLCell celda, DateTime valor)
     {
         celda.Value = valor;
-        celda.Style.DateFormat.Format = "yyyy-mm-dd hh:mm:ss";
+        celda.Style.DateFormat.Format = "dd/mm/yyyy hh:mm:ss";
     }
 
     private static void Fecha(IXLCell celda, DateTime? valor)

@@ -1,0 +1,60 @@
+@* Usuario con sesión: menú con cambiar contraseña y cerrar sesión (POST a /cuenta/logout con token antiforgery). *@
+<AuthorizeView>
+    <Authorized>
+        <div class="usuario-menu dropdown">
+            <button type="button"
+                    class="usuario-boton"
+                    aria-expanded="@Abierto"
+                    @onclick="() => Abierto = !Abierto">
+                <span class="avatar" aria-hidden="true">@Iniciales(Nombre(context))</span>
+
+                <span class="datos">
+                    <strong>@Nombre(context)</strong>
+                    <small>@string.Join(", ", Roles.Todos.Where(context.User.IsInRole))</small>
+                </span>
+
+                <i class="bi bi-chevron-down flecha" aria-hidden="true"></i>
+            </button>
+
+            @if (Abierto)
+            {
+                <div class="menu-fondo" @onclick="() => Abierto = false"></div>
+
+                <div class="dropdown-menu dropdown-menu-end show shadow menu-usuario">
+                    <div class="px-3 py-2">
+                        <div class="fw-semibold">@Nombre(context)</div>
+                        <div class="small text-body-secondary">@context.User.Identity?.Name</div>
+                    </div>
+
+                    <hr class="dropdown-divider" />
+
+                    <a class="dropdown-item" href="cuenta/cambiar-password">
+                        <i class="bi bi-key me-2"></i>Cambiar contraseña
+                    </a>
+
+                    <hr class="dropdown-divider" />
+
+                    <form action="cuenta/logout" method="post" class="m-0">
+                        <AntiforgeryToken />
+                        <button type="submit" class="dropdown-item text-danger">
+                            <i class="bi bi-box-arrow-right me-2"></i>Cerrar sesión
+                        </button>
+                    </form>
+                </div>
+            }
+        </div>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private bool Abierto;
+
+    private static string Nombre(AuthenticationState estado) =>
+        estado.User.FindFirst(UsuarioClaimsFactory.NombreCompleto)?.Value ?? estado.User.Identity?.Name ?? "";
+
+    private static string Iniciales(string? nombre) =>
+        string.Concat((nombre ?? "?")
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .Select(p => char.ToUpperInvariant(p[0])));
+}
