@@ -1,0 +1,4 @@
+Tabler 1.6.1 (@tabler/core) - https://github.com/tabler/tabler - Licencia MIT.
+Solo se usa dist/css/tabler.min.css y se carga por pantalla con <HeadContent> (Resumen, CFDI emitidos/recibidos),
+porque cargado en toda la app cambia el aspecto de pantallas que ya estaban terminadas.
+El JavaScript no se carga: Blazor maneja la interacción.

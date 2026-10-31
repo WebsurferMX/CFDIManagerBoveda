@@ -11,237 +11,290 @@
 @inject EmpresaContext EmpresaContext
 @inject AccesoEmpresasService Acceso
 
-<div class="cfdi-page">
-    <header class="page-heading">
-        <div>
-            <span class="eyebrow">CFDI MANAGER</span>
-            <h1>@Titulo</h1>
-            <p>@Descripcion</p>
-        </div>
+@* Tabler solo en estas pantallas: en toda la app cambia el aspecto de las que ya estaban terminadas. *@
+<HeadContent>
+    <link rel="stylesheet" href="lib/tabler/css/tabler.min.css" />
+</HeadContent>
 
-        <button type="button" class="primary-button" @onclick="Consultar" disabled="@Cargando">
-            @(Cargando ? "Consultando..." : "Consultar")
-        </button>
-    </header>
-
-    <section class="filters-card">
-        <div class="filter-field">
-            <label>Tipo CFDI</label>
-            <select @bind="Filtro.TipoCfdi">
-                <option value="">Todos</option>
-                <option value="I">I · Facturas</option>
-                <option value="N">N · Nómina</option>
-                <option value="E">E · Notas de crédito</option>
-                <option value="T">T · Traslados</option>
-                <option value="P">P · Pagos</option>
-            </select>
+<div class="consulta">
+    @* ---------- Encabezado ---------- *@
+    <div class="page-header mb-3">
+        <div class="row align-items-center">
+            <div class="col">
+                <div class="page-pretitle">CFDI Manager · @EmpresaContext.Rfc</div>
+                <h2 class="page-title">@Titulo</h2>
+                @if (!string.IsNullOrWhiteSpace(Descripcion))
+                {
+                    <div class="text-secondary mt-1">@Descripcion</div>
+                }
+            </div>
         </div>
+    </div>
 
-        <div class="filter-field">
-            <label>Fecha inicial</label>
-            <FechaInput @bind-Valor="Filtro.FechaInicio" />
-        </div>
+    @* ---------- Filtros ---------- *@
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-sm-6 col-lg-2">
+                    <label class="form-label">Tipo CFDI</label>
+                    <select class="form-select" @bind="Filtro.TipoCfdi">
+                        <option value="">Todos</option>
+                        <option value="I">I · Facturas</option>
+                        <option value="N">N · Nómina</option>
+                        <option value="E">E · Notas de crédito</option>
+                        <option value="T">T · Traslados</option>
+                        <option value="P">P · Pagos</option>
+                    </select>
+                </div>
 
-        <div class="filter-field">
-            <label>Fecha final</label>
-            <FechaInput @bind-Valor="Filtro.FechaFin" />
-        </div>
+                <div class="col-sm-6 col-lg-auto">
+                    <label class="form-label">Fecha inicial</label>
+                    <FechaInput @bind-Valor="Filtro.FechaInicio" />
+                </div>
 
-        <div class="filter-field search-field">
-            <label>Búsqueda</label>
-            <input @bind="Filtro.Busqueda"
-                   @bind:event="oninput"
-                   @onkeydown="ManejarTecla"
-                   placeholder="UUID, RFC, razón social, serie o folio" />
-        </div>
+                <div class="col-sm-6 col-lg-auto">
+                    <label class="form-label">Fecha final</label>
+                    <FechaInput @bind-Valor="Filtro.FechaFin" />
+                </div>
 
-        <div class="filter-actions">
-            <button type="button" class="primary-button" @onclick="Consultar" disabled="@Cargando">
-                Consultar
-            </button>
-            <button type="button" class="secondary-button" @onclick="LimpiarFiltros" disabled="@Cargando">
-                Limpiar
-            </button>
+                <div class="col-sm-6 col-lg">
+                    <label class="form-label">Búsqueda</label>
+                    <div class="input-icon">
+                        <span class="input-icon-addon"><i class="ti ti-search"></i></span>
+                        <input class="form-control"
+                               @bind="Filtro.Busqueda"
+                               @bind:event="oninput"
+                               @onkeydown="ManejarTecla"
+                               placeholder="UUID, RFC, razón social, serie o folio" />
+                    </div>
+                </div>
+
+                <div class="col-12 col-lg-auto">
+                    <div class="btn-list">
+                        <button type="button" class="btn btn-primary" @onclick="Consultar" disabled="@Cargando">
+                            <i class="ti ti-filter me-1"></i>@(Cargando ? "Consultando…" : "Consultar")
+                        </button>
+                        <button type="button" class="btn" @onclick="LimpiarFiltros" disabled="@Cargando">
+                            <i class="ti ti-eraser me-1"></i>Limpiar
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
-    </section>
+    </div>
 
     @if (!string.IsNullOrWhiteSpace(Error))
     {
-        <section class="message error-message">
-            <strong>No se pudo completar la consulta.</strong>
-            <span>@Error</span>
-        </section>
+        <div class="alert alert-danger" role="alert">
+            <div class="d-flex gap-2">
+                <i class="ti ti-alert-octagon fs-2"></i>
+                <div>
+                    <h4 class="alert-title">No se pudo completar la consulta</h4>
+                    <div class="text-secondary">@Error</div>
+                </div>
+            </div>
+        </div>
     }
 
     @if (!string.IsNullOrWhiteSpace(MensajeSat))
     {
-        <section class="@ClaseMensajeSat">
-            <strong>Validación SAT</strong>
-            <span>@MensajeSat</span>
-        </section>
+        <div class="alert @(MensajeSatEsError ? "alert-danger" : "alert-success") alert-dismissible" role="status">
+            <div class="d-flex gap-2">
+                <i class="ti @(MensajeSatEsError ? "ti-alert-triangle" : "ti-shield-check") fs-2"></i>
+                <div>
+                    <h4 class="alert-title">Validación SAT</h4>
+                    <div class="text-secondary">@MensajeSat</div>
+                </div>
+            </div>
+            <button type="button" class="btn-close" aria-label="Cerrar" @onclick="CerrarMensajeSat"></button>
+        </div>
     }
 
     @if (Cargando)
     {
-        <section class="message loading-message">
-            Consultando @Titulo.ToLowerInvariant() en PostgreSQL...
-        </section>
+        <div class="card">
+            <div class="card-body">
+                <div class="text-secondary mb-2">Consultando @Titulo.ToLowerInvariant() en PostgreSQL…</div>
+                <div class="progress progress-sm"><div class="progress-bar progress-bar-indeterminate"></div></div>
+            </div>
+        </div>
     }
     else
     {
+        @* ---------- Validación SAT por lote ---------- *@
         @if (ValidandoLoteSat || UltimoResultadoLote is not null)
         {
-            <section class="sat-batch-card">
-                <div class="sat-batch-heading">
-                    <div>
-                        <strong>Validación SAT por lote</strong>
-                        <span>@TextoProgresoSat</span>
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-2">
+                        <div>
+                            <div class="subheader">Validación SAT por lote</div>
+                            <div class="text-secondary small font-monospace">@TextoProgresoSat</div>
+                        </div>
+                        <div class="ms-auto h2 mb-0">@PorcentajeSat.ToString("0")%</div>
                     </div>
-                    <strong>@PorcentajeSat.ToString("0")%</strong>
-                </div>
 
-                <div class="sat-progress-track">
-                    <div class="sat-progress-value @(ValidandoLoteSat ? "sat-progress-running" : "")"
-                         style="@($"width: {PorcentajeSat:0.##}%")">
+                    <div class="progress progress-sm mb-3">
+                        <div class="progress-bar @(ValidandoLoteSat ? "progress-bar-striped progress-bar-animated" : "bg-green")"
+                             style="width: @PorcentajeSat.ToString("0.##", CultureInfo.InvariantCulture)%"></div>
+                    </div>
+
+                    <div class="datagrid">
+                        <div class="datagrid-item"><div class="datagrid-title">Procesados</div><div class="datagrid-content">@ProcesadosSat</div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">Vigentes</div><div class="datagrid-content text-green">@VigentesSat</div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">Cancelados</div><div class="datagrid-content text-red">@CanceladosSat</div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">No encontrados</div><div class="datagrid-content text-yellow">@NoEncontradosSat</div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">Otros</div><div class="datagrid-content">@OtrosSat</div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">Errores</div><div class="datagrid-content">@ErroresSat</div></div>
                     </div>
                 </div>
-
-                <div class="sat-result-grid">
-                    <span>Procesados <strong>@ProcesadosSat</strong></span>
-                    <span>Vigentes <strong>@VigentesSat</strong></span>
-                    <span>Cancelados <strong>@CanceladosSat</strong></span>
-                    <span>No encontrados <strong>@NoEncontradosSat</strong></span>
-                    <span>Otros <strong>@OtrosSat</strong></span>
-                    <span>Errores <strong>@ErroresSat</strong></span>
-                </div>
-            </section>
+            </div>
         }
 
-        <section class="summary-strip">
-            <button type="button" class="summary-item invoice @(Filtro.TipoCfdi == "I" ? "active-kpi" : "")" @onclick='() => AplicarTipo("I")'>
-                <span class="summary-code">I</span>
-                <span><small>Facturas @SufijoFemenino (@Resumen.CantidadFacturas)</small><strong>@Moneda(Resumen.TotalFacturas)</strong></span>
-            </button>
-            <button type="button" class="summary-item payroll @(Filtro.TipoCfdi == "N" ? "active-kpi" : "")" @onclick='() => AplicarTipo("N")'>
-                <span class="summary-code">N</span>
-                <span><small>Nómina @SufijoFemenino (@Resumen.CantidadNominas)</small><strong>@Moneda(Resumen.TotalNominas)</strong></span>
-            </button>
-            <button type="button" class="summary-item credit-note @(Filtro.TipoCfdi == "E" ? "active-kpi" : "")" @onclick='() => AplicarTipo("E")'>
-                <span class="summary-code">E</span>
-                <span><small>Notas de crédito @SufijoFemenino (@Resumen.CantidadNotasCredito)</small><strong>@Moneda(Resumen.TotalNotasCredito)</strong></span>
-            </button>
-            <button type="button" class="summary-item transfer @(Filtro.TipoCfdi == "T" ? "active-kpi" : "")" @onclick='() => AplicarTipo("T")'>
-                <span class="summary-code">T</span>
-                <span><small>Traslados @SufijoMasculino (@Resumen.CantidadTraslados.ToString("N0"))</small><strong>@Moneda(Resumen.TotalTraslados)</strong></span>
-            </button>
-            <button type="button" class="summary-item payment @(Filtro.TipoCfdi == "P" ? "active-kpi" : "")" @onclick='() => AplicarTipo("P")'>
-                <span class="summary-code">P</span>
-                <span><small>Pagos @SufijoMasculino (@Resumen.CantidadPagos.ToString("N0"))</small><strong>@Moneda(Resumen.TotalPagos)</strong></span>
-            </button>
-            <button type="button" class="summary-item total @(string.IsNullOrWhiteSpace(Filtro.TipoCfdi) ? "active-kpi" : "")" @onclick='() => AplicarTipo("")'>
-                <span class="summary-code">Σ</span>
-                <span><small>Total @SufijoMasculino (@Resumen.TotalCfdi.ToString("N0"))</small><strong>@Moneda(Resumen.ImporteTotal)</strong></span>
-            </button>
-        </section>
-
-        <section class="grid-card">
-            <div class="grid-toolbar">
-                <div>
-                    <strong>@Titulo</strong>
-                    <span>Mostrando @Resultado.RegistroInicial–@Resultado.RegistroFinal de @Resultado.TotalRegistros.ToString("N0")</span>
+        @* ---------- Totales por tipo (clic = filtrar) ---------- *@
+        <div class="row row-cards mb-3">
+            @foreach (Totalizador t in Totalizadores)
+            {
+                <div class="col-sm-6 col-lg-4 col-xxl-2">
+                    <button type="button" class="card card-sm card-link totalizador w-100 text-start @(Filtro.TipoCfdi == t.Tipo ? "activo" : "")"
+                            style="--color-tipo: var(--tblr-@t.Color)"
+                            @onclick="() => AplicarTipo(t.Tipo)">
+                        <span class="card-body d-flex align-items-center gap-3">
+                            <span class="avatar bg-@t.Color-lt"><i class="ti @t.Icono"></i></span>
+                            <span class="d-block lh-sm">
+                                <span class="subheader d-block">@t.Nombre</span>
+                                <span class="h3 d-block mb-0">@Moneda(t.Importe)</span>
+                                <span class="text-secondary small">@t.Cantidad.ToString("N0") CFDI</span>
+                            </span>
+                        </span>
+                    </button>
                 </div>
-                <div class="sat-batch-tools">
-                    <label>Lote SAT</label>
-                    <select @bind="TamanoLoteSat"
-                            disabled="@ValidandoLoteSat">
-                        <option value="10">10</option>
-                        <option value="25">25</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                    </select>
+            }
+        </div>
 
-                    <button type="button"
-                            class="secondary-button sat-batch-button"
-                            disabled="@(ValidandoLoteSat || Cargando)"
-                            @onclick="ValidarPendientesSatAsync">
-                        @(ValidandoLoteSat
-                            ? $"Validando {ProcesadosSat}/{TotalSat}..."
-                            : "Validar pendientes SAT")
+        @* ---------- Tabla ---------- *@
+        <div class="card">
+            <div class="card-header flex-wrap gap-2">
+                <div>
+                    <h3 class="card-title">@Titulo</h3>
+                    <div class="card-subtitle">
+                        @if (Resultado.TotalRegistros > 0)
+                        {
+                            <span>Mostrando @Resultado.RegistroInicial–@Resultado.RegistroFinal de @Resultado.TotalRegistros.ToString("N0")</span>
+                        }
+                        else
+                        {
+                            <span>Sin resultados</span>
+                        }
+                    </div>
+                </div>
+
+                <div class="card-actions d-flex flex-wrap align-items-center gap-2">
+                    <div class="input-group input-group-sm w-auto" title="Cuántos CFDI pendientes valida cada lote">
+                        <span class="input-group-text">Lote SAT</span>
+                        <select class="form-select form-select-sm" @bind="TamanoLoteSat" disabled="@ValidandoLoteSat">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+
+                    <button type="button" class="btn btn-sm btn-outline-success" disabled="@(ValidandoLoteSat || Cargando)" @onclick="ValidarPendientesSatAsync">
+                        @if (ValidandoLoteSat)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                            <span>Validando @ProcesadosSat/@TotalSat…</span>
+                        }
+                        else
+                        {
+                            <i class="ti ti-shield-check me-1"></i>
+                            <span>Validar pendientes SAT</span>
+                        }
                     </button>
 
                     @if (ValidandoLoteSat)
                     {
-                        <button type="button"
-                                class="secondary-button cancel-batch-button"
-                                @onclick="CancelarValidacionSat">
-                            Cancelar
+                        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="CancelarValidacionSat">
+                            <i class="ti ti-player-stop me-1"></i>Cancelar
                         </button>
                     }
-                </div>
 
-                <div class="page-size">
-                    <label>Filas</label>
-                    <select value="@Filtro.RegistrosPorPagina" @onchange="CambiarTamanoPagina">
-                        <option value="25">25</option>
-                        <option value="50">50</option>
-                        <option value="100">100</option>
-                    </select>
+                    <div class="input-group input-group-sm w-auto">
+                        <span class="input-group-text">Filas</span>
+                        <select class="form-select form-select-sm" value="@Filtro.RegistrosPorPagina" @onchange="CambiarTamanoPagina">
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
-            <div class="table-container">
-                <table class="cfdi-table">
+            <div class="table-responsive">
+                <table class="table table-vcenter card-table table-hover text-nowrap">
                     <thead>
                         <tr>
-                            <th><button type="button" @onclick='() => Ordenar("fecha_emision")'>Fecha</button></th>
-                            <th><button type="button" @onclick='() => Ordenar("tipo_cfdi")'>Tipo</button></th>
+                            <th><button type="button" class="table-sort @ClaseOrden("fecha_emision")" @onclick="@(() => Ordenar("fecha_emision"))">Fecha</button></th>
+                            <th><button type="button" class="table-sort @ClaseOrden("tipo_cfdi")" @onclick="@(() => Ordenar("tipo_cfdi"))">Tipo</button></th>
                             <th>Serie / Folio</th>
-                            <th><button type="button" @onclick='() => Ordenar("rfc")'>@EtiquetaRfc</button></th>
-                            <th><button type="button" @onclick='() => Ordenar("nombre")'>@EtiquetaNombre</button></th>
-                            <th><button type="button" @onclick='() => Ordenar("total")'>Total</button></th>
-                            <th>Moneda</th>
+                            <th><button type="button" class="table-sort @ClaseOrden("rfc")" @onclick="@(() => Ordenar("rfc"))">@EtiquetaRfc</button></th>
+                            <th><button type="button" class="table-sort @ClaseOrden("nombre")" @onclick="@(() => Ordenar("nombre"))">@EtiquetaNombre</button></th>
+                            <th class="text-end"><button type="button" class="table-sort @ClaseOrden("total")" @onclick="@(() => Ordenar("total"))">Total</button></th>
                             <th>UUID</th>
                             <th>Estado SAT</th>
-                            <th class="actions-header">Acciones</th>
+                            <th class="w-1">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         @if (Resultado.Registros.Count == 0)
                         {
-                            <tr><td colspan="10" class="empty-cell">No se encontraron CFDI con los filtros seleccionados.</td></tr>
+                            <tr>
+                                <td colspan="9">
+                                    <div class="empty py-4">
+                                        <div class="empty-icon"><i class="ti ti-file-search fs-1"></i></div>
+                                        <p class="empty-title">Sin CFDI</p>
+                                        <p class="empty-subtitle text-secondary">No se encontraron CFDI con los filtros seleccionados.</p>
+                                    </div>
+                                </td>
+                            </tr>
                         }
                         else
                         {
                             @foreach (CfdiConsultaDto cfdi in Resultado.Registros)
                             {
-                                <tr class="@(Seleccionado?.CfdiId == cfdi.CfdiId ? "selected-row" : "")" @onclick="() => Seleccionar(cfdi)">
-                                    <td>@cfdi.FechaEmision.ToString("dd/MM/yyyy HH:mm")</td>
-                                    <td><span class="type-badge @ClaseTipo(cfdi.TipoCfdi)">@cfdi.TipoCfdi</span></td>
+                                <tr class="fila @(Seleccionado?.CfdiId == cfdi.CfdiId ? "table-active" : "")" @onclick="() => Seleccionar(cfdi)">
+                                    <td class="text-secondary">@cfdi.FechaEmision.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td><span class="badge bg-@ColorTipo(cfdi.TipoCfdi)-lt" title="@NombreTipo(cfdi.TipoCfdi)">@cfdi.TipoCfdi</span></td>
                                     <td><strong>@cfdi.Serie</strong> @cfdi.Folio</td>
-                                    <td class="mono">@ObtenerRfc(cfdi)</td>
-                                    <td class="name-cell" title="@ObtenerNombre(cfdi)">@ObtenerNombre(cfdi)</td>
-                                    <td class="amount-cell">@Moneda(cfdi.Total)</td>
-                                    <td>@cfdi.Moneda</td>
-                                    <td class="uuid-cell" title="@cfdi.UUID">@AbreviarUuid(cfdi.UUID)</td>
-                                    <td><span class="@ObtenerClaseEstadoSat(cfdi.EstadoSat)">@ObtenerTextoEstadoSat(cfdi.EstadoSat)</span></td>
-                                    <td class="actions-cell" @onclick:stopPropagation="true">
-                                        <a class="row-action xml-action" href="@ObtenerUrlXml(cfdi.CfdiId)" target="_blank" rel="noopener noreferrer" title="Ver XML">XML</a>
-                                        <a class="row-action pdf-action" href="@ObtenerUrlPdf(cfdi.CfdiId)" target="_blank" rel="noopener noreferrer" title="Generar PDF">PDF</a>
-                                        <button type="button"
-                                                class="@ObtenerClaseBotonSat(cfdi)"
-                                                title="@ObtenerTituloBotonSat(cfdi)"
-                                                disabled="@(EstaValidandoSat(cfdi.CfdiId) || ValidandoLoteSat)"
-                                                @onclick="() => ValidarEstadoSatAsync(cfdi)">
-                                            @if (EstaValidandoSat(cfdi.CfdiId))
-                                            {
-                                                <span class="spinner-sat"></span>
-                                                <span>SAT...</span>
-                                            }
-                                            else
-                                            {
-                                                <span>SAT</span>
-                                            }
-                                        </button>
+                                    <td class="font-monospace small">@ObtenerRfc(cfdi)</td>
+                                    <td class="nombre text-truncate" title="@ObtenerNombre(cfdi)">@ObtenerNombre(cfdi)</td>
+                                    <td class="text-end"><span class="fw-bold">@Moneda(cfdi.Total)</span> <span class="text-secondary small">@cfdi.Moneda</span></td>
+                                    <td class="font-monospace small text-secondary" title="@cfdi.UUID">@AbreviarUuid(cfdi.UUID)</td>
+                                    <td><span class="status status-@ColorEstadoSat(cfdi.EstadoSat)"><span class="status-dot"></span>@ObtenerTextoEstadoSat(cfdi.EstadoSat)</span></td>
+                                    <td @onclick:stopPropagation="true">
+                                        <div class="btn-list flex-nowrap">
+                                            <a class="btn btn-sm btn-icon btn-outline-blue" href="@ObtenerUrlXml(cfdi.CfdiId)" target="_blank" rel="noopener noreferrer" title="Ver XML">
+                                                <i class="ti ti-file-code"></i>
+                                            </a>
+                                            <a class="btn btn-sm btn-icon btn-outline-red" href="@ObtenerUrlPdf(cfdi.CfdiId)" target="_blank" rel="noopener noreferrer" title="Generar PDF">
+                                                <i class="ti ti-file-type-pdf"></i>
+                                            </a>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-icon btn-outline-@ColorEstadoSat(cfdi.EstadoSat)"
+                                                    title="@ObtenerTituloBotonSat(cfdi)"
+                                                    disabled="@(EstaValidandoSat(cfdi.CfdiId) || ValidandoLoteSat)"
+                                                    @onclick="() => ValidarEstadoSatAsync(cfdi)">
+                                                @if (EstaValidandoSat(cfdi.CfdiId))
+                                                {
+                                                    <span class="spinner-border spinner-border-sm"></span>
+                                                }
+                                                else
+                                                {
+                                                    <i class="ti ti-shield-check"></i>
+                                                }
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             }
@@ -250,36 +303,57 @@
                 </table>
             </div>
 
-            <div class="pagination">
-                <button type="button" @onclick="PaginaAnterior" disabled="@(!Resultado.TienePaginaAnterior || Cargando)">Anterior</button>
-                <span>Página @Resultado.PaginaActual de @Math.Max(Resultado.TotalPaginas, 1)</span>
-                <button type="button" @onclick="PaginaSiguiente" disabled="@(!Resultado.TienePaginaSiguiente || Cargando)">Siguiente</button>
+            <div class="card-footer d-flex align-items-center">
+                <p class="m-0 text-secondary">Página @Resultado.PaginaActual de @Math.Max(Resultado.TotalPaginas, 1)</p>
+                <ul class="pagination m-0 ms-auto">
+                    <li class="page-item @(!Resultado.TienePaginaAnterior || Cargando ? "disabled" : "")">
+                        <button type="button" class="page-link" @onclick="PaginaAnterior"><i class="ti ti-chevron-left"></i> Anterior</button>
+                    </li>
+                    <li class="page-item @(!Resultado.TienePaginaSiguiente || Cargando ? "disabled" : "")">
+                        <button type="button" class="page-link" @onclick="PaginaSiguiente">Siguiente <i class="ti ti-chevron-right"></i></button>
+                    </li>
+                </ul>
             </div>
-        </section>
+        </div>
 
+        @* ---------- Detalle del CFDI seleccionado ---------- *@
         @if (Seleccionado is not null)
         {
-            <section class="detail-card">
-                <div class="detail-heading">
+            <div class="card mt-3">
+                <div class="card-header">
                     <div>
-                        <span class="type-badge @ClaseTipo(Seleccionado.TipoCfdi)">@Seleccionado.TipoCfdi</span>
-                        <h2>@ObtenerNombre(Seleccionado)</h2>
-                        <p class="mono">@Seleccionado.UUID</p>
+                        <h3 class="card-title">
+                            <span class="badge bg-@ColorTipo(Seleccionado.TipoCfdi)-lt me-2">@NombreTipo(Seleccionado.TipoCfdi)</span>@ObtenerNombre(Seleccionado)
+                        </h3>
+                        <div class="card-subtitle font-monospace">@Seleccionado.UUID</div>
                     </div>
-                    <button type="button" class="close-detail" @onclick="() => Seleccionado = null">×</button>
+                    <div class="card-actions btn-list">
+                        <a class="btn btn-sm" href="@ObtenerUrlXml(Seleccionado.CfdiId)" target="_blank" rel="noopener noreferrer"><i class="ti ti-file-code me-1"></i>XML</a>
+                        <a class="btn btn-sm" href="@ObtenerUrlPdf(Seleccionado.CfdiId)" target="_blank" rel="noopener noreferrer"><i class="ti ti-file-type-pdf me-1"></i>PDF</a>
+                        <button type="button" class="btn-close ms-2" aria-label="Cerrar" @onclick="() => Seleccionado = null"></button>
+                    </div>
                 </div>
-                <div class="detail-grid">
-                    <div><span>Clasificación</span><strong>@Seleccionado.Clasificacion</strong></div>
-                    <div><span>Fecha</span><strong>@Seleccionado.FechaEmision.ToString("dd/MM/yyyy HH:mm")</strong></div>
-                    <div><span>Serie / Folio</span><strong>@Seleccionado.Serie @Seleccionado.Folio</strong></div>
-                    <div><span>@EtiquetaRfc</span><strong class="mono">@ObtenerRfc(Seleccionado)</strong></div>
-                    <div><span>@EtiquetaNombre</span><strong>@ObtenerNombre(Seleccionado)</strong></div>
-                    <div><span>Subtotal</span><strong>@Moneda(Seleccionado.Subtotal)</strong></div>
-                    <div><span>Total</span><strong>@Moneda(Seleccionado.Total)</strong></div>
-                    <div><span>Estado SAT</span><strong><span class="@ObtenerClaseEstadoSat(Seleccionado.EstadoSat)">@ObtenerTextoEstadoSat(Seleccionado.EstadoSat)</span></strong></div>
-                    <div class="detail-path"><span>Ruta XML</span><strong>@Seleccionado.RutaXml</strong></div>
+                <div class="card-body">
+                    <div class="datagrid">
+                        <div class="datagrid-item"><div class="datagrid-title">Clasificación</div><div class="datagrid-content">@Seleccionado.Clasificacion</div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">Fecha</div><div class="datagrid-content">@Seleccionado.FechaEmision.ToString("dd/MM/yyyy HH:mm")</div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">Serie / Folio</div><div class="datagrid-content">@Seleccionado.Serie @Seleccionado.Folio</div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">@EtiquetaRfc</div><div class="datagrid-content font-monospace">@ObtenerRfc(Seleccionado)</div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">@EtiquetaNombre</div><div class="datagrid-content">@ObtenerNombre(Seleccionado)</div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">Subtotal</div><div class="datagrid-content">@Moneda(Seleccionado.Subtotal)</div></div>
+                        <div class="datagrid-item"><div class="datagrid-title">Total</div><div class="datagrid-content fw-bold">@Moneda(Seleccionado.Total)</div></div>
+                        <div class="datagrid-item">
+                            <div class="datagrid-title">Estado SAT</div>
+                            <div class="datagrid-content">
+                                <span class="status status-@ColorEstadoSat(Seleccionado.EstadoSat)"><span class="status-dot"></span>@ObtenerTextoEstadoSat(Seleccionado.EstadoSat)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="datagrid mt-3">
+                        <div class="datagrid-item"><div class="datagrid-title">Ruta XML</div><div class="datagrid-content font-monospace small text-break">@Seleccionado.RutaXml</div></div>
+                    </div>
                 </div>
-            </section>
+            </div>
         }
     }
 </div>
@@ -329,7 +403,7 @@
                 ? "Sin ejecución"
                 : $"Lote terminado: {UltimoResultadoLote.Procesados} procesado(s).";
 
-    private string ClaseMensajeSat => MensajeSatEsError ? "message error-message" : "message sat-success-message";
+    private void CerrarMensajeSat() => MensajeSat = "";
     private string SufijoFemenino => Clasificacion == "EMITIDO" ? "emitidas" : "recibidas";
     private string SufijoMasculino => Clasificacion == "EMITIDO" ? "emitidos" : "recibidos";
 
@@ -569,20 +643,6 @@
         finally { CfdiValidandoSat.Remove(cfdi.CfdiId); await InvokeAsync(StateHasChanged); }
     }
 
-    private static string ObtenerClaseBotonSat(CfdiConsultaDto cfdi)
-    {
-        string estado = (cfdi.EstadoSat ?? "").Trim().ToUpperInvariant();
-
-        return estado switch
-        {
-            "VIGENTE" => "row-action sat-action sat-button-vigente",
-            "CANCELADO" => "row-action sat-action sat-button-cancelado",
-            "NO ENCONTRADO" => "row-action sat-action sat-button-no-encontrado",
-            "ERROR" => "row-action sat-action sat-button-error",
-            _ => "row-action sat-action sat-button-pendiente"
-        };
-    }
-
     private static string ObtenerTituloBotonSat(CfdiConsultaDto cfdi)
     {
         string estado = ObtenerTextoEstadoSat(cfdi.EstadoSat);
@@ -593,13 +653,13 @@
     private void MostrarMensajeSat(string mensaje, bool esError) { MensajeSat = mensaje; MensajeSatEsError = esError; }
     private static string ObtenerTextoEstadoSat(string? estado) => string.IsNullOrWhiteSpace(estado) || estado.Equals("NO VERIFICADO", StringComparison.OrdinalIgnoreCase) ? "No validado" : estado.Trim();
 
-    private static string ObtenerClaseEstadoSat(string? estado) => (estado ?? "").Trim().ToUpperInvariant() switch
+    private static string ColorEstadoSat(string? estado) => (estado ?? "").Trim().ToUpperInvariant() switch
     {
-        "VIGENTE" => "estado-sat estado-vigente",
-        "CANCELADO" => "estado-sat estado-cancelado",
-        "NO ENCONTRADO" => "estado-sat estado-no-encontrado",
-        "ERROR" => "estado-sat estado-error",
-        _ => "estado-sat estado-pendiente"
+        "VIGENTE" => "green",
+        "CANCELADO" => "red",
+        "NO ENCONTRADO" => "yellow",
+        "ERROR" => "orange",
+        _ => "secondary"
     };
 
     private string ObtenerRfc(CfdiConsultaDto cfdi) => Clasificacion == "EMITIDO" ? cfdi.RfcReceptor : cfdi.RfcEmisor;
@@ -632,7 +692,25 @@
 
     private static string Moneda(decimal valor) => valor.ToString("C2", CultureInfo.GetCultureInfo("es-MX"));
     private static string AbreviarUuid(string uuid) => string.IsNullOrWhiteSpace(uuid) ? "" : uuid.Length <= 13 ? uuid : $"{uuid[..8]}…{uuid[^4..]}";
-    private static string ClaseTipo(string tipo) => tipo switch { "I" => "invoice", "N" => "payroll", "E" => "credit-note", "T" => "transfer", "P" => "payment", _ => "unknown" };
+    // Colores por tipo en toda la app: facturas azul, nómina verde, notas de crédito rojo, traslados ámbar, pagos morado.
+    private static string ColorTipo(string tipo) => tipo switch { "I" => "blue", "N" => "green", "E" => "red", "T" => "yellow", "P" => "purple", _ => "secondary" };
+
+    private static string NombreTipo(string tipo) => tipo switch { "I" => "Factura", "N" => "Nómina", "E" => "Nota de crédito", "T" => "Traslado", "P" => "Pago", _ => tipo };
+
+    private string ClaseOrden(string campo) => Filtro.OrdenarPor != campo ? "" : Filtro.OrdenDescendente ? "desc" : "asc";
+
+    private sealed record Totalizador(string Tipo, string Nombre, string Icono, string Color, long Cantidad, decimal Importe);
+
+    // Mismo orden de siempre: Facturas, Nómina, Notas de crédito, Traslados, Pagos; al final el total.
+    private IEnumerable<Totalizador> Totalizadores =>
+    [
+        new("I", $"Facturas {SufijoFemenino}", "ti-file-invoice", "blue", Resumen.CantidadFacturas, Resumen.TotalFacturas),
+        new("N", $"Nómina {SufijoFemenino}", "ti-users", "green", Resumen.CantidadNominas, Resumen.TotalNominas),
+        new("E", "Notas de crédito", "ti-receipt-refund", "red", Resumen.CantidadNotasCredito, Resumen.TotalNotasCredito),
+        new("T", $"Traslados {SufijoMasculino}", "ti-truck", "yellow", Resumen.CantidadTraslados, Resumen.TotalTraslados),
+        new("P", $"Pagos {SufijoMasculino}", "ti-cash", "purple", Resumen.CantidadPagos, Resumen.TotalPagos),
+        new("", $"Total {SufijoMasculino}", "ti-sum", "azure", Resumen.TotalCfdi, Resumen.ImporteTotal)
+    ];
 
     private CfdiFiltroDto CrearFiltroResumen() => new()
     {

@@ -12,302 +12,315 @@
 
 <PageTitle>CFDI Manager</PageTitle>
 
+@* Tabler solo en esta pantalla: en toda la app cambia el aspecto de las que ya estaban terminadas. *@
+<HeadContent>
+    <link rel="stylesheet" href="lib/tabler/css/tabler.min.css" />
+</HeadContent>
 
-<div class="dashboard">
-    <header class="dashboard-header">
-        <div>
-            <div class="brand-label">CFDI MANAGER</div>
-            <h1>Resumen fiscal</h1>
-            <p>
-                CFDI emitidos y recibidos del RFC
-                <strong>@RfcEmpresa</strong>
-            </p>
+<div class="resumen">
+    @* ---------- Encabezado y periodo ---------- *@
+    <div class="page-header mb-3">
+        <div class="row g-3 align-items-end">
+            <div class="col">
+                <div class="page-pretitle">CFDI Manager · @RfcEmpresa</div>
+                <h2 class="page-title">Resumen fiscal</h2>
+                <div class="text-secondary mt-1">CFDI emitidos y recibidos del periodo.</div>
+            </div>
+
+            <div class="col-auto">
+                <div class="d-flex flex-wrap align-items-end gap-2">
+                    <div>
+                        <label class="form-label mb-1">Fecha inicial</label>
+                        <FechaInput @bind-Valor="FechaInicio" />
+                    </div>
+                    <div>
+                        <label class="form-label mb-1">Fecha final</label>
+                        <FechaInput @bind-Valor="FechaFin" />
+                    </div>
+                    <button type="button" class="btn btn-primary" @onclick="CargarDashboard" disabled="@Cargando">
+                        <i class="ti ti-refresh me-1"></i>@(Cargando ? "Actualizando…" : "Consultar")
+                    </button>
+                </div>
+            </div>
         </div>
-
-        <button class="button-primary"
-                @onclick="CargarDashboard"
-                disabled="@Cargando">
-            @(Cargando ? "Actualizando..." : "Actualizar")
-        </button>
-    </header>
-
-    <section class="period-panel">
-        <div class="field">
-            <label>Fecha inicial</label>
-            <FechaInput @bind-Valor="FechaInicio" />
-        </div>
-
-        <div class="field">
-            <label>Fecha final</label>
-            <FechaInput @bind-Valor="FechaFin" />
-        </div>
-
-        <button class="button-primary"
-                @onclick="CargarDashboard"
-                disabled="@Cargando">
-            Consultar periodo
-        </button>
-    </section>
+    </div>
 
     @if (!string.IsNullOrWhiteSpace(Error))
     {
-        <section class="error-box">
-            <strong>No se pudo cargar el Dashboard</strong>
-            <span>@Error</span>
-        </section>
+        <div class="alert alert-danger" role="alert">
+            <div class="d-flex gap-2">
+                <i class="ti ti-alert-octagon fs-2"></i>
+                <div>
+                    <h4 class="alert-title">No se pudo cargar el resumen</h4>
+                    <div class="text-secondary">@Error</div>
+                </div>
+            </div>
+        </div>
     }
     else if (Cargando)
     {
-        <section class="loading-box">
-            Consultando información en PostgreSQL...
-        </section>
+        <div class="card">
+            <div class="card-body">
+                <div class="text-secondary mb-2">Consultando información en PostgreSQL…</div>
+                <div class="progress progress-sm"><div class="progress-bar progress-bar-indeterminate"></div></div>
+            </div>
+        </div>
     }
     else
     {
-        <div class="dashboard-groups">
-            <section class="fiscal-group emitted-group">
-                <header class="group-header">
-                    <div>
-                        <span class="group-badge emitted">EMITIDOS</span>
-                        <h2>Facturación y ventas</h2>
-                        <p>CFDI donde el RFC seleccionado es emisor</p>
-                    </div>
-
-                    <div class="group-total">
-                        <span>Total CFDI</span>
-                        <strong>@Datos.CfdiEmitidos.ToString("N0")</strong>
-                    </div>
-                </header>
-
-                <div class="group-content">
-                    <article class="main-kpi emitted-main">
-                        <span>Facturación neta</span>
-                        <strong>@FormatoMoneda(Datos.FacturacionNeta)</strong>
-                        <small>Facturas menos notas de crédito</small>
-                    </article>
-
-                    <div class="mini-kpi-grid">
-                        <article class="mini-kpi invoice">
-                            <div class="type-icon">I</div>
-                            <div class="mini-content">
-                                <span>Facturas emitidas</span>
-                                <strong>@FormatoMoneda(Datos.TotalIngresosEmitidos)</strong>
-                                <small>@Datos.IngresosEmitidos.ToString("N0") comprobantes</small>
+        @* ---------- Indicadores ---------- *@
+        <div class="row row-cards mb-3">
+            <div class="col-sm-6 col-xl-3">
+                <div class="card card-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="avatar bg-blue text-white"><i class="ti ti-trending-up"></i></span>
+                            <div>
+                                <div class="subheader">Facturación neta</div>
+                                <div class="h2 mb-0">@Moneda(Datos.FacturacionNeta)</div>
+                                <div class="text-secondary small">Facturas menos notas de crédito</div>
                             </div>
-                        </article>
-
-                        <article class="mini-kpi payroll">
-                            <div class="type-icon">N</div>
-                            <div class="mini-content">
-                                <span>Nómina emitida</span>
-                                <strong>@FormatoMoneda(Datos.TotalNominasEmitidas)</strong>
-                                <small>@Datos.NominasEmitidas.ToString("N0") comprobantes</small>
-                            </div>
-                        </article>
-
-                        <article class="mini-kpi credit-note">
-                            <div class="type-icon">E</div>
-                            <div class="mini-content">
-                                <span>Notas de crédito</span>
-                                <strong>@FormatoMoneda(Datos.TotalEgresosEmitidos)</strong>
-                                <small>@Datos.EgresosEmitidos.ToString("N0") comprobantes</small>
-                            </div>
-                        </article>
-
-                        <article class="mini-kpi transfer">
-                            <div class="type-icon">T</div>
-                            <div class="mini-content">
-                                <span>Traslados emitidos</span>
-                                <strong>@Datos.TrasladosEmitidos.ToString("N0")</strong>
-                                <small>Comprobantes de traslado</small>
-                            </div>
-                        </article>
-
-                        <article class="mini-kpi payment">
-                            <div class="type-icon">P</div>
-                            <div class="mini-content">
-
-                                <span>Pagos emitidos</span>
-                                <strong>@FormatoMoneda(Datos.TotalPagosEmitidos)</strong>
-                                <small>@Datos.PagosEmitidos.ToString("N0")complementos</small>
-                            </div>
-                        </article>
+                        </div>
                     </div>
                 </div>
-            </section>
+            </div>
 
-            <section class="fiscal-group received-group">
-                <header class="group-header">
-                    <div>
-                        <span class="group-badge received">RECIBIDOS</span>
-                        <h2>Compras y gastos</h2>
-                        <p>CFDI donde el RFC seleccionado es receptor</p>
-                    </div>
-
-                    <div class="group-total">
-                        <span>Total CFDI</span>
-                        <strong>@Datos.CfdiRecibidos.ToString("N0")</strong>
-                    </div>
-                </header>
-
-                <div class="group-content">
-                    <article class="main-kpi received-main">
-                        <span>Compras netas</span>
-                        <strong>@FormatoMoneda(Datos.ComprasNetas)</strong>
-                        <small>Facturas recibidas menos notas de crédito</small>
-                    </article>
-
-                    <div class="mini-kpi-grid">
-                        <article class="mini-kpi invoice">
-                            <div class="type-icon">I</div>
-                            <div class="mini-content">
-                                <span>Facturas recibidas</span>
-                                <strong>@FormatoMoneda(Datos.TotalIngresosRecibidos)</strong>
-                                <small>@Datos.IngresosRecibidos.ToString("N0") comprobantes</small>
+            <div class="col-sm-6 col-xl-3">
+                <div class="card card-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="avatar bg-teal text-white"><i class="ti ti-shopping-cart"></i></span>
+                            <div>
+                                <div class="subheader">Compras netas</div>
+                                <div class="h2 mb-0">@Moneda(Datos.ComprasNetas)</div>
+                                <div class="text-secondary small">Facturas recibidas menos notas de crédito</div>
                             </div>
-                        </article>
-
-                        <article class="mini-kpi payroll">
-                            <div class="type-icon">N</div>
-                            <div class="mini-content">
-                                <span>Nómina recibida</span>
-                                <strong>@FormatoMoneda(Datos.TotalNominasRecibidas)</strong>
-                                <small>@Datos.NominasRecibidas.ToString("N0") comprobantes</small>
-                            </div>
-                        </article>
-
-                        <article class="mini-kpi credit-note">
-                            <div class="type-icon">E</div>
-                            <div class="mini-content">
-                                <span>Notas de crédito recibidas</span>
-                                <strong>@FormatoMoneda(Datos.TotalEgresosRecibidos)</strong>
-                                <small>@Datos.EgresosRecibidos.ToString("N0") comprobantes</small>
-                            </div>
-                        </article>
-
-                        <article class="mini-kpi transfer">
-                            <div class="type-icon">T</div>
-                            <div class="mini-content">
-                                <span>Traslados recibidos</span>
-                                <strong>@Datos.TrasladosRecibidos.ToString("N0")</strong>
-                                <small>Comprobantes de traslado</small>
-                            </div>
-                        </article>
-
-                        <article class="mini-kpi payment">
-                            <div class="type-icon">P</div>
-                            <div class="mini-content">
-                                <span>Pagos recibidos</span>
-                                <strong> @FormatoMoneda(Datos.TotalPagosRecibidos)
-
-                                </strong>
-
-<small>
-    @Datos.PagosRecibidos.ToString("N0")
-    complementos
-</small>
-                    </div>
-                        </article>
+                        </div>
                     </div>
                 </div>
-            </section>
+            </div>
+
+            <div class="col-sm-6 col-xl-3">
+                <div class="card card-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="avatar @(Diferencia >= 0 ? "bg-green" : "bg-red") text-white">
+                                <i class="ti @(Diferencia >= 0 ? "ti-arrow-up-right" : "ti-arrow-down-right")"></i>
+                            </span>
+                            <div>
+                                <div class="subheader">Ventas − compras</div>
+                                <div class="h2 mb-0 @(Diferencia >= 0 ? "text-green" : "text-red")">@Moneda(Diferencia)</div>
+                                <div class="text-secondary small">Facturación neta menos compras netas</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-sm-6 col-xl-3">
+                <div class="card card-sm h-100">
+                    <div class="card-body">
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="avatar bg-azure text-white"><i class="ti ti-files"></i></span>
+                            <div>
+                                <div class="subheader">CFDI del periodo</div>
+                                <div class="h2 mb-0">@((Datos.CfdiEmitidos + Datos.CfdiRecibidos).ToString("N0"))</div>
+                                <div class="text-secondary small">
+                                    @Datos.CfdiEmitidos.ToString("N0") emitidos · @Datos.CfdiRecibidos.ToString("N0") recibidos
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* ---------- Emitidos y recibidos por tipo ---------- *@
+        <div class="row row-cards">
+            @foreach (Grupo grupo in Grupos)
+            {
+                <div class="col-xl-6">
+                    <div class="card h-100">
+                        <div class="card-header">
+                            <div>
+                                <h3 class="card-title">
+                                    <span class="badge @grupo.Insignia me-2">@grupo.Clave</span>@grupo.Titulo
+                                </h3>
+                                <div class="card-subtitle">@grupo.Descripcion</div>
+                            </div>
+                            <div class="card-actions text-end">
+                                <div class="subheader">@grupo.EtiquetaNeto</div>
+                                <div class="h3 mb-0">@Moneda(grupo.Neto)</div>
+                            </div>
+                        </div>
+
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="text-secondary">Composición por número de CFDI</span>
+                                <strong>@grupo.Total.ToString("N0") CFDI</strong>
+                            </div>
+
+                            @if (grupo.Total > 0)
+                            {
+                                <div class="progress progress-separated progress-lg mb-3">
+                                    @foreach (Renglon r in grupo.Renglones.Where(r => r.Cantidad > 0))
+                                    {
+                                        <div class="progress-bar @r.Fondo" role="progressbar"
+                                             style="width: @Porcentaje(r.Cantidad, grupo.Total).ToString("0.##", CultureInfo.InvariantCulture)%"
+                                             title="@r.Nombre: @r.Cantidad.ToString("N0") (@Porcentaje(r.Cantidad, grupo.Total).ToString("0.#")%)"></div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="progress progress-lg mb-3"></div>
+                            }
+
+                            <div class="d-flex flex-wrap gap-3 small text-secondary">
+                                @foreach (Renglon r in grupo.Renglones)
+                                {
+                                    <span><span class="legend @r.Fondo me-1"></span>@r.Nombre</span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="table table-vcenter card-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tipo</th>
+                                        <th class="text-end">CFDI</th>
+                                        <th class="text-end">%</th>
+                                        <th class="text-end">Importe</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (Renglon r in grupo.Renglones)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <span class="avatar avatar-sm @r.Claro"><i class="ti @r.Icono"></i></span>
+                                                    <span>@r.Nombre</span>
+                                                </div>
+                                            </td>
+                                            <td class="text-end">@r.Cantidad.ToString("N0")</td>
+                                            <td class="text-end text-secondary">@Porcentaje(r.Cantidad, grupo.Total).ToString("0.#")%</td>
+                                            <td class="text-end fw-bold">@(r.Importe is decimal importe ? Moneda(importe) : "—")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            }
         </div>
     }
 </div>
 
 @code {
-    private DashboardDto Datos { get; set; } =
-        new();
+    private static readonly CultureInfo Mx = CultureInfo.GetCultureInfo("es-MX");
 
-    private DateTime FechaInicio { get; set; } =
-        new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DashboardDto Datos { get; set; } = new();
 
-    private DateTime FechaFin { get; set; } =
-        DateTime.Today;
+    private DateTime FechaInicio { get; set; } = new(DateTime.Today.Year, DateTime.Today.Month, 1);
 
-    private bool Cargando { get; set; } =
-        true;
+    private DateTime FechaFin { get; set; } = DateTime.Today;
+
+    private bool Cargando { get; set; } = true;
 
     private string? Error { get; set; }
 
     private string RfcEmpresa =>
-        string.IsNullOrWhiteSpace(
-            EmpresaContext.Rfc)
-                ? "Empresa no seleccionada"
-                : EmpresaContext.Rfc;
+        string.IsNullOrWhiteSpace(EmpresaContext.Rfc) ? "Empresa no seleccionada" : EmpresaContext.Rfc;
+
+    private decimal Diferencia => Datos.FacturacionNeta - Datos.ComprasNetas;
+
+    // Un renglón por tipo, siempre en el orden Facturas, Nómina, Notas de crédito, Traslados, Pagos.
+    // Los traslados no llevan importe.
+    private sealed record Renglon(string Icono, string Nombre, string Fondo, string Claro, long Cantidad, decimal? Importe);
+
+    private sealed record Grupo(string Clave, string Insignia, string Titulo, string Descripcion,
+                                string EtiquetaNeto, decimal Neto, long Total, List<Renglon> Renglones);
+
+    private IEnumerable<Grupo> Grupos =>
+    [
+        new("EMITIDOS", "bg-blue-lt", "Facturación y ventas", "CFDI donde el RFC es emisor",
+            "Facturación neta", Datos.FacturacionNeta, Datos.CfdiEmitidos,
+            Renglones(Datos.IngresosEmitidos, Datos.TotalIngresosEmitidos,
+                      Datos.NominasEmitidas, Datos.TotalNominasEmitidas,
+                      Datos.EgresosEmitidos, Datos.TotalEgresosEmitidos,
+                      Datos.TrasladosEmitidos,
+                      Datos.PagosEmitidos, Datos.TotalPagosEmitidos)),
+        new("RECIBIDOS", "bg-teal-lt", "Compras y gastos", "CFDI donde el RFC es receptor",
+            "Compras netas", Datos.ComprasNetas, Datos.CfdiRecibidos,
+            Renglones(Datos.IngresosRecibidos, Datos.TotalIngresosRecibidos,
+                      Datos.NominasRecibidas, Datos.TotalNominasRecibidas,
+                      Datos.EgresosRecibidos, Datos.TotalEgresosRecibidos,
+                      Datos.TrasladosRecibidos,
+                      Datos.PagosRecibidos, Datos.TotalPagosRecibidos))
+    ];
+
+    private static List<Renglon> Renglones(long facturas, decimal importeFacturas,
+                                           long nominas, decimal importeNominas,
+                                           long notas, decimal importeNotas,
+                                           long traslados,
+                                           long pagos, decimal importePagos) =>
+    [
+        new("ti-file-invoice", "Facturas", "bg-blue", "bg-blue-lt", facturas, importeFacturas),
+        new("ti-users", "Nómina", "bg-green", "bg-green-lt", nominas, importeNominas),
+        new("ti-receipt-refund", "Notas de crédito", "bg-red", "bg-red-lt", notas, importeNotas),
+        new("ti-truck", "Traslados", "bg-yellow", "bg-yellow-lt", traslados, null),
+        new("ti-cash", "Pagos", "bg-purple", "bg-purple-lt", pagos, importePagos)
+    ];
 
     protected override void OnInitialized()
     {
-        EmpresaContext.OnChange +=
-            CambiarEmpresa;
-
+        EmpresaContext.OnChange += CambiarEmpresa;
         CargarDashboard();
     }
 
     private void CargarDashboard()
     {
-        Error = $"EmpresaId={EmpresaContext.EmpresaId} RFC={EmpresaContext.Rfc}";    
         Cargando = true;
         Error = null;
+
         try
         {
             if (!EmpresaContext.TieneEmpresaActiva)
-            {
-                throw new InvalidOperationException(
-                    "Selecciona una empresa o RFC.");
-            }
+                throw new InvalidOperationException("Selecciona una empresa o RFC.");
 
-            if (FechaFin.Date <
-                FechaInicio.Date)
-            {
-                throw new InvalidOperationException(
-                    "La fecha final no puede ser menor " +
-                    "que la fecha inicial.");
-            }
-            
-            Datos =
-                Repo.ObtenerDashboard(
-                    EmpresaContext.EmpresaId,
-                    FechaInicio,
-                    FechaFin);
+            if (FechaFin.Date < FechaInicio.Date)
+                throw new InvalidOperationException("La fecha final no puede ser menor que la fecha inicial.");
+
+            Datos = Repo.ObtenerDashboard(EmpresaContext.EmpresaId, FechaInicio, FechaFin);
         }
         catch (Exception ex)
         {
-            Error =
-                ex.Message;
+            Error = ex.Message;
         }
         finally
         {
-            Cargando =
-                false;
+            Cargando = false;
         }
     }
 
     private void CambiarEmpresa()
     {
-        _ = InvokeAsync(
-            () =>
-            {
-                CargarDashboard();
-                StateHasChanged();
-            });
+        _ = InvokeAsync(() =>
+        {
+            CargarDashboard();
+            StateHasChanged();
+        });
     }
 
     public void Dispose()
     {
-        EmpresaContext.OnChange -=
-            CambiarEmpresa;
+        EmpresaContext.OnChange -= CambiarEmpresa;
     }
 
-    private static string FormatoMoneda(
-        decimal valor)
-    {
-        CultureInfo cultura =
-            CultureInfo.GetCultureInfo(
-                "es-MX");
+    private static double Porcentaje(long parte, long total) => total <= 0 ? 0 : parte * 100d / total;
 
-        return valor.ToString(
-            "C2",
-            cultura);
-    }
+    private static string Moneda(decimal valor) => valor.ToString("C2", Mx);
 }
