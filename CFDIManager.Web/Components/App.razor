@@ -5,6 +5,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
+    <link rel="icon" type="image/png" href="favicon.png" />
 
     @* Antes de los estilos para que no parpadee el tema guardado. *@
     <script src="js/theme.js"></script>
@@ -26,12 +27,29 @@
 
     <script src="js/descargas.js"></script>
     <script src="js/fecha.js"></script>
+
+    @* Cierre por inactividad (Sesion:MinutosInactividad): solo con sesión iniciada. El formulario lleva el token
+       antiforgery que exige /cuenta/logout. *@
+    @if (SesionIniciada && MinutosInactividad > 0)
+    {
+        <form id="cfdi-salir-inactividad" action="cuenta/logout" method="post" hidden>
+            <AntiforgeryToken />
+            <input type="hidden" name="motivo" value="inactividad" />
+        </form>
+        <script src="js/sesion.js" data-minutos="@MinutosInactividad"></script>
+    }
     <script src="_framework/blazor.web.js"></script>
 </body>
 
 </html>
 
+@inject IConfiguration Configuracion
+
 @code {
+    private bool SesionIniciada => HttpContext.User.Identity?.IsAuthenticated == true;
+
+    private int MinutosInactividad => Configuracion.GetValue("Sesion:MinutosInactividad", 30);
+
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
 

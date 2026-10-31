@@ -16,6 +16,7 @@
 @inject CFDIManager.Web.Services.Storage.EstadoSincronizacionStorage Sincronizacion
 @inject RutaXmlService Rutas
 @inject CFDIManager.Web.Services.Sat.EstadoDescargaAutomaticaSat DescargaSat
+@inject CFDIManager.Web.Services.AdministracionXml.ValidacionSatSegundoPlano ValidacionesSat
 
 <PageTitle>Administración de XML</PageTitle>
 
@@ -173,12 +174,12 @@
                     </select>
                 </div>
                 <div class="progreso progress" role="progressbar" aria-label="Progreso del proceso">
-                    <div class="progress-bar @(Cancelacion is not null ? "progress-bar-striped progress-bar-animated" : "")"
+                    <div class="progress-bar @(EnProceso ? "progress-bar-striped progress-bar-animated" : "")"
                          style="width:@(Proceso is { Total: > 0 } p ? (p.Hechos * 100 / p.Total) : 0)%"></div>
                     <span class="progreso-texto">@TextoProceso</span>
-                    @if (Cancelacion is not null)
+                    @if (EnProceso)
                     {
-                        <button class="btn btn-sm btn-danger cancelar" @onclick="() => Cancelacion?.Cancel()"><i class="bi bi-stop-fill me-1"></i>Cancelar</button>
+                        <button class="btn btn-sm btn-danger cancelar" @onclick="CancelarProceso"><i class="bi bi-stop-fill me-1"></i>Cancelar</button>
                     }
                 </div>
             </div>
@@ -842,8 +843,10 @@
         EmpresaContext.OnChange += EmpresaCambio;
         Sincronizacion.Cambio += SincronizacionCambio;
         DescargaSat.Cambio += DescargaSatCambio;
+        ValidacionesSat.Cambio += ValidacionSatCambio;
         _ultimaPasadaVista = Sincronizacion.UltimaPasada;
         await CargarOpciones();
+        ConectarValidacionSat();
 
         // La carpeta Storage\XML es la fuente de verdad: al abrir se vuelve a leer y,
         // si registra o retira XML, SincronizacionCambio recarga la tabla.
@@ -903,6 +906,7 @@
             MesesElegidos.Clear();
             DiasElegidos.Clear();
             await CargarOpciones();
+            ConectarValidacionSat();
             StateHasChanged();
             Sincronizacion.SolicitarAhora();
         });
@@ -913,6 +917,7 @@
         EmpresaContext.OnChange -= EmpresaCambio;
         Sincronizacion.Cambio -= SincronizacionCambio;
         DescargaSat.Cambio -= DescargaSatCambio;
+        ValidacionesSat.Cambio -= ValidacionSatCambio;
         Cancelacion?.Cancel();
         _pausaBusqueda?.Cancel();
     }
@@ -1565,7 +1570,7 @@
     private async Task Ejecutar(string titulo, Func<IProgress<ResultadoProcesoXml>, CancellationToken, Task<ResultadoProcesoXml>> proceso, bool recargar,
         Action<ResultadoProcesoXml>? alAvanzar = null, Func<ResultadoProcesoXml, string>? texto = null)
     {
-        if (Cancelacion is not null)
+        if (EnProceso)
         {
             Avisar("Ya hay un proceso en curso.", error: true);
             return;
@@ -1627,7 +1632,7 @@
     /// </summary>
     private async Task ValidarEstadoSat()
     {
-        if (Cancelacion is not null)
+        if (EnProceso)
         {
             Avisar("Ya hay un proceso en curso.", error: true);
             return;
@@ -1661,11 +1666,74 @@
             return;
         }
 
-        await Ejecutar("Valida Estado SAT", (p, ct) => Admin.ValidarEstadoSatAsync(EmpresaContext.EmpresaActiva!, filas, p, ct), recargar: false,
-            alAvanzar: PintarEstadosSat,
-            texto: r => $"Valida Estado SAT: {r.Hechos:N0} de {r.Total:N0} · " +
-                        string.Join(" · ", r.PorTipo.Select(t => $"{NombreTipo(t.Key)} {t.Value.Hechos:N0}/{t.Value.Total:N0}")) +
-                        (r.Errores > 0 ? $" · {r.Errores} sin respuesta" : ""));
+        // Corre en segundo plano: sigue aunque se cambie de pantalla y al volver se ve su avance.
+        if (!ValidacionesSat.Iniciar(EmpresaContext.EmpresaActiva!, filas))
+        {
+            Avisar("Ya hay una validación SAT en curso para esta empresa.", error: true);
+            return;
+        }
+
+        Proceso = ValidacionesSat.Obtener(EmpresaContext.EmpresaId)?.Resultado;
+        TextoProceso = "Valida Estado SAT…";
+    }
+
+    private bool ValidandoSat => ValidacionesSat.Obtener(EmpresaContext.EmpresaId) is { EnCurso: true };
+
+    private bool EnProceso => Cancelacion is not null || ValidandoSat;
+
+    private void CancelarProceso()
+    {
+        if (ValidandoSat)
+            ValidacionesSat.Cancelar(EmpresaContext.EmpresaId);
+        else
+            Cancelacion?.Cancel();
+    }
+
+    private void ValidacionSatCambio(long empresaId)
+    {
+        if (empresaId == EmpresaContext.EmpresaId)
+            _ = InvokeAsync(() =>
+            {
+                ConectarValidacionSat();
+                StateHasChanged();
+            });
+    }
+
+    /// <summary>Muestra el avance de la validación de la empresa activa y, al terminar, su resumen (una sola vez).</summary>
+    private void ConectarValidacionSat()
+    {
+        if (ValidacionesSat.Obtener(EmpresaContext.EmpresaId) is not { } t)
+            return;
+
+        ResultadoProcesoXml r = t.Resultado;
+
+        lock (r)
+        {
+            Proceso = r;
+            PintarEstadosSat(r);
+
+            TextoProceso = t.EnCurso
+                ? $"Valida Estado SAT: {r.Hechos:N0} de {r.Total:N0} · " +
+                  string.Join(" · ", r.PorTipo.Select(p => $"{NombreTipo(p.Key)} {p.Value.Hechos:N0}/{p.Value.Total:N0}")) +
+                  (r.Errores > 0 ? $" · {r.Errores} sin respuesta" : "")
+                : t.Error is not null ? "Valida Estado SAT: error"
+                : t.Cancelado ? $"Valida Estado SAT: cancelado ({r.Hechos:N0} de {r.Total:N0})"
+                : $"Valida Estado SAT: terminado ({r.Hechos:N0})";
+        }
+
+        if (!t.Terminado || t.Avisado)
+            return;
+
+        t.Avisado = true;
+
+        if (t.Error is not null)
+        {
+            Avisar(t.Error, error: true);
+            return;
+        }
+
+        string detalle = r.Detalle.Count > 0 ? " · " + string.Join(", ", r.Detalle.Select(d => $"{d.Key}: {d.Value}")) : "";
+        Avisar($"Valida Estado SAT: {r.Correctos:N0} correctos, {r.Errores:N0} con error{detalle}.", error: r.Errores > 0 && r.Correctos == 0);
 
         // Vigente / Cancelado del pie cambian con los nuevos estados.
         Totales = Repo.ObtenerTotalesAdministracionXml(Filtro());

@@ -13,6 +13,7 @@
 @inject PostgreSqlRepository Repo
 @inject NavigationManager Navigation
 @inject ILogger<Login> Logger
+@inject IConfiguration Configuracion
 
 <PageTitle>Iniciar sesión · CFDI Manager</PageTitle>
 
@@ -26,6 +27,14 @@
     </div>
 
     <h1>Iniciar sesión</h1>
+
+    @if (Inactividad == "1" && string.IsNullOrWhiteSpace(MensajeError))
+    {
+        <div class="mensaje-info" role="status">
+            <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+            Tu sesión se cerró por inactividad. Vuelve a iniciar sesión.
+        </div>
+    }
 
     @if (!string.IsNullOrWhiteSpace(MensajeError))
     {
@@ -50,10 +59,14 @@
             <ValidationMessage For="() => Input.Password" />
         </div>
 
-        <label class="recordar">
-            <InputCheckbox @bind-Value="Input.Recordarme" />
-            Mantener la sesión en este equipo
-        </label>
+        @* Por seguridad viene apagado (Sesion:PermitirRecordarme): sin él, la sesión termina al cerrar el navegador. *@
+        @if (PermitirRecordarme)
+        {
+            <label class="recordar">
+                <InputCheckbox @bind-Value="Input.Recordarme" />
+                Mantener la sesión en este equipo
+            </label>
+        }
 
         <button type="submit" class="entrar">
             <i class="bi bi-box-arrow-in-right" aria-hidden="true"></i>
@@ -74,6 +87,11 @@
     [SupplyParameterFromQuery]
     private string? ReturnUrl { get; set; }
 
+    [SupplyParameterFromQuery]
+    private string? Inactividad { get; set; }
+
+    private bool PermitirRecordarme => Configuracion.GetValue("Sesion:PermitirRecordarme", false);
+
     private string? MensajeError;
 
     private async Task IniciarSesion()
@@ -88,7 +106,7 @@
         }
 
         SignInResult resultado = await SignInManager.PasswordSignInAsync(
-            usuario, Input.Password, Input.Recordarme, lockoutOnFailure: true);
+            usuario, Input.Password, Input.Recordarme && PermitirRecordarme, lockoutOnFailure: true);
 
         if (resultado.Succeeded)
         {

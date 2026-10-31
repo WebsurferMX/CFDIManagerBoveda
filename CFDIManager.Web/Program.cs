@@ -96,6 +96,9 @@ builder.Services.AddScoped<RepresentacionImpresaService>();
 
 builder.Services.AddScoped<AdministracionXmlService>();
 
+// "Valida Estado SAT" sigue aunque se cambie de pantalla.
+builder.Services.AddSingleton<ValidacionSatSegundoPlano>();
+
 // QuestPDF exige declarar la licencia antes de generar documentos.
 // Community: gratuita para organizaciones con ingresos anuales menores a 1 millón de USD.
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
@@ -180,7 +183,10 @@ builder.Services.ConfigureApplicationCookie(opciones =>
     opciones.LoginPath = "/cuenta/login";
     opciones.LogoutPath = "/cuenta/logout";
     opciones.AccessDeniedPath = "/cuenta/acceso-denegado";
-    opciones.ExpireTimeSpan = TimeSpan.FromHours(10);
+    // La sesión vence tras Sesion:MinutosInactividad sin usar la app (0 = 10 horas, como antes). El navegador
+    // cierra la sesión un poco antes (js/sesion.js) y, mientras hay actividad, la renueva con /cuenta/actividad.
+    int minutosInactividad = builder.Configuration.GetValue("Sesion:MinutosInactividad", 30);
+    opciones.ExpireTimeSpan = minutosInactividad > 0 ? TimeSpan.FromMinutes(minutosInactividad + 5) : TimeSpan.FromHours(10);
     opciones.SlidingExpiration = true;
 });
 
@@ -325,11 +331,15 @@ app.MapStaticAssets();
 // [FromForm] obliga a validar el token antiforgery del formulario de "Cerrar sesión".
 app.MapPost(
     "/cuenta/logout",
-    async ([FromForm] string? returnUrl, SignInManager<UsuarioDto> signInManager) =>
+    async ([FromForm] string? returnUrl, [FromForm] string? motivo, SignInManager<UsuarioDto> signInManager) =>
     {
         await signInManager.SignOutAsync();
-        return Results.LocalRedirect("/cuenta/login");
+        return Results.LocalRedirect(motivo == "inactividad" ? "/cuenta/login?inactividad=1" : "/cuenta/login");
     });
+
+// Mientras el usuario trabaja, js/sesion.js llama aquí cada pocos minutos para renovar la cookie de sesión
+// (en Blazor Server la pantalla no hace peticiones HTTP que la renueven solas).
+app.MapGet("/cuenta/actividad", () => Results.NoContent()).RequireAuthorization();
 
 // Todo /api exige sesión; las rutas por empresa además validan que el usuario la tenga asignada.
 RouteGroupBuilder api = app.MapGroup("/api").RequireAuthorization();
