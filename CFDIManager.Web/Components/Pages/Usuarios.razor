@@ -69,7 +69,7 @@
 
     <div class="row g-3 align-items-start">
         @* ---------- Catálogo ---------- *@
-        <div class="col-xxl-8 col-xl-7">
+        <div class="col-12">
             <div class="card shadow-sm">
                 <div class="card-header bg-body d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
                     <div>
@@ -83,7 +83,7 @@
                     </div>
                 </div>
 
-                <div class="table-responsive">
+                <div class="table-responsive tabla-contenedor">
                     <table class="table table-hover align-middle mb-0 tabla-usuarios">
                         <thead>
                             <tr>
@@ -206,8 +206,8 @@
         </div>
 
         @* ---------- Formulario ---------- *@
-        <div class="col-xxl-4 col-xl-5">
-            <div class="card shadow-sm formulario">
+        <div class="col-12">
+            <div class="card shadow-sm formulario" id="editor-usuario">
                 <div class="card-header bg-body d-flex justify-content-between align-items-center py-3">
                     <div>
                         <span class="eyebrow">@(Editando ? "EDITAR USUARIO" : "NUEVO USUARIO")</span>
@@ -220,232 +220,245 @@
                     }
                 </div>
 
-                <div class="card-body">
-                    @* Datos generales *@
-                    <div class="seccion">
-                        <div class="seccion-titulo"><i class="bi bi-person-vcard"></i> Datos generales</div>
+                <div class="card-body bg-body-tertiary">
+                    <div class="row g-3">
+                        @* Columna 1: datos y acceso *@
+                        <div class="col-xxl-4 col-lg-6 d-flex flex-column gap-3">
+                            @* Datos generales *@
+                            <div class="panel">
+                                <div class="seccion-titulo"><i class="bi bi-person-vcard"></i> Datos generales</div>
 
-                        <div class="row g-2">
-                            <div class="col-sm-6">
-                                <label class="form-label small fw-semibold" for="nombre-usuario">Usuario</label>
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="bi bi-person"></i></span>
-                                    <input id="nombre-usuario" class="form-control" @bind="Modelo.NombreUsuario" disabled="@Editando" autocomplete="off" placeholder="jperez" />
+                                <div class="row g-2">
+                                    <div class="col-sm-6">
+                                        <label class="form-label small fw-semibold" for="nombre-usuario">Usuario</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-person"></i></span>
+                                            <input id="nombre-usuario" class="form-control" @bind="Modelo.NombreUsuario" disabled="@Editando" autocomplete="off" placeholder="jperez" />
+                                        </div>
+                                    </div>
+
+                                    <div class="col-sm-6">
+                                        <label class="form-label small fw-semibold" for="nombre-completo">Nombre completo</label>
+                                        <input id="nombre-completo" class="form-control" @ref="CampoNombre" @bind="Modelo.NombreCompleto" placeholder="Juan Pérez" />
+                                    </div>
+
+                                    <div class="col-12">
+                                        <label class="form-label small fw-semibold" for="email">Correo electrónico</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text"><i class="bi bi-envelope"></i></span>
+                                            <input id="email" type="email" class="form-control" @bind="Modelo.Email" @bind:after="AjustarBienvenida" placeholder="jperez@empresa.com" />
+                                        </div>
+                                        @if (!Editando)
+                                        {
+                                            <div class="form-text">El usuario inicia sesión con su nombre de usuario; no se puede cambiar después.</div>
+                                        }
+                                    </div>
                                 </div>
                             </div>
 
-                            <div class="col-sm-6">
-                                <label class="form-label small fw-semibold" for="nombre-completo">Nombre completo</label>
-                                <input id="nombre-completo" class="form-control" @bind="Modelo.NombreCompleto" placeholder="Juan Pérez" />
-                            </div>
+                            @* Acceso *@
+                            <div class="panel">
+                                <div class="seccion-titulo"><i class="bi bi-key"></i> Acceso</div>
 
-                            <div class="col-12">
-                                <label class="form-label small fw-semibold" for="email">Correo electrónico</label>
-                                <div class="input-group">
-                                    <span class="input-group-text"><i class="bi bi-envelope"></i></span>
-                                    <input id="email" type="email" class="form-control" @bind="Modelo.Email" @bind:after="AjustarBienvenida" placeholder="jperez@empresa.com" />
-                                </div>
                                 @if (!Editando)
                                 {
-                                    <div class="form-text">El usuario inicia sesión con su nombre de usuario; no se puede cambiar después.</div>
+                                    <div class="d-flex flex-column gap-1 mb-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" id="pwd-temporal" name="tipo-password"
+                                                   checked="@Modelo.GenerarTemporal" @onchange="() => Modelo.GenerarTemporal = true" />
+                                            <label class="form-check-label small" for="pwd-temporal">
+                                                Generar contraseña temporal <span class="badge bg-success-subtle text-success-emphasis ms-1">Recomendado</span>
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" id="pwd-manual" name="tipo-password"
+                                                   checked="@(!Modelo.GenerarTemporal)" @onchange="() => Modelo.GenerarTemporal = false" />
+                                            <label class="form-check-label small" for="pwd-manual">Escribir la contraseña</label>
+                                        </div>
+                                    </div>
+
+                                    @if (Modelo.GenerarTemporal)
+                                    {
+                                        <div class="form-text mb-2">Se genera al guardar; el usuario deberá cambiarla en su primer inicio de sesión.</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="row g-2 mb-2">
+                                            <div class="col-sm-6">
+                                                <input type="password" class="form-control" placeholder="Contraseña" autocomplete="new-password" @bind="Modelo.Password" />
+                                            </div>
+                                            <div class="col-sm-6">
+                                                <input type="password" class="form-control" placeholder="Confirmar" autocomplete="new-password" @bind="Modelo.ConfirmarPassword" />
+                                            </div>
+                                            <div class="col-12 form-text mt-1">Mínimo 8 caracteres con mayúscula, minúscula y número.</div>
+                                        </div>
+                                    }
+
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="bienvenida"
+                                               @bind="Modelo.EnviarBienvenida" disabled="@(!PuedeEnviarBienvenida)" />
+                                        <label class="form-check-label small" for="bienvenida">Enviar correo de bienvenida</label>
+                                    </div>
+                                    @if (!CorreoConfigurado)
+                                    {
+                                        <div class="form-text"><i class="bi bi-info-circle"></i> Configura el envío en <a href="configuracion/correo">Configuración → Correo</a>.</div>
+                                    }
+                                    else if (string.IsNullOrWhiteSpace(Modelo.Email))
+                                    {
+                                        <div class="form-text">Captura el correo del usuario para enviarle la bienvenida.</div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                                        <div class="form-check form-switch m-0">
+                                            <input class="form-check-input" type="checkbox" role="switch" id="activo" @bind="Modelo.Activo" />
+                                            <label class="form-check-label small fw-semibold" for="activo">Usuario activo</label>
+                                        </div>
+
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => PedirRestablecer(UsuarioSeleccionado!)" disabled="@Guardando">
+                                            <i class="bi bi-arrow-repeat me-1"></i>Restablecer contraseña
+                                        </button>
+                                    </div>
+
+                                    @if (Modelo.Bloqueado)
+                                    {
+                                        <div class="alert alert-danger d-flex align-items-center justify-content-between gap-2 py-2 mt-2 mb-0 small">
+                                            <span><i class="bi bi-lock-fill me-1"></i>Bloqueado por intentos fallidos.</span>
+                                            <button type="button" class="btn btn-sm btn-danger" @onclick="Desbloquear" disabled="@Guardando">Desbloquear</button>
+                                        </div>
+                                    }
                                 }
                             </div>
                         </div>
-                    </div>
 
-                    @* Rol *@
-                    <div class="seccion">
-                        <div class="seccion-titulo"><i class="bi bi-shield-check"></i> Rol</div>
+                        @* Columna 2: rol y tareas *@
+                        <div class="col-xxl-4 col-lg-6 d-flex flex-column gap-3">
+                            @* Rol *@
+                            <div class="panel">
+                                <div class="seccion-titulo"><i class="bi bi-shield-check"></i> Rol</div>
 
-                        <div class="list-group roles">
-                            @foreach (RolDto rol in ListaRoles)
-                            {
-                                <label class="list-group-item list-group-item-action d-flex gap-2 @(Modelo.Rol == rol.Nombre ? "active-rol" : "")">
-                                    <input class="form-check-input flex-shrink-0 mt-1"
-                                           type="radio"
-                                           name="rol"
-                                           checked="@(Modelo.Rol == rol.Nombre)"
-                                           @onchange="() => Modelo.Rol = rol.Nombre" />
-                                    <span>
-                                        <span class="fw-semibold d-block">@rol.Nombre</span>
-                                        <small class="text-body-secondary">@rol.Descripcion</small>
-                                    </span>
-                                </label>
-                            }
-                        </div>
-                    </div>
-
-                    @* Acceso *@
-                    <div class="seccion">
-                        <div class="seccion-titulo"><i class="bi bi-key"></i> Acceso</div>
-
-                        @if (!Editando)
-                        {
-                            <div class="d-flex flex-column gap-1 mb-2">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" id="pwd-temporal" name="tipo-password"
-                                           checked="@Modelo.GenerarTemporal" @onchange="() => Modelo.GenerarTemporal = true" />
-                                    <label class="form-check-label small" for="pwd-temporal">
-                                        Generar contraseña temporal <span class="badge bg-success-subtle text-success-emphasis ms-1">Recomendado</span>
-                                    </label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" id="pwd-manual" name="tipo-password"
-                                           checked="@(!Modelo.GenerarTemporal)" @onchange="() => Modelo.GenerarTemporal = false" />
-                                    <label class="form-check-label small" for="pwd-manual">Escribir la contraseña</label>
+                                <div class="row row-cols-sm-2 g-2 roles">
+                                    @foreach (RolDto rol in ListaRoles)
+                                    {
+                                        <div class="col">
+                                            <label class="rol h-100 d-flex gap-2 @(Modelo.Rol == rol.Nombre ? "active-rol" : "")">
+                                                <input class="form-check-input flex-shrink-0 mt-1"
+                                                       type="radio"
+                                                       name="rol"
+                                                       checked="@(Modelo.Rol == rol.Nombre)"
+                                                       @onchange="() => Modelo.Rol = rol.Nombre" />
+                                                <span>
+                                                    <span class="fw-semibold d-block">@rol.Nombre</span>
+                                                    <small class="text-body-secondary">@rol.Descripcion</small>
+                                                </span>
+                                            </label>
+                                        </div>
+                                    }
                                 </div>
                             </div>
 
-                            @if (Modelo.GenerarTemporal)
-                            {
-                                <div class="form-text mb-2">Se genera al guardar; el usuario deberá cambiarla en su primer inicio de sesión.</div>
-                            }
-                            else
-                            {
-                                <div class="row g-2 mb-2">
-                                    <div class="col-sm-6">
-                                        <input type="password" class="form-control" placeholder="Contraseña" autocomplete="new-password" @bind="Modelo.Password" />
-                                    </div>
-                                    <div class="col-sm-6">
-                                        <input type="password" class="form-control" placeholder="Confirmar" autocomplete="new-password" @bind="Modelo.ConfirmarPassword" />
-                                    </div>
-                                    <div class="col-12 form-text mt-1">Mínimo 8 caracteres con mayúscula, minúscula y número.</div>
-                                </div>
-                            }
-
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" role="switch" id="bienvenida"
-                                       @bind="Modelo.EnviarBienvenida" disabled="@(!PuedeEnviarBienvenida)" />
-                                <label class="form-check-label small" for="bienvenida">Enviar correo de bienvenida</label>
-                            </div>
-                            @if (!CorreoConfigurado)
-                            {
-                                <div class="form-text"><i class="bi bi-info-circle"></i> Configura el envío en <a href="configuracion/correo">Configuración → Correo</a>.</div>
-                            }
-                            else if (string.IsNullOrWhiteSpace(Modelo.Email))
-                            {
-                                <div class="form-text">Captura el correo del usuario para enviarle la bienvenida.</div>
-                            }
-                        }
-                        else
-                        {
-                            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                                <div class="form-check form-switch m-0">
-                                    <input class="form-check-input" type="checkbox" role="switch" id="activo" @bind="Modelo.Activo" />
-                                    <label class="form-check-label small fw-semibold" for="activo">Usuario activo</label>
+                            @* Tareas: opciones del menú del rol; desmarcar una se la quita a este usuario. *@
+                            <div class="panel">
+                                <div class="seccion-titulo d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-ui-checks-grid"></i> Tareas</span>
+                                    @if (!EsAdministradorSeleccionado)
+                                    {
+                                        <span class="badge rounded-pill text-bg-primary">@TareasAsignadas / @TareasDelRol.Count</span>
+                                    }
                                 </div>
 
-                                <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => PedirRestablecer(UsuarioSeleccionado!)" disabled="@Guardando">
-                                    <i class="bi bi-arrow-repeat me-1"></i>Restablecer contraseña
-                                </button>
-                            </div>
-
-                            @if (Modelo.Bloqueado)
-                            {
-                                <div class="alert alert-danger d-flex align-items-center justify-content-between gap-2 py-2 mt-2 mb-0 small">
-                                    <span><i class="bi bi-lock-fill me-1"></i>Bloqueado por intentos fallidos.</span>
-                                    <button type="button" class="btn btn-sm btn-danger" @onclick="Desbloquear" disabled="@Guardando">Desbloquear</button>
-                                </div>
-                            }
-                        }
-                    </div>
-
-                    @* Tareas: opciones del menú del rol; desmarcar una se la quita a este usuario. *@
-                    <div class="seccion">
-                        <div class="seccion-titulo d-flex justify-content-between align-items-center">
-                            <span><i class="bi bi-ui-checks-grid"></i> Tareas</span>
-                            @if (!EsAdministradorSeleccionado)
-                            {
-                                <span class="badge rounded-pill text-bg-primary">@TareasAsignadas / @TareasDelRol.Count</span>
-                            }
-                        </div>
-
-                        @if (EsAdministradorSeleccionado)
-                        {
-                            <div class="alert alert-info d-flex gap-2 py-2 mb-0 small">
-                                <i class="bi bi-info-circle-fill"></i>
-                                El Administrador tiene todas las tareas.
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <span class="small text-body-secondary">Las que desmarques no le aparecerán en el menú. Resumen siempre está.</span>
-                                <span class="d-flex gap-1">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => Modelo.TareasDenegadas.Clear()">Todas</button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="QuitarTodasLasTareas">Ninguna</button>
-                                </span>
-                            </div>
-
-                            <div class="tareas">
-                                @foreach (var grupo in TareasDelRol.GroupBy(t => t.Grupo))
+                                @if (EsAdministradorSeleccionado)
                                 {
-                                    <div class="tareas-grupo">
-                                        <div class="tareas-grupo-titulo">@grupo.Key</div>
-                                        @foreach (Tarea t in grupo)
+                                    <div class="alert alert-info d-flex gap-2 py-2 mb-0 small">
+                                        <i class="bi bi-info-circle-fill"></i>
+                                        El Administrador tiene todas las tareas.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="small text-body-secondary">Las que desmarques no le aparecerán en el menú. Resumen siempre está.</span>
+                                        <span class="d-flex gap-1">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => Modelo.TareasDenegadas.Clear()">Todas</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="QuitarTodasLasTareas">Ninguna</button>
+                                        </span>
+                                    </div>
+
+                                    <div class="tareas">
+                                        @foreach (var grupo in TareasDelRol.GroupBy(t => t.Grupo))
                                         {
-                                            <label class="form-check tarea">
-                                                <input class="form-check-input" type="checkbox"
-                                                       checked="@(!Modelo.TareasDenegadas.Contains(t.Clave))"
-                                                       @onchange="args => AlternarTarea(t.Clave, args)" />
-                                                <span class="form-check-label"><i class="bi @t.Icono me-1 text-body-secondary"></i>@t.Nombre</span>
+                                            <div class="tareas-grupo">
+                                                <div class="tareas-grupo-titulo">@grupo.Key</div>
+                                                @foreach (Tarea t in grupo)
+                                                {
+                                                    <label class="form-check tarea">
+                                                        <input class="form-check-input" type="checkbox"
+                                                               checked="@(!Modelo.TareasDenegadas.Contains(t.Clave))"
+                                                               @onchange="args => AlternarTarea(t.Clave, args)" />
+                                                        <span class="form-check-label"><i class="bi @t.Icono me-1 text-body-secondary"></i>@t.Nombre</span>
+                                                    </label>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        @* Columna 3: empresas *@
+                        <div class="col-xxl-4 col-12 d-flex flex-column">
+                            @* Empresas *@
+                            <div class="panel">
+                                <div class="seccion-titulo d-flex justify-content-between align-items-center">
+                                    <span><i class="bi bi-buildings"></i> Empresas asignadas</span>
+                                    @if (!EsAdministradorSeleccionado)
+                                    {
+                                        <span class="badge rounded-pill text-bg-primary">@Modelo.Empresas.Count / @ListaEmpresas.Count</span>
+                                    }
+                                </div>
+
+                                @if (EsAdministradorSeleccionado)
+                                {
+                                    <div class="alert alert-info d-flex gap-2 py-2 mb-0 small">
+                                        <i class="bi bi-info-circle-fill"></i>
+                                        El Administrador tiene acceso a todas las empresas; no necesita asignación.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="input-group input-group-sm mb-2">
+                                        <span class="input-group-text"><i class="bi bi-funnel"></i></span>
+                                        <input class="form-control" placeholder="Filtrar por RFC o nombre" @bind="FiltroEmpresas" @bind:event="oninput" />
+                                        <button type="button" class="btn btn-outline-secondary" @onclick="SeleccionarTodas">Todas</button>
+                                        <button type="button" class="btn btn-outline-secondary" @onclick="() => Modelo.Empresas.Clear()">Ninguna</button>
+                                    </div>
+
+                                    <div class="list-group empresas-lista">
+                                        @foreach (EmpresaDto e in EmpresasFiltradas)
+                                        {
+                                            <label class="list-group-item list-group-item-action d-flex align-items-center gap-2 py-2 small">
+                                                <input class="form-check-input flex-shrink-0 m-0"
+                                                       type="checkbox"
+                                                       checked="@Modelo.Empresas.Contains(e.EmpresaId)"
+                                                       @onchange="args => AlternarEmpresa(e.EmpresaId, args)" />
+                                                <span class="font-monospace fw-semibold">@e.Rfc</span>
+                                                <span class="text-truncate text-body-secondary flex-grow-1">@e.NombreParaMostrar</span>
+                                                @if (!e.Activa)
+                                                {
+                                                    <span class="badge text-bg-secondary">Inactiva</span>
+                                                }
                                             </label>
                                         }
+
+                                        @if (EmpresasFiltradas.Count == 0)
+                                        {
+                                            <div class="list-group-item small text-body-secondary text-center py-3">No hay empresas que coincidan.</div>
+                                        }
                                     </div>
                                 }
                             </div>
-                        }
-                    </div>
-
-                    @* Empresas *@
-                    <div class="seccion mb-0">
-                        <div class="seccion-titulo d-flex justify-content-between align-items-center">
-                            <span><i class="bi bi-buildings"></i> Empresas asignadas</span>
-                            @if (!EsAdministradorSeleccionado)
-                            {
-                                <span class="badge rounded-pill text-bg-primary">@Modelo.Empresas.Count / @ListaEmpresas.Count</span>
-                            }
                         </div>
-
-                        @if (EsAdministradorSeleccionado)
-                        {
-                            <div class="alert alert-info d-flex gap-2 py-2 mb-0 small">
-                                <i class="bi bi-info-circle-fill"></i>
-                                El Administrador tiene acceso a todas las empresas; no necesita asignación.
-                            </div>
-                        }
-                        else
-                        {
-                            <div class="input-group input-group-sm mb-2">
-                                <span class="input-group-text"><i class="bi bi-funnel"></i></span>
-                                <input class="form-control" placeholder="Filtrar por RFC o nombre" @bind="FiltroEmpresas" @bind:event="oninput" />
-                                <button type="button" class="btn btn-outline-secondary" @onclick="SeleccionarTodas">Todas</button>
-                                <button type="button" class="btn btn-outline-secondary" @onclick="() => Modelo.Empresas.Clear()">Ninguna</button>
-                            </div>
-
-                            <div class="list-group empresas-lista">
-                                @foreach (EmpresaDto e in EmpresasFiltradas)
-                                {
-                                    <label class="list-group-item list-group-item-action d-flex align-items-center gap-2 py-2 small">
-                                        <input class="form-check-input flex-shrink-0 m-0"
-                                               type="checkbox"
-                                               checked="@Modelo.Empresas.Contains(e.EmpresaId)"
-                                               @onchange="args => AlternarEmpresa(e.EmpresaId, args)" />
-                                        <span class="font-monospace fw-semibold">@e.Rfc</span>
-                                        <span class="text-truncate text-body-secondary flex-grow-1">@e.NombreParaMostrar</span>
-                                        @if (!e.Activa)
-                                        {
-                                            <span class="badge text-bg-secondary">Inactiva</span>
-                                        }
-                                    </label>
-                                }
-
-                                @if (EmpresasFiltradas.Count == 0)
-                                {
-                                    <div class="list-group-item small text-body-secondary text-center py-3">No hay empresas que coincidan.</div>
-                                }
-                            </div>
-                        }
                     </div>
                 </div>
 
@@ -709,17 +722,33 @@
 
     private void AjustarBienvenida() => Modelo.EnviarBienvenida = PuedeEnviarBienvenida;
 
+    // El formulario va debajo del catálogo: al elegir un usuario o "Nuevo usuario" se enfoca su primer campo,
+    // lo que además desplaza la vista hasta él.
+    private ElementReference CampoNombre;
+    private bool IrAlFormulario;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!IrAlFormulario)
+            return;
+
+        IrAlFormulario = false;
+        await CampoNombre.FocusAsync();
+    }
+
     private void NuevoUsuario()
     {
         LimpiarMensajes();
         UsuarioSeleccionado = null;
         Modelo = CrearModeloVacio();
+        IrAlFormulario = true;
     }
 
     private void EditarUsuario(UsuarioDto u)
     {
         LimpiarMensajes();
         UsuarioSeleccionado = u;
+        IrAlFormulario = true;
 
         Modelo = new ModeloUsuario
         {
@@ -993,7 +1022,10 @@
             CargarUsuarios();
 
             if (Modelo.UsuarioId == usuario.UsuarioId)
+            {
                 NuevoUsuario();
+                IrAlFormulario = false;   // que se vea el aviso de arriba
+            }
 
             MensajeExito = $"Se eliminó el usuario {usuario.NombreUsuario}.";
         }
