@@ -689,3 +689,52 @@ html[data-theme="dark"] .pageframe .tab-button.active { border-bottom-color: #4d
 html[data-theme="dark"] .pf-cabecera p { color: #b3bbc8; }
 html[data-theme="dark"] .pf-empresa strong { color: #e8ecf7; }
 html[data-theme="dark"] .pf-busqueda { border-bottom-color: #2a3b52; }
+
+/* ---------- Lista: consecutivo, encabezados que ordenan y acciones con iconos ---------- */
+
+.companies-table .num-col {
+    width: 3rem;
+    color: var(--bs-secondary-color);
+    text-align: center;
+}
+
+.companies-table th .orden {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+}
+
+.companies-table th .orden .ti {
+    font-size: .95rem;
+    opacity: .45;
+}
+
+.companies-table th .orden:hover,
+.companies-table th .orden.activo {
+    color: var(--bs-primary);
+}
+
+.companies-table th .orden.activo .ti {
+    opacity: 1;
+}
+
+.companies-table .badge .ti {
+    font-size: .9rem;
+    vertical-align: -2px;
+}
+
+.acciones-empresa .btn {
+    padding: .3rem .5rem;
+}
+
+.acciones-empresa .ti {
+    font-size: 1.05rem;
+}

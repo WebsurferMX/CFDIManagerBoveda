@@ -39,5 +39,10 @@ public class CfdiConsultaDto
 
     public string EstadoSat { get; set; } = "";
 
+    /// <summary>Cuándo se obtuvo el estado SAT (consulta uno por uno o metadatos del SAT); nulo si nunca.</summary>
+    public DateTime? FechaValidacionSat { get; set; }
+
+    public string OrigenValidacionSat { get; set; } = "";
+
     public string RutaXml { get; set; } = "";
 }

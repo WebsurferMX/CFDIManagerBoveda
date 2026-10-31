@@ -7,8 +7,14 @@
 /* Totalizadores: tarjetas que filtran por tipo al dar clic. */
 .totalizador {
     border-left: 3px solid var(--color-tipo);
+    background: linear-gradient(145deg, color-mix(in srgb, var(--color-tipo) 16%, var(--tblr-bg-surface)) 0%, var(--tblr-bg-surface) 70%);
     color: inherit;
     cursor: pointer;
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.totalizador:hover {
+    transform: translateY(-2px);
 }
 
 .totalizador.activo {
@@ -25,9 +31,29 @@
 }
 
 .nombre {
-    max-width: 260px;
+    max-width: 240px;
 }
 
 .btn-icon .ti {
     font-size: 1.05rem;
+}
+
+/* Profundidad al estilo de las tarjetas de Bootstrap. */
+.consulta .card {
+    border-radius: .85rem;
+    box-shadow: 0 .6rem 1.4rem rgb(0 0 0 / 18%), 0 .15rem .35rem rgb(0 0 0 / 12%);
+}
+
+:root[data-bs-theme="dark"] .consulta .card {
+    box-shadow: 0 .75rem 1.6rem rgb(0 0 0 / 45%), 0 .15rem .4rem rgb(0 0 0 / 35%), inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+.consulta .totalizador.activo {
+    box-shadow: 0 0 0 2px var(--color-tipo), 0 .75rem 1.6rem rgb(0 0 0 / 35%);
+}
+
+.validacion {
+    margin-top: .15rem;
+    padding-left: .5rem;
+    font-size: .75rem;
 }

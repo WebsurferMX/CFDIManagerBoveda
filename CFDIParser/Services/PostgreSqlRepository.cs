@@ -729,6 +729,8 @@ public partial class PostgreSqlRepository
                     c.estado_sat,
                     'NO VALIDADO'
                 ) AS estado_sat,
+                c.fecha_validacion_sat,
+                COALESCE(c.origen_validacion_sat, '') AS origen_validacion_sat,
                 COALESCE(c.ruta_xml, '') AS ruta_xml,
                 emisor.rfc AS rfc_emisor,
                 emisor.nombre AS nombre_emisor,
@@ -784,7 +786,9 @@ public partial class PostgreSqlRepository
                 Total = Convert.ToDecimal(reader["total"]),
                 Moneda = reader["moneda"] == DBNull.Value ? "" : reader["moneda"]?.ToString() ?? "",
                 RutaXml = RutaXmlLocal.Resolver(reader["ruta_xml"]?.ToString()),
-                EstadoSat = reader["estado_sat"]?.ToString()?? "NO VALIDADO"
+                EstadoSat = reader["estado_sat"]?.ToString()?? "NO VALIDADO",
+                FechaValidacionSat = reader["fecha_validacion_sat"] as DateTime?,
+                OrigenValidacionSat = reader["origen_validacion_sat"]?.ToString() ?? ""
             });
         }
 
@@ -2073,7 +2077,10 @@ public void ActualizarEstadoSat(
                 @codigo_estatus_sat,
 
             fecha_validacion_sat =
-                @fecha_validacion_sat
+                @fecha_validacion_sat,
+
+            origen_validacion_sat =
+                'Consulta SAT'
 
         WHERE empresa_id =
               @empresa_id
@@ -2188,7 +2195,7 @@ public List<CfdiValidacionSatDto>
 
         ORDER BY
             c.fecha_validacion_sat NULLS FIRST,
-            c.cfdi_id
+            c.fecha_emision DESC
 
         LIMIT @cantidad;";
 

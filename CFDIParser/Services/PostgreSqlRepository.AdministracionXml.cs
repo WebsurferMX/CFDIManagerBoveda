@@ -236,6 +236,8 @@ public partial class PostgreSqlRepository
                 COALESCE(c.total, 0) AS total,
                 c.monto_total_pagos,
                 COALESCE(c.estado_sat, '') AS estado_sat,
+                c.fecha_validacion_sat,
+                COALESCE(c.origen_validacion_sat, '') AS origen_validacion_sat,
                 v.cfdi_id IS NOT NULL AS verificado,
                 COALESCE(c.ruta_xml, '') AS ruta_xml
             FROM {DesdeAdminXml}
@@ -282,6 +284,8 @@ public partial class PostgreSqlRepository
                 Total = dr.GetDecimal(dr.GetOrdinal("total")),
                 MontoTotalPagos = dr.IsDBNull(dr.GetOrdinal("monto_total_pagos")) ? null : dr.GetDecimal(dr.GetOrdinal("monto_total_pagos")),
                 EstadoSat = Texto(dr, "estado_sat"),
+                FechaValidacionSat = dr.IsDBNull(dr.GetOrdinal("fecha_validacion_sat")) ? null : dr.GetDateTime(dr.GetOrdinal("fecha_validacion_sat")),
+                OrigenValidacionSat = Texto(dr, "origen_validacion_sat"),
                 Verificado = dr.GetBoolean(dr.GetOrdinal("verificado")),
                 RutaXml = RutaXmlLocal.Resolver(Texto(dr, "ruta_xml"))
             });
@@ -295,6 +299,7 @@ public partial class PostgreSqlRepository
     {
         ["verificado"] = "verificado",
         ["estado_sat"] = "estado_sat",
+        ["validacion"] = "fecha_validacion_sat",
         ["version"] = "version_cfdi",
         ["tipo"] = "tipo_cfdi",
         ["fecha"] = "fecha_emision",

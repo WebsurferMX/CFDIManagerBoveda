@@ -155,24 +155,32 @@
                     <table class="companies-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>RFC</th>
-                                <th>Empresa</th>
+                                <th class="num-col">#</th>
+                                <th>
+                                    <button type="button" class="orden @(OrdenEmpresas == "rfc" ? "activo" : "")" @onclick='() => Ordenar("rfc")'>
+                                        RFC <i class="ti @IconoOrden("rfc")"></i>
+                                    </button>
+                                </th>
+                                <th>
+                                    <button type="button" class="orden @(OrdenEmpresas == "empresa" ? "activo" : "")" @onclick='() => Ordenar("empresa")'>
+                                        Empresa <i class="ti @IconoOrden("empresa")"></i>
+                                    </button>
+                                </th>
                                 <th>Regímenes</th>
                                 <th>Opinión</th>
                                 <th>FIEL</th>
-                                <th>VENCE</th>
+                                <th>Vence</th>
                                 <th>Estado</th>
-                                <th>Acciones</th>
+                                <th class="text-end">Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (EmpresaDto empresa in EmpresasFiltradas)
+                            @foreach ((EmpresaDto empresa, int numero) in EmpresasFiltradas.Select((e, i) => (e, i + 1)))
                             {
                                 <tr class="@(EmpresaContext.EmpresaId == empresa.EmpresaId ? "active-company-row" : "") @(Modelo.EmpresaId == empresa.EmpresaId ? "selected-company-row" : "")"
                                     title="Clic para ver el detalle de la empresa"
                                     @onclick="() => EditarEmpresa(empresa)">
-                                    <td>@empresa.EmpresaId</td>
+                                    <td class="num-col">@numero</td>
                                     <td class="rfc-cell">@empresa.Rfc</td>
                                     <td>
                                         <strong>@empresa.NombreParaMostrar</strong>
@@ -210,80 +218,67 @@
                                         }
                                     </td>
 
-                                            <td>
-                                                @if (empresa.TieneFiel &&
-                                                     RfcFiel.TryGetValue(empresa.EmpresaId, out string? rfcFiel) &&
-                                                     rfcFiel != empresa.Rfc)
-                                                {
-                                                    <span class="badge bg-warning text-dark"
-                                                          title="La e.firma guardada es del RFC @rfcFiel">
-                                                        ⚠ FIEL DE OTRO RFC
-                                                    </span>
-                                                }
-                                                else if (empresa.TieneFiel)
-                                                {
-                                                    <span class="badge bg-success">
-                                                        ✅ FIEL OK
-                                                    </span>
-                                                }
-                                                else
-                                                {
-                                                    <span class="badge bg-danger">
-                                                        ❌ SIN FIEL
-                                                    </span>
-                                                }
-                                            </td>
+                                    <td>
+                                        @if (empresa.TieneFiel &&
+                                             RfcFiel.TryGetValue(empresa.EmpresaId, out string? rfcFiel) &&
+                                             rfcFiel != empresa.Rfc)
+                                        {
+                                            <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle"
+                                                  title="La e.firma guardada es del RFC @rfcFiel">
+                                                <i class="ti ti-alert-triangle"></i> FIEL de otro RFC
+                                            </span>
+                                        }
+                                        else if (empresa.TieneFiel)
+                                        {
+                                            <span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">
+                                                <i class="ti ti-shield-check"></i> FIEL OK
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle">
+                                                <i class="ti ti-shield-x"></i> Sin FIEL
+                                            </span>
+                                        }
+                                    </td>
 
-                                            <td>
-                                                @if (empresa.FechaVencimientoFiel.HasValue)
-                                                {
-                                                    @empresa.FechaVencimientoFiel.Value.ToString("dd/MM/yyyy")
-                                                }
-                                                else
-                                                {
-                                                    <span>-</span>
-                                                }
-                                            </td>
+                                    <td>
+                                        @if (empresa.FechaVencimientoFiel.HasValue)
+                                        {
+                                            @empresa.FechaVencimientoFiel.Value.ToString("dd/MM/yyyy")
+                                        }
+                                        else
+                                        {
+                                            <span class="sin-dato">—</span>
+                                        }
+                                    </td>
 
-                                            <td>
-                                                <span class="status-badge @(empresa.Activa ? "active-status" : "inactive-status")">
-                                                    @(empresa.Activa ? "Activa" : "Inactiva")
-                                                </span>
-                                            </td>
+                                    <td>
+                                        <span class="status-badge @(empresa.Activa ? "active-status" : "inactive-status")">
+                                            @(empresa.Activa ? "Activa" : "Inactiva")
+                                        </span>
+                                    </td>
 
-                                        <td class="actions-cell" @onclick:stopPropagation="true">
-                                            <button type="button"
-                                                    class="table-action edit-action"
+                                    <td class="text-end text-nowrap" @onclick:stopPropagation="true">
+                                        <div class="btn-group btn-group-sm acciones-empresa">
+                                            <button type="button" class="btn btn-outline-primary" title="Editar empresa"
                                                     @onclick="() => EditarEmpresa(empresa)">
-                                                Editar
+                                                <i class="ti ti-pencil"></i>
                                             </button>
-
-                                            @if (empresa.TieneFiel)
-                                            {
-                                                <button type="button"
-                                                        class="table-action"
-                                                        style="background:#198754;color:white;"
-                                                        @onclick="() => VerEstadoSat(empresa)">
-                                                    SAT
-                                                </button>
-                                            }
-                                            else
-                                            {
-                                                <button type="button"
-                                                        class="table-action"
-                                                        disabled
-                                                        style="opacity:.5;">
-                                                    SAT
-                                                </button>
-                                            }
-
+                                            <button type="button" class="btn btn-outline-success"
+                                                    title="@(empresa.TieneFiel ? "Estado de la e.firma y conexión con el SAT" : "Sin e.firma: cárgala en Accesos SAT")"
+                                                    disabled="@(!empresa.TieneFiel)"
+                                                    @onclick="() => VerEstadoSat(empresa)">
+                                                <i class="ti ti-certificate"></i>
+                                            </button>
                                             <button type="button"
-                                                    class="table-action status-action"
+                                                    class="btn @(empresa.Activa ? "btn-outline-danger" : "btn-outline-success")"
+                                                    title="@(empresa.Activa ? "Desactivar empresa" : "Activar empresa")"
                                                     @onclick="() => CambiarEstado(empresa)">
-                                                @(empresa.Activa ? "Desactivar" : "Activar")
+                                                <i class="ti @(empresa.Activa ? "ti-power" : "ti-player-play")"></i>
                                             </button>
-                                        </td>
-
+                                        </div>
+                                    </td>
                                 </tr>
                             }
                         </tbody>
@@ -536,14 +531,33 @@
     private bool Editando => Modelo.EmpresaId > 0;
 
     private List<EmpresaDto> EmpresasFiltradas =>
-        ListaEmpresas
+        Ordenadas(ListaEmpresas
             .Where(empresa =>
                 string.IsNullOrWhiteSpace(Busqueda) ||
                 empresa.Rfc.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
                 empresa.RazonSocial.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
-                empresa.NombreCorto.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase))
-            .OrderBy(empresa => empresa.EmpresaId)
-            .ToList();
+                empresa.NombreCorto.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase)));
+
+    // Por omisión en orden alfabético por empresa; clic en RFC o Empresa cambia el orden.
+    private string OrdenEmpresas = "empresa";
+    private bool OrdenDescendente;
+
+    private static readonly StringComparer Alfabetico = StringComparer.Create(new System.Globalization.CultureInfo("es-MX"), ignoreCase: true);
+
+    private List<EmpresaDto> Ordenadas(IEnumerable<EmpresaDto> empresas)
+    {
+        Func<EmpresaDto, string> clave = OrdenEmpresas == "rfc" ? e => e.Rfc : e => e.NombreParaMostrar;
+        return (OrdenDescendente ? empresas.OrderByDescending(clave, Alfabetico) : empresas.OrderBy(clave, Alfabetico)).ToList();
+    }
+
+    private void Ordenar(string columna)
+    {
+        OrdenDescendente = OrdenEmpresas == columna && !OrdenDescendente;
+        OrdenEmpresas = columna;
+    }
+
+    private string IconoOrden(string columna) =>
+        OrdenEmpresas != columna ? "ti-arrows-sort" : OrdenDescendente ? "ti-sort-descending-letters" : "ti-sort-ascending-letters";
 
     // El Supervisor solo ve y edita sus empresas asignadas; el alta es del Administrador.
     private HashSet<long>? EmpresasPermitidas;

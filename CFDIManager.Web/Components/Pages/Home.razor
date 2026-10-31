@@ -71,7 +71,7 @@
         @* ---------- Indicadores ---------- *@
         <div class="row row-cards mb-3">
             <div class="col-sm-6 col-xl-3">
-                <div class="card card-sm h-100">
+                <div class="card card-sm h-100 kpi" style="--color-tipo: var(--tblr-blue)">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-3">
                             <span class="avatar bg-blue text-white"><i class="ti ti-trending-up"></i></span>
@@ -86,7 +86,7 @@
             </div>
 
             <div class="col-sm-6 col-xl-3">
-                <div class="card card-sm h-100">
+                <div class="card card-sm h-100 kpi" style="--color-tipo: var(--tblr-teal)">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-3">
                             <span class="avatar bg-teal text-white"><i class="ti ti-shopping-cart"></i></span>
@@ -101,7 +101,7 @@
             </div>
 
             <div class="col-sm-6 col-xl-3">
-                <div class="card card-sm h-100">
+                <div class="card card-sm h-100 kpi" style="--color-tipo: var(--tblr-@(Diferencia >= 0 ? "green" : "red"))">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-3">
                             <span class="avatar @(Diferencia >= 0 ? "bg-green" : "bg-red") text-white">
@@ -118,7 +118,7 @@
             </div>
 
             <div class="col-sm-6 col-xl-3">
-                <div class="card card-sm h-100">
+                <div class="card card-sm h-100 kpi" style="--color-tipo: var(--tblr-azure)">
                     <div class="card-body">
                         <div class="d-flex align-items-center gap-3">
                             <span class="avatar bg-azure text-white"><i class="ti ti-files"></i></span>
@@ -140,7 +140,7 @@
             @foreach (Grupo grupo in Grupos)
             {
                 <div class="col-xl-6">
-                    <div class="card h-100">
+                    <div class="card h-100 grupo" style="--color-tipo: var(--tblr-@(grupo.Clave == "EMITIDOS" ? "blue" : "teal"))">
                         <div class="card-header">
                             <div>
                                 <h3 class="card-title">

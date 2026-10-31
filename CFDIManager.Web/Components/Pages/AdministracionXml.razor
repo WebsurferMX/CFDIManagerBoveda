@@ -789,10 +789,15 @@
 
     private static string N(decimal? v) => v is decimal d ? d.ToString("N2") : "";
 
+    // Lo que se guarda al importar es PENDIENTE: en pantalla se lee mejor como "Sin validar".
+    private static string TextoEstadoSat(string estado) =>
+        estado.ToUpperInvariant() is "" or "PENDIENTE" or "NO VALIDADO" or "NO VERIFICADO" ? "Sin validar" : estado;
+
     private static readonly List<Columna> Columnas = new()
     {
         new("verificado", "Verificado ó Asoc.", x => x.Verificado ? "✓" : "", ClaseFn: _ => "ok"),
-        new("estado_sat", "Estado SAT", x => x.EstadoSat, ClaseFn: x => x.EstadoSat.Equals("Cancelado", StringComparison.OrdinalIgnoreCase) ? "mal" : x.EstadoSat.Equals("Vigente", StringComparison.OrdinalIgnoreCase) ? "ok" : ""),
+        new("estado_sat", "Estado SAT", x => TextoEstadoSat(x.EstadoSat), ClaseFn: x => x.EstadoSat.Equals("Cancelado", StringComparison.OrdinalIgnoreCase) ? "mal" : x.EstadoSat.Equals("Vigente", StringComparison.OrdinalIgnoreCase) ? "ok" : ""),
+        new("validacion", "Últ. validación", x => x.FechaValidacionSat is DateTime v ? v.ToString("dd/MM/yyyy HH:mm") + (x.OrigenValidacionSat == "Metadatos SAT" ? " · metadatos" : "") : "Nunca"),
         new("version", "Versión", x => x.Version),
         new("tipo", "Tipo", x => NombreTipo(x.TipoCfdi)),
         new("fecha", "Fecha emisión", x => x.FechaEmision.ToString("dd/MM/yyyy")),
@@ -1673,6 +1678,8 @@
             if (Filas.FirstOrDefault(f => f.CfdiId == e.CfdiId) is { } fila)
             {
                 fila.EstadoSat = e.Estado;
+                fila.FechaValidacionSat = DateTime.Now;
+                fila.OrigenValidacionSat = "Consulta SAT";
             }
         }
     }

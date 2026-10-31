@@ -263,7 +263,13 @@ using (IServiceScope scope = app.Services.CreateScope())
 
     try
     {
-        scope.ServiceProvider.GetRequiredService<PostgreSqlRepository>().AsegurarSatMetadatos();
+        PostgreSqlRepository repoMetadatos = scope.ServiceProvider.GetRequiredService<PostgreSqlRepository>();
+        repoMetadatos.AsegurarSatMetadatos();
+
+        // Los CFDI que ya tienen metadatos del SAT toman de ahí su Estado SAT sin consultar uno por uno.
+        int conEstado = repoMetadatos.AplicarEstadoSatDeMetadatos();
+        if (conEstado > 0)
+            app.Logger.LogInformation("Estado SAT tomado de los metadatos del SAT en {Cantidad} CFDI.", conEstado);
     }
     catch (Exception ex)
     {

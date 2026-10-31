@@ -64,6 +64,8 @@ public class AdminXmlFilaDto
     public decimal Total { get; set; }
     public decimal? MontoTotalPagos { get; set; }
     public string EstadoSat { get; set; } = "";
+    public DateTime? FechaValidacionSat { get; set; }
+    public string OrigenValidacionSat { get; set; } = "";
     public bool Verificado { get; set; }
     public string RutaXml { get; set; } = "";
 }

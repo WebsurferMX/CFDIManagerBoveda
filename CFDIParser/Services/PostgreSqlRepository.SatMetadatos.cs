@@ -57,9 +57,44 @@ public partial class PostgreSqlRepository
                 detalle TEXT NOT NULL DEFAULT '',
                 automatico BOOLEAN NOT NULL DEFAULT FALSE,
                 PRIMARY KEY (empresa_id, periodo)
-            );", cn);
+            );
+
+            -- De dónde salió el último estado SAT del CFDI: 'Consulta SAT' (uno por uno) o 'Metadatos SAT'.
+            ALTER TABLE cfdi ADD COLUMN IF NOT EXISTS origen_validacion_sat TEXT;", cn);
 
         cmd.ExecuteNonQuery();
+    }
+
+    // Los metadatos traen el estatus oficial (Vigente/Cancelado) de cada CFDI del mes al momento de la
+    // solicitud (cubre_hasta). Se aplica a los CFDI de la bóveda que no tengan una validación más reciente.
+    private const string SqlAplicarEstadoSat = @"
+        UPDATE cfdi c
+        SET estado_sat = m.estatus,
+            fecha_validacion_sat = p.cubre_hasta,
+            origen_validacion_sat = 'Metadatos SAT'
+        FROM sat_metadatos m
+        JOIN sat_metadatos_periodos p
+          ON p.empresa_id = m.empresa_id AND p.recibido = m.recibido
+         AND p.periodo = EXTRACT(YEAR FROM m.fecha_emision)::int * 100 + EXTRACT(MONTH FROM m.fecha_emision)::int
+        WHERE (@empresa_id::bigint IS NULL OR m.empresa_id = @empresa_id::bigint)
+          AND m.estatus <> ''
+          AND c.empresa_id = m.empresa_id
+          AND m.recibido = (c.clasificacion = 'RECIBIDO')
+          AND UPPER(c.uuid) = m.uuid
+          AND (c.fecha_validacion_sat IS NULL OR c.fecha_validacion_sat < p.cubre_hasta)";
+
+    /// <summary>
+    /// Pasa a los CFDI el estatus de los metadatos del SAT ya descargados (de una empresa o de todas).
+    /// Regresa cuántos CFDI cambió. Idempotente: un CFDI ya actualizado no se vuelve a tocar.
+    /// </summary>
+    public int AplicarEstadoSatDeMetadatos(long? empresaId = null)
+    {
+        using var cn = new NpgsqlConnection(_connectionString);
+        cn.Open();
+
+        using var cmd = new NpgsqlCommand(SqlAplicarEstadoSat, cn);
+        cmd.Parameters.Add(new NpgsqlParameter("empresa_id", NpgsqlDbType.Bigint) { Value = (object?)empresaId ?? DBNull.Value });
+        return cmd.ExecuteNonQuery();
     }
 
     /// <summary>
@@ -139,6 +174,12 @@ public partial class PostgreSqlRepository
             periodoCmd.Parameters.AddWithValue("registros", registros);
             periodoCmd.Parameters.AddWithValue("cubre_hasta", cubreHasta);
             periodoCmd.ExecuteNonQuery();
+        }
+
+        using (var estado = new NpgsqlCommand(SqlAplicarEstadoSat, cn, tx))
+        {
+            estado.Parameters.Add(new NpgsqlParameter("empresa_id", NpgsqlDbType.Bigint) { Value = empresaId });
+            estado.ExecuteNonQuery();
         }
 
         tx.Commit();

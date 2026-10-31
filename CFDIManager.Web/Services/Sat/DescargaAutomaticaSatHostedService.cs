@@ -390,6 +390,14 @@ public class DescargaAutomaticaSatHostedService : BackgroundService
                 _log.LogInformation("Cierre de mes {Mes:yyyy-MM} de {Rfc} iniciado.", anterior, empresa.Rfc);
         }
 
+        // 5. Los CFDI recién importados toman su Estado SAT de los metadatos ya descargados del mes.
+        using (IServiceScope scope = _scopes.CreateScope())
+        {
+            int conEstado = scope.ServiceProvider.GetRequiredService<PostgreSqlRepository>().AplicarEstadoSatDeMetadatos(empresa.EmpresaId);
+            if (conEstado > 0)
+                _log.LogInformation("Estado SAT de {Cantidad} CFDI de {Rfc} tomado de los metadatos.", conEstado, empresa.Rfc);
+        }
+
         resultado.Pendientes = automaticas.Count(s => s.Pendiente);
     }
 

@@ -242,7 +242,7 @@
                             <th><button type="button" class="table-sort @ClaseOrden("nombre")" @onclick="@(() => Ordenar("nombre"))">@EtiquetaNombre</button></th>
                             <th class="text-end"><button type="button" class="table-sort @ClaseOrden("total")" @onclick="@(() => Ordenar("total"))">Total</button></th>
                             <th>UUID</th>
-                            <th>Estado SAT</th>
+                            <th title="Estado SAT y fecha de la última validación">Estado SAT</th>
                             <th class="w-1">Acciones</th>
                         </tr>
                     </thead>
@@ -271,7 +271,10 @@
                                     <td class="nombre text-truncate" title="@ObtenerNombre(cfdi)">@ObtenerNombre(cfdi)</td>
                                     <td class="text-end"><span class="fw-bold">@Moneda(cfdi.Total)</span> <span class="text-secondary small">@cfdi.Moneda</span></td>
                                     <td class="font-monospace small text-secondary" title="@cfdi.UUID">@AbreviarUuid(cfdi.UUID)</td>
-                                    <td><span class="status status-@ColorEstadoSat(cfdi.EstadoSat)"><span class="status-dot"></span>@ObtenerTextoEstadoSat(cfdi.EstadoSat)</span></td>
+                                    <td title="@TituloValidacion(cfdi)">
+                                        <span class="status status-@ColorEstadoSat(cfdi.EstadoSat)"><span class="status-dot"></span>@ObtenerTextoEstadoSat(cfdi.EstadoSat)</span>
+                                        <div class="small text-secondary validacion">@TextoValidacion(cfdi)</div>
+                                    </td>
                                     <td @onclick:stopPropagation="true">
                                         <div class="btn-list flex-nowrap">
                                             <a class="btn btn-sm btn-icon btn-outline-blue" href="@ObtenerUrlXml(cfdi.CfdiId)" target="_blank" rel="noopener noreferrer" title="Ver XML">
@@ -348,6 +351,7 @@
                                 <span class="status status-@ColorEstadoSat(Seleccionado.EstadoSat)"><span class="status-dot"></span>@ObtenerTextoEstadoSat(Seleccionado.EstadoSat)</span>
                             </div>
                         </div>
+                        <div class="datagrid-item"><div class="datagrid-title">Última validación</div><div class="datagrid-content">@TituloValidacion(Seleccionado)</div></div>
                     </div>
                     <div class="datagrid mt-3">
                         <div class="datagrid-item"><div class="datagrid-title">Ruta XML</div><div class="datagrid-content font-monospace small text-break">@Seleccionado.RutaXml</div></div>
@@ -632,6 +636,8 @@
 
             Repo.ActualizarEstadoSat(EmpresaContext.EmpresaId, cfdi.CfdiId, resultado);
             cfdi.EstadoSat = resultado.Estado;
+            cfdi.FechaValidacionSat = DateTime.Now;
+            cfdi.OrigenValidacionSat = "Consulta SAT";
             if (Seleccionado?.CfdiId == cfdi.CfdiId) Seleccionado.EstadoSat = resultado.Estado;
 
             string codigo = string.IsNullOrWhiteSpace(resultado.CodigoEstatus) ? "" : $" {resultado.CodigoEstatus}.";
@@ -651,7 +657,17 @@
 
     private bool EstaValidandoSat(long cfdiId) => CfdiValidandoSat.Contains(cfdiId);
     private void MostrarMensajeSat(string mensaje, bool esError) { MensajeSat = mensaje; MensajeSatEsError = esError; }
-    private static string ObtenerTextoEstadoSat(string? estado) => string.IsNullOrWhiteSpace(estado) || estado.Equals("NO VERIFICADO", StringComparison.OrdinalIgnoreCase) ? "No validado" : estado.Trim();
+    // Al importar se guarda PENDIENTE; en pantalla se lee mejor como "Sin validar".
+    private static string ObtenerTextoEstadoSat(string? estado) =>
+        (estado ?? "").Trim().ToUpperInvariant() is "" or "PENDIENTE" or "NO VALIDADO" or "NO VERIFICADO" ? "Sin validar" : estado!.Trim();
+
+    private static string TextoValidacion(CfdiConsultaDto cfdi) =>
+        cfdi.FechaValidacionSat is DateTime v ? v.ToString("dd/MM/yyyy HH:mm") : "Nunca";
+
+    private static string TituloValidacion(CfdiConsultaDto cfdi) =>
+        cfdi.FechaValidacionSat is DateTime v
+            ? $"{v:dd/MM/yyyy HH:mm} · {(string.IsNullOrWhiteSpace(cfdi.OrigenValidacionSat) ? "Consulta SAT" : cfdi.OrigenValidacionSat)}"
+            : "Nunca se ha validado en el SAT";
 
     private static string ColorEstadoSat(string? estado) => (estado ?? "").Trim().ToUpperInvariant() switch
     {

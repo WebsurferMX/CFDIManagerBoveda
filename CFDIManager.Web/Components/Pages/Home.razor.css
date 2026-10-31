@@ -16,3 +16,27 @@
 .resumen .progress-bar {
     min-width: 4px;
 }
+
+/* Profundidad al estilo de las tarjetas de Bootstrap: sombra marcada, degradado del color y relieve al pasar el mouse. */
+.resumen .card {
+    border-radius: .85rem;
+    box-shadow: 0 .6rem 1.4rem rgb(0 0 0 / 18%), 0 .15rem .35rem rgb(0 0 0 / 12%);
+}
+
+:root[data-bs-theme="dark"] .resumen .card {
+    box-shadow: 0 .75rem 1.6rem rgb(0 0 0 / 45%), 0 .15rem .4rem rgb(0 0 0 / 35%), inset 0 1px 0 rgb(255 255 255 / 5%);
+}
+
+.resumen .kpi {
+    border-top: 3px solid var(--color-tipo);
+    background: linear-gradient(145deg, color-mix(in srgb, var(--color-tipo) 16%, var(--tblr-bg-surface)) 0%, var(--tblr-bg-surface) 65%);
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.resumen .kpi:hover {
+    transform: translateY(-2px);
+}
+
+.resumen .grupo > .card-header {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--color-tipo) 14%, transparent) 0%, transparent 70%);
+}
