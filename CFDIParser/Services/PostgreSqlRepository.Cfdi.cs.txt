@@ -1,0 +1,1057 @@
+using Npgsql;
+using CFDIParser.Models;
+
+namespace CFDIParser.Services;
+
+public partial class PostgreSqlRepository
+{
+    public long GuardarCfdi(
+        long empresaId,
+        CfdiDto cfdi,
+        string clasificacion,
+        string rutaXml)
+    {
+        ArgumentNullException.ThrowIfNull(cfdi);
+
+        if (empresaId <= 0)
+        {
+            throw new InvalidOperationException(
+                "La empresa seleccionada no es válida.");
+        }
+
+        if (string.IsNullOrWhiteSpace(cfdi.UUID))
+        {
+            throw new InvalidOperationException(
+                "El CFDI no contiene un UUID válido.");
+        }
+
+        if (string.IsNullOrWhiteSpace(cfdi.RFCEmisor))
+        {
+            throw new InvalidOperationException(
+                $"El CFDI {cfdi.UUID} no contiene RFC del emisor.");
+        }
+
+        if (string.IsNullOrWhiteSpace(cfdi.RFCReceptor))
+        {
+            throw new InvalidOperationException(
+                $"El CFDI {cfdi.UUID} no contiene RFC del receptor.");
+        }
+
+        string clasificacionNormalizada =
+            NormalizarClasificacion(clasificacion);
+
+        using var conn =
+            new NpgsqlConnection(_connectionString);
+
+        conn.Open();
+
+        using var tx =
+            conn.BeginTransaction();
+
+        try
+        {
+            long? cfdiExistenteId =
+                BuscarCfdiId(
+                    conn,
+                    tx,
+                    empresaId,
+                    cfdi.UUID);
+
+            long emisorId =
+                ObtenerOCrearPersona(
+                    conn,
+                    tx,
+                    cfdi.RFCEmisor,
+                    cfdi.NombreEmisor,
+                    "EMISOR");
+
+            long receptorId =
+                ObtenerOCrearPersona(
+                    conn,
+                    tx,
+                    cfdi.RFCReceptor,
+                    cfdi.NombreReceptor,
+                    "RECEPTOR");
+
+            long cfdiId;
+            bool cfdiExistia =
+                cfdiExistenteId.HasValue;
+
+            if (cfdiExistia)
+            {
+                cfdiId =
+                    cfdiExistenteId!.Value;
+
+                ActualizarCfdi(
+                    conn,
+                    tx,
+                    cfdiId,
+                    empresaId,
+                    emisorId,
+                    receptorId,
+                    cfdi,
+                    clasificacionNormalizada,
+                    rutaXml);
+
+                EliminarImpuestosGlobales(
+                    conn,
+                    tx,
+                    cfdiId);
+
+                EliminarCfdiRelacionados(
+                    conn,
+                    tx,
+                    cfdiId);
+            }
+            else
+            {
+                cfdiId =
+                    InsertarCfdi(
+                        conn,
+                        tx,
+                        empresaId,
+                        emisorId,
+                        receptorId,
+                        cfdi,
+                        clasificacionNormalizada,
+                        rutaXml);
+            }
+
+            GuardarImpuestosGlobales(
+                conn,
+                tx,
+                cfdiId,
+                cfdi.Impuestos);
+
+            GuardarCfdiRelacionados(
+                conn,
+                tx,
+                cfdiId,
+                cfdi.Relacionados);
+
+            tx.Commit();
+
+            return cfdiId;
+        }
+        catch
+        {
+            tx.Rollback();
+            throw;
+        }
+    }
+
+    public bool ExisteCfdi(
+        long empresaId,
+        string uuid)
+    {
+        if (empresaId <= 0 ||
+            string.IsNullOrWhiteSpace(uuid))
+        {
+            return false;
+        }
+
+        using var conn =
+            new NpgsqlConnection(_connectionString);
+
+        conn.Open();
+
+        const string sql = @"
+            SELECT EXISTS
+            (
+                SELECT 1
+                FROM cfdi
+                WHERE empresa_id = @empresa_id
+                  AND UPPER(TRIM(uuid)) =
+                      UPPER(TRIM(@uuid))
+            );";
+
+        using var cmd =
+            new NpgsqlCommand(
+                sql,
+                conn);
+
+        cmd.Parameters.AddWithValue(
+            "@empresa_id",
+            empresaId);
+
+        cmd.Parameters.AddWithValue(
+            "@uuid",
+            uuid.Trim());
+
+        return Convert.ToBoolean(
+            cmd.ExecuteScalar());
+    }
+
+    public long? ObtenerCfdiId(
+        long empresaId,
+        string uuid)
+    {
+        if (empresaId <= 0 ||
+            string.IsNullOrWhiteSpace(uuid))
+        {
+            return null;
+        }
+
+        using var conn =
+            new NpgsqlConnection(_connectionString);
+
+        conn.Open();
+
+        const string sql = @"
+            SELECT cfdi_id
+            FROM cfdi
+            WHERE empresa_id = @empresa_id
+              AND UPPER(TRIM(uuid)) =
+                  UPPER(TRIM(@uuid))
+            LIMIT 1;";
+
+        using var cmd =
+            new NpgsqlCommand(
+                sql,
+                conn);
+
+        cmd.Parameters.AddWithValue(
+            "@empresa_id",
+            empresaId);
+
+        cmd.Parameters.AddWithValue(
+            "@uuid",
+            uuid.Trim());
+
+        object? resultado =
+            cmd.ExecuteScalar();
+
+        if (resultado is null ||
+            resultado == DBNull.Value)
+        {
+            return null;
+        }
+
+        return Convert.ToInt64(resultado);
+    }
+
+    public void ActualizarMontoTotalPagos(
+        long empresaId,
+        string uuid,
+        decimal? montoTotalPagos)
+    {
+        if (empresaId <= 0)
+        {
+            throw new InvalidOperationException(
+                "La empresa seleccionada no es válida.");
+        }
+
+        if (string.IsNullOrWhiteSpace(uuid))
+        {
+            throw new InvalidOperationException(
+                "El UUID no puede estar vacío.");
+        }
+
+        using var conn =
+            new NpgsqlConnection(_connectionString);
+
+        conn.Open();
+
+        const string sql = @"
+            UPDATE cfdi
+            SET monto_total_pagos =
+                @monto_total_pagos
+            WHERE empresa_id = @empresa_id
+              AND UPPER(TRIM(uuid)) =
+                  UPPER(TRIM(@uuid));";
+
+        using var cmd =
+            new NpgsqlCommand(
+                sql,
+                conn);
+
+        cmd.Parameters.AddWithValue(
+            "@empresa_id",
+            empresaId);
+
+        cmd.Parameters.AddWithValue(
+            "@uuid",
+            uuid.Trim());
+
+        AgregarParametro(
+            cmd,
+            "@monto_total_pagos",
+            montoTotalPagos);
+
+        cmd.ExecuteNonQuery();
+    }
+
+    private static long? BuscarCfdiId(
+        NpgsqlConnection conn,
+        NpgsqlTransaction tx,
+        long empresaId,
+        string uuid)
+    {
+        const string sql = @"
+            SELECT cfdi_id
+            FROM cfdi
+            WHERE empresa_id = @empresa_id
+              AND UPPER(TRIM(uuid)) =
+                  UPPER(TRIM(@uuid))
+            LIMIT 1;";
+
+        using var cmd =
+            new NpgsqlCommand(
+                sql,
+                conn,
+                tx);
+
+        cmd.Parameters.AddWithValue(
+            "@empresa_id",
+            empresaId);
+
+        cmd.Parameters.AddWithValue(
+            "@uuid",
+            uuid.Trim());
+
+        object? resultado =
+            cmd.ExecuteScalar();
+
+        if (resultado is null ||
+            resultado == DBNull.Value)
+        {
+            return null;
+        }
+
+        return Convert.ToInt64(resultado);
+    }
+
+    private static long InsertarCfdi(
+        NpgsqlConnection conn,
+        NpgsqlTransaction tx,
+        long empresaId,
+        long emisorId,
+        long receptorId,
+        CfdiDto cfdi,
+        string clasificacion,
+        string rutaXml)
+    {
+        const string sql = @"
+            INSERT INTO cfdi
+            (
+                empresa_id,
+                uuid,
+                tipo_cfdi,
+                emisor_id,
+                receptor_id,
+                serie,
+                folio,
+                fecha_emision,
+                subtotal,
+                descuento,
+                total,
+                moneda,
+                tipo_cambio,
+                clasificacion,
+                ruta_xml,
+                monto_total_pagos,
+
+                version_cfdi,
+                forma_pago,
+                metodo_pago,
+                condiciones_pago,
+                lugar_expedicion,
+                exportacion,
+                no_certificado,
+                certificado,
+                sello_cfdi,
+                confirmacion,
+
+                regimen_fiscal_emisor,
+                fac_atr_adquirente,
+
+                domicilio_fiscal_receptor,
+                regimen_fiscal_receptor,
+                uso_cfdi,
+                residencia_fiscal,
+                num_reg_id_trib,
+
+                total_impuestos_trasladados,
+                total_impuestos_retenidos,
+
+                fecha_timbrado,
+                rfc_prov_certif,
+                no_certificado_sat,
+                version_timbre,
+                sello_cfd,
+                sello_sat
+            )
+            VALUES
+            (
+                @empresa_id,
+                @uuid,
+                @tipo_cfdi,
+                @emisor_id,
+                @receptor_id,
+                @serie,
+                @folio,
+                @fecha_emision,
+                @subtotal,
+                @descuento,
+                @total,
+                @moneda,
+                @tipo_cambio,
+                @clasificacion,
+                @ruta_xml,
+                @monto_total_pagos,
+
+                @version_cfdi,
+                @forma_pago,
+                @metodo_pago,
+                @condiciones_pago,
+                @lugar_expedicion,
+                @exportacion,
+                @no_certificado,
+                @certificado,
+                @sello_cfdi,
+                @confirmacion,
+
+                @regimen_fiscal_emisor,
+                @fac_atr_adquirente,
+
+                @domicilio_fiscal_receptor,
+                @regimen_fiscal_receptor,
+                @uso_cfdi,
+                @residencia_fiscal,
+                @num_reg_id_trib,
+
+                @total_impuestos_trasladados,
+                @total_impuestos_retenidos,
+
+                @fecha_timbrado,
+                @rfc_prov_certif,
+                @no_certificado_sat,
+                @version_timbre,
+                @sello_cfd,
+                @sello_sat
+            )
+            RETURNING cfdi_id;";
+
+        using var cmd =
+            new NpgsqlCommand(
+                sql,
+                conn,
+                tx);
+
+        AgregarParametrosCfdi(
+            cmd,
+            empresaId,
+            emisorId,
+            receptorId,
+            cfdi,
+            clasificacion,
+            rutaXml);
+
+        object? resultado =
+            cmd.ExecuteScalar();
+
+        if (resultado is null ||
+            resultado == DBNull.Value)
+        {
+            throw new InvalidOperationException(
+                $"No se pudo guardar el CFDI {cfdi.UUID}.");
+        }
+
+        return Convert.ToInt64(resultado);
+    }
+
+    private static void ActualizarCfdi(
+        NpgsqlConnection conn,
+        NpgsqlTransaction tx,
+        long cfdiId,
+        long empresaId,
+        long emisorId,
+        long receptorId,
+        CfdiDto cfdi,
+        string clasificacion,
+        string rutaXml)
+    {
+        const string sql = @"
+            UPDATE cfdi
+            SET
+                tipo_cfdi =
+                    @tipo_cfdi,
+
+                emisor_id =
+                    @emisor_id,
+
+                receptor_id =
+                    @receptor_id,
+
+                serie =
+                    @serie,
+
+                folio =
+                    @folio,
+
+                fecha_emision =
+                    @fecha_emision,
+
+                subtotal =
+                    @subtotal,
+
+                descuento =
+                    @descuento,
+
+                total =
+                    @total,
+
+                moneda =
+                    @moneda,
+
+                tipo_cambio =
+                    @tipo_cambio,
+
+                clasificacion =
+                    @clasificacion,
+
+                ruta_xml =
+                    @ruta_xml,
+
+                monto_total_pagos =
+                    @monto_total_pagos,
+
+                version_cfdi =
+                    @version_cfdi,
+
+                forma_pago =
+                    @forma_pago,
+
+                metodo_pago =
+                    @metodo_pago,
+
+                condiciones_pago =
+                    @condiciones_pago,
+
+                lugar_expedicion =
+                    @lugar_expedicion,
+
+                exportacion =
+                    @exportacion,
+
+                no_certificado =
+                    @no_certificado,
+
+                certificado =
+                    @certificado,
+
+                sello_cfdi =
+                    @sello_cfdi,
+
+                confirmacion =
+                    @confirmacion,
+
+                regimen_fiscal_emisor =
+                    @regimen_fiscal_emisor,
+
+                fac_atr_adquirente =
+                    @fac_atr_adquirente,
+
+                domicilio_fiscal_receptor =
+                    @domicilio_fiscal_receptor,
+
+                regimen_fiscal_receptor =
+                    @regimen_fiscal_receptor,
+
+                uso_cfdi =
+                    @uso_cfdi,
+
+                residencia_fiscal =
+                    @residencia_fiscal,
+
+                num_reg_id_trib =
+                    @num_reg_id_trib,
+
+                total_impuestos_trasladados =
+                    @total_impuestos_trasladados,
+
+                total_impuestos_retenidos =
+                    @total_impuestos_retenidos,
+
+                fecha_timbrado =
+                    @fecha_timbrado,
+
+                rfc_prov_certif =
+                    @rfc_prov_certif,
+
+                no_certificado_sat =
+                    @no_certificado_sat,
+
+                version_timbre =
+                    @version_timbre,
+
+                sello_cfd =
+                    @sello_cfd,
+
+                sello_sat =
+                    @sello_sat
+
+            WHERE cfdi_id = @cfdi_id
+              AND empresa_id = @empresa_id;";
+
+        using var cmd =
+            new NpgsqlCommand(
+                sql,
+                conn,
+                tx);
+
+        cmd.Parameters.AddWithValue(
+            "@cfdi_id",
+            cfdiId);
+
+        AgregarParametrosCfdi(
+            cmd,
+            empresaId,
+            emisorId,
+            receptorId,
+            cfdi,
+            clasificacion,
+            rutaXml);
+
+        int afectados =
+            cmd.ExecuteNonQuery();
+
+        if (afectados == 0)
+        {
+            throw new InvalidOperationException(
+                $"No se pudo actualizar el CFDI {cfdi.UUID}.");
+        }
+    }
+
+    private static void AgregarParametrosCfdi(
+        NpgsqlCommand cmd,
+        long empresaId,
+        long emisorId,
+        long receptorId,
+        CfdiDto cfdi,
+        string clasificacion,
+        string rutaXml)
+    {
+        cmd.Parameters.AddWithValue(
+            "@empresa_id",
+            empresaId);
+
+        cmd.Parameters.AddWithValue(
+            "@uuid",
+            cfdi.UUID
+                .Trim()
+                .ToUpperInvariant());
+
+        cmd.Parameters.AddWithValue(
+            "@tipo_cfdi",
+            cfdi.TipoComprobante ?? "");
+
+        cmd.Parameters.AddWithValue(
+            "@emisor_id",
+            emisorId);
+
+        cmd.Parameters.AddWithValue(
+            "@receptor_id",
+            receptorId);
+
+        AgregarParametro(
+            cmd,
+            "@serie",
+            cfdi.Serie);
+
+        AgregarParametro(
+            cmd,
+            "@folio",
+            cfdi.Folio);
+
+        cmd.Parameters.AddWithValue(
+            "@fecha_emision",
+            cfdi.FechaEmision);
+
+        cmd.Parameters.AddWithValue(
+            "@subtotal",
+            cfdi.SubTotal);
+
+        AgregarParametro(
+            cmd,
+            "@descuento",
+            cfdi.Descuento);
+
+        cmd.Parameters.AddWithValue(
+            "@total",
+            cfdi.Total);
+
+        AgregarParametro(
+            cmd,
+            "@moneda",
+            cfdi.Moneda);
+
+        AgregarParametro(
+            cmd,
+            "@tipo_cambio",
+            cfdi.TipoCambio);
+
+        cmd.Parameters.AddWithValue(
+            "@clasificacion",
+            clasificacion);
+
+        cmd.Parameters.AddWithValue(
+            "@ruta_xml",
+            rutaXml ?? "");
+
+        AgregarParametro(
+            cmd,
+            "@monto_total_pagos",
+            cfdi.MontoTotalPagos);
+
+        AgregarParametro(
+            cmd,
+            "@version_cfdi",
+            cfdi.Version);
+
+        AgregarParametro(
+            cmd,
+            "@forma_pago",
+            cfdi.FormaPago);
+
+        AgregarParametro(
+            cmd,
+            "@metodo_pago",
+            cfdi.MetodoPago);
+
+        AgregarParametro(
+            cmd,
+            "@condiciones_pago",
+            cfdi.CondicionesDePago);
+
+        AgregarParametro(
+            cmd,
+            "@lugar_expedicion",
+            cfdi.LugarExpedicion);
+
+        AgregarParametro(
+            cmd,
+            "@exportacion",
+            cfdi.Exportacion);
+
+        AgregarParametro(
+            cmd,
+            "@no_certificado",
+            cfdi.NoCertificado);
+
+        AgregarParametro(
+            cmd,
+            "@certificado",
+            cfdi.Certificado);
+
+        AgregarParametro(
+            cmd,
+            "@sello_cfdi",
+            cfdi.Sello);
+
+        AgregarParametro(
+            cmd,
+            "@confirmacion",
+            cfdi.Confirmacion);
+
+        AgregarParametro(
+            cmd,
+            "@regimen_fiscal_emisor",
+            cfdi.RegimenFiscalEmisor);
+
+        AgregarParametro(
+            cmd,
+            "@fac_atr_adquirente",
+            cfdi.FacAtrAdquirente);
+
+        AgregarParametro(
+            cmd,
+            "@domicilio_fiscal_receptor",
+            cfdi.DomicilioFiscalReceptor);
+
+        AgregarParametro(
+            cmd,
+            "@regimen_fiscal_receptor",
+            cfdi.RegimenFiscalReceptor);
+
+        AgregarParametro(
+            cmd,
+            "@uso_cfdi",
+            cfdi.UsoCfdi);
+
+        AgregarParametro(
+            cmd,
+            "@residencia_fiscal",
+            cfdi.ResidenciaFiscal);
+
+        AgregarParametro(
+            cmd,
+            "@num_reg_id_trib",
+            cfdi.NumRegIdTrib);
+
+        AgregarParametro(
+            cmd,
+            "@total_impuestos_trasladados",
+            cfdi.TotalImpuestosTrasladados);
+
+        AgregarParametro(
+            cmd,
+            "@total_impuestos_retenidos",
+            cfdi.TotalImpuestosRetenidos);
+
+        AgregarParametro(
+            cmd,
+            "@fecha_timbrado",
+            cfdi.FechaTimbrado);
+
+        AgregarParametro(
+            cmd,
+            "@rfc_prov_certif",
+            cfdi.RfcProvCertif);
+
+        AgregarParametro(
+            cmd,
+            "@no_certificado_sat",
+            cfdi.NoCertificadoSat);
+
+        AgregarParametro(
+            cmd,
+            "@version_timbre",
+            cfdi.VersionTimbre);
+
+        AgregarParametro(
+            cmd,
+            "@sello_cfd",
+            cfdi.SelloCfd);
+
+        AgregarParametro(
+            cmd,
+            "@sello_sat",
+            cfdi.SelloSat);
+    }
+
+    private static void GuardarImpuestosGlobales(
+        NpgsqlConnection conn,
+        NpgsqlTransaction tx,
+        long cfdiId,
+        IEnumerable<ImpuestoDto>? impuestos)
+    {
+        if (impuestos is null)
+        {
+            return;
+        }
+
+        const string sql = @"
+            INSERT INTO cfdi_impuestos_globales
+            (
+                cfdi_id,
+                tipo,
+                impuesto,
+                base,
+                tipo_factor,
+                tasa,
+                importe
+            )
+            VALUES
+            (
+                @cfdi_id,
+                @tipo,
+                @impuesto,
+                @base,
+                @tipo_factor,
+                @tasa,
+                @importe
+            )
+            ON CONFLICT DO NOTHING;";
+
+        foreach (ImpuestoDto impuesto in impuestos)
+        {
+            using var cmd =
+                new NpgsqlCommand(
+                    sql,
+                    conn,
+                    tx);
+
+            cmd.Parameters.AddWithValue(
+                "@cfdi_id",
+                cfdiId);
+
+            cmd.Parameters.AddWithValue(
+                "@tipo",
+                NormalizarTipoImpuesto(
+                    impuesto.Tipo));
+
+            AgregarParametro(
+                cmd,
+                "@impuesto",
+                impuesto.Impuesto);
+
+            cmd.Parameters.AddWithValue(
+                "@base",
+                impuesto.Base);
+
+            AgregarParametro(
+                cmd,
+                "@tipo_factor",
+                impuesto.TipoFactor);
+
+            cmd.Parameters.AddWithValue(
+                "@tasa",
+                impuesto.Tasa);
+
+            cmd.Parameters.AddWithValue(
+                "@importe",
+                impuesto.Importe);
+
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    private static void EliminarImpuestosGlobales(
+        NpgsqlConnection conn,
+        NpgsqlTransaction tx,
+        long cfdiId)
+    {
+        const string sql = @"
+            DELETE FROM cfdi_impuestos_globales
+            WHERE cfdi_id = @cfdi_id;";
+
+        using var cmd =
+            new NpgsqlCommand(
+                sql,
+                conn,
+                tx);
+
+        cmd.Parameters.AddWithValue(
+            "@cfdi_id",
+            cfdiId);
+
+        cmd.ExecuteNonQuery();
+    }
+
+    private static void GuardarCfdiRelacionados(
+        NpgsqlConnection conn,
+        NpgsqlTransaction tx,
+        long cfdiId,
+        IEnumerable<CfdiRelacionadoDto>? relacionados)
+    {
+        if (relacionados is null)
+        {
+            return;
+        }
+
+        const string sql = @"
+            INSERT INTO cfdi_relacionados
+            (
+                cfdi_id,
+                tipo_relacion,
+                uuid_relacionado
+            )
+            VALUES
+            (
+                @cfdi_id,
+                @tipo_relacion,
+                @uuid_relacionado
+            )
+            ON CONFLICT DO NOTHING;";
+
+        foreach (
+            CfdiRelacionadoDto relacionado
+            in relacionados)
+        {
+            if (string.IsNullOrWhiteSpace(
+                    relacionado.UUID))
+            {
+                continue;
+            }
+
+            using var cmd =
+                new NpgsqlCommand(
+                    sql,
+                    conn,
+                    tx);
+
+            cmd.Parameters.AddWithValue(
+                "@cfdi_id",
+                cfdiId);
+
+            cmd.Parameters.AddWithValue(
+                "@tipo_relacion",
+                relacionado.TipoRelacion ?? "");
+
+            cmd.Parameters.AddWithValue(
+                "@uuid_relacionado",
+                relacionado.UUID
+                    .Trim()
+                    .ToUpperInvariant());
+
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    private static void EliminarCfdiRelacionados(
+        NpgsqlConnection conn,
+        NpgsqlTransaction tx,
+        long cfdiId)
+    {
+        const string sql = @"
+            DELETE FROM cfdi_relacionados
+            WHERE cfdi_id = @cfdi_id;";
+
+        using var cmd =
+            new NpgsqlCommand(
+                sql,
+                conn,
+                tx);
+
+        cmd.Parameters.AddWithValue(
+            "@cfdi_id",
+            cfdiId);
+
+        cmd.ExecuteNonQuery();
+    }
+
+    private static string NormalizarClasificacion(
+        string clasificacion)
+    {
+        string valor =
+            (clasificacion ?? "")
+                .Trim()
+                .ToUpperInvariant();
+
+        if (valor != "EMITIDO" &&
+            valor != "RECIBIDO" &&
+            valor != "PROPIO")
+        {
+            throw new InvalidOperationException(
+                "La clasificación debe ser " +
+                "EMITIDO, RECIBIDO o PROPIO.");
+        }
+
+        return valor;
+    }
+
+    private static string NormalizarTipoImpuesto(
+        string tipo)
+    {
+        string valor =
+            (tipo ?? "")
+                .Trim()
+                .ToUpperInvariant();
+
+        return valor switch
+        {
+            "TRASLADO" =>
+                "TRASLADO",
+
+            "RETENCION" =>
+                "RETENCION",
+
+            "RETENCIÓN" =>
+                "RETENCION",
+
+            _ =>
+                valor
+        };
+    }
+}

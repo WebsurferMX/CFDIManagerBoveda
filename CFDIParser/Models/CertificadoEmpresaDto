@@ -1,0 +1,26 @@
+public class CertificadoEmpresaDto
+{
+    public long CertificadoId { get; set; }
+
+    public long EmpresaId { get; set; }
+
+    public string Rfc { get; set; } = "";
+
+    public string TipoCertificado { get; set; } = "";
+
+    public string NombreCertificado { get; set; } = "";
+
+    public string NumeroSerie { get; set; } = "";
+
+    public DateTime? FechaInicio { get; set; }
+
+    public DateTime? FechaFin { get; set; }
+
+    public string RutaCer { get; set; } = "";
+
+    public string RutaKey { get; set; } = "";
+
+    public bool Activo { get; set; }
+
+    public DateTime FechaCarga { get; set; }
+}

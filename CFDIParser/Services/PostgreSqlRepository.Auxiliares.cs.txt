@@ -1,0 +1,435 @@
+using Npgsql;
+using CFDIParser.Models;
+
+namespace CFDIParser.Services;
+
+public partial class PostgreSqlRepository
+{
+    private static void AgregarParametro(
+        NpgsqlCommand cmd,
+        string nombre,
+        object? valor)
+    {
+        if (valor is string texto)
+        {
+            cmd.Parameters.AddWithValue(
+                nombre,
+                string.IsNullOrWhiteSpace(texto)
+                    ? DBNull.Value
+                    : texto);
+
+            return;
+        }
+
+        cmd.Parameters.AddWithValue(
+            nombre,
+            valor ?? DBNull.Value);
+    }
+
+    private static long ObtenerOCrearPersona(
+        NpgsqlConnection conn,
+        NpgsqlTransaction tx,
+        string rfc,
+        string nombre,
+        string tipo)
+    {
+        if (string.IsNullOrWhiteSpace(rfc))
+        {
+            throw new InvalidOperationException(
+                $"El RFC del {tipo.ToLowerInvariant()} está vacío.");
+        }
+
+        const string buscarSql = @"
+            SELECT persona_id
+            FROM personas_fiscales
+            WHERE UPPER(TRIM(rfc)) =
+                  UPPER(TRIM(@rfc))
+            LIMIT 1;";
+
+        using (
+            var buscarCmd =
+                new NpgsqlCommand(
+                    buscarSql,
+                    conn,
+                    tx))
+        {
+            buscarCmd.Parameters.AddWithValue(
+                "@rfc",
+                rfc);
+
+            object? personaExistente =
+                buscarCmd.ExecuteScalar();
+
+            if (personaExistente is not null)
+            {
+                long personaId =
+                    Convert.ToInt64(
+                        personaExistente);
+
+                ActualizarNombrePersona(
+                    conn,
+                    tx,
+                    personaId,
+                    nombre);
+
+                return personaId;
+            }
+        }
+
+        const string insertarSql = @"
+            INSERT INTO personas_fiscales
+            (
+                rfc,
+                nombre,
+                tipo
+            )
+            VALUES
+            (
+                @rfc,
+                @nombre,
+                @tipo
+            )
+            RETURNING persona_id;";
+
+        using var insertarCmd =
+            new NpgsqlCommand(
+                insertarSql,
+                conn,
+                tx);
+
+        insertarCmd.Parameters.AddWithValue(
+            "@rfc",
+            rfc.Trim().ToUpperInvariant());
+
+        insertarCmd.Parameters.AddWithValue(
+            "@nombre",
+            nombre?.Trim() ?? "");
+
+        insertarCmd.Parameters.AddWithValue(
+            "@tipo",
+            tipo);
+
+        return Convert.ToInt64(
+            insertarCmd.ExecuteScalar());
+    }
+
+    private static void ActualizarNombrePersona(
+        NpgsqlConnection conn,
+        NpgsqlTransaction tx,
+        long personaId,
+        string nombre)
+    {
+        if (string.IsNullOrWhiteSpace(nombre))
+        {
+            return;
+        }
+
+        const string sql = @"
+            UPDATE personas_fiscales
+            SET nombre = @nombre
+            WHERE persona_id = @persona_id
+              AND
+              (
+                  nombre IS NULL
+                  OR TRIM(nombre) = ''
+                  OR nombre <> @nombre
+              );";
+
+        using var cmd =
+            new NpgsqlCommand(
+                sql,
+                conn,
+                tx);
+
+        cmd.Parameters.AddWithValue(
+            "@persona_id",
+            personaId);
+
+        cmd.Parameters.AddWithValue(
+            "@nombre",
+            nombre.Trim());
+
+        cmd.ExecuteNonQuery();
+    }
+
+    private static EmpresaDto MapearEmpresa(
+        NpgsqlDataReader reader)
+    {
+        return new EmpresaDto
+        {
+            EmpresaId =
+                Convert.ToInt64(
+                    reader["empresa_id"]),
+
+            Rfc =
+                reader["rfc"]?.ToString()
+                ?? "",
+
+            RazonSocial =
+                reader["razon_social"]?.ToString()
+                ?? "",
+
+            NombreCorto =
+                reader["nombre_corto"]?.ToString()
+                ?? "",
+
+            RutaXml =
+                reader["ruta_xml"]?.ToString()
+                ?? "",
+
+            Activa =
+                Convert.ToBoolean(
+                    reader["activa"])
+        };
+    }
+
+    private static CfdiConsultaDto MapearCfdiConsulta(
+        NpgsqlDataReader reader)
+    {
+        return new CfdiConsultaDto
+        {
+            CfdiId =
+                Convert.ToInt64(
+                    reader["cfdi_id"]),
+
+            UUID =
+                reader["uuid"]?.ToString()
+                ?? "",
+
+            Clasificacion =
+                reader["clasificacion"]?.ToString()
+                ?? "",
+
+            TipoCfdi =
+                reader["tipo_cfdi"]?.ToString()
+                ?? "",
+
+            FechaEmision =
+                Convert.ToDateTime(
+                    reader["fecha_emision"]),
+
+            Serie =
+                reader["serie"] == DBNull.Value
+                    ? ""
+                    : reader["serie"]?.ToString()
+                      ?? "",
+
+            Folio =
+                reader["folio"] == DBNull.Value
+                    ? ""
+                    : reader["folio"]?.ToString()
+                      ?? "",
+
+            RfcEmisor =
+                reader["rfc_emisor"]?.ToString()
+                ?? "",
+
+            NombreEmisor =
+                reader["nombre_emisor"]?.ToString()
+                ?? "",
+
+            RfcReceptor =
+                reader["rfc_receptor"]?.ToString()
+                ?? "",
+
+            NombreReceptor =
+                reader["nombre_receptor"]?.ToString()
+                ?? "",
+
+            RfcContraparte =
+                reader["rfc_contraparte"]?.ToString()
+                ?? "",
+
+            NombreContraparte =
+                reader["nombre_contraparte"]?.ToString()
+                ?? "",
+
+            Subtotal =
+                Convert.ToDecimal(
+                    reader["subtotal"]),
+
+            Total =
+                Convert.ToDecimal(
+                    reader["total"]),
+
+            Moneda =
+                reader["moneda"]?.ToString()
+                ?? "",
+
+            RutaXml =
+                reader["ruta_xml"]?.ToString()
+                ?? "",
+
+            EstadoSat =
+                "NO VERIFICADO"
+        };
+    }
+
+    private static void ValidarFiltroCfdi(
+        CfdiFiltroDto filtro)
+    {
+        ArgumentNullException.ThrowIfNull(
+            filtro);
+
+        if (filtro.EmpresaId <= 0)
+        {
+            throw new InvalidOperationException(
+                "No se ha seleccionado una empresa.");
+        }
+
+        if (filtro.FechaFin.Date <
+            filtro.FechaInicio.Date)
+        {
+            throw new InvalidOperationException(
+                "La fecha final no puede ser menor " +
+                "que la fecha inicial.");
+        }
+
+        if (filtro.Pagina <= 0)
+        {
+            filtro.Pagina =
+                1;
+        }
+
+        if (filtro.RegistrosPorPagina <= 0)
+        {
+            filtro.RegistrosPorPagina =
+                25;
+        }
+
+        if (filtro.RegistrosPorPagina > 500)
+        {
+            filtro.RegistrosPorPagina =
+                500;
+        }
+    }
+
+    private static string ConstruirCondicionesCfdi()
+    {
+        return @"
+            c.empresa_id = @empresa_id
+
+            AND c.fecha_emision >= @fecha_inicio
+
+            AND c.fecha_emision < @fecha_fin_exclusiva
+
+            AND
+            (
+                @clasificacion = ''
+                OR c.clasificacion = @clasificacion
+            )
+
+            AND
+            (
+                @tipo_cfdi = ''
+                OR c.tipo_cfdi = @tipo_cfdi
+            )
+
+            AND
+            (
+                @busqueda = ''
+
+                OR c.uuid ILIKE @busqueda_contiene
+
+                OR COALESCE(c.serie, '')
+                    ILIKE @busqueda_contiene
+
+                OR COALESCE(c.folio, '')
+                    ILIKE @busqueda_contiene
+
+                OR COALESCE(emisor.rfc, '')
+                    ILIKE @busqueda_contiene
+
+                OR COALESCE(emisor.nombre, '')
+                    ILIKE @busqueda_contiene
+
+                OR COALESCE(receptor.rfc, '')
+                    ILIKE @busqueda_contiene
+
+                OR COALESCE(receptor.nombre, '')
+                    ILIKE @busqueda_contiene
+            )";
+    }
+
+    private static void AgregarParametrosFiltroCfdi(
+        NpgsqlCommand cmd,
+        CfdiFiltroDto filtro)
+    {
+        string clasificacion =
+            (filtro.Clasificacion ?? "")
+                .Trim()
+                .ToUpperInvariant();
+
+        string tipoCfdi =
+            (filtro.TipoCfdi ?? "")
+                .Trim()
+                .ToUpperInvariant();
+
+        string busqueda =
+            (filtro.Busqueda ?? "")
+                .Trim();
+
+        cmd.Parameters.AddWithValue(
+            "@empresa_id",
+            filtro.EmpresaId);
+
+        cmd.Parameters.AddWithValue(
+            "@fecha_inicio",
+            filtro.FechaInicio.Date);
+
+        cmd.Parameters.AddWithValue(
+            "@fecha_fin_exclusiva",
+            filtro.FechaFin.Date.AddDays(1));
+
+        cmd.Parameters.AddWithValue(
+            "@clasificacion",
+            clasificacion);
+
+        cmd.Parameters.AddWithValue(
+            "@tipo_cfdi",
+            tipoCfdi);
+
+        cmd.Parameters.AddWithValue(
+            "@busqueda",
+            busqueda);
+
+        cmd.Parameters.AddWithValue(
+            "@busqueda_contiene",
+            string.IsNullOrWhiteSpace(busqueda)
+                ? ""
+                : $"%{busqueda}%");
+    }
+
+    private static string ObtenerCampoOrdenCfdi(
+        string? ordenarPor)
+    {
+        return (ordenarPor ?? "")
+            .Trim()
+            .ToLowerInvariant() switch
+        {
+            "total" =>
+                "c.total",
+
+            "serie" =>
+                "c.serie",
+
+            "folio" =>
+                "c.folio",
+
+            "tipo_cfdi" =>
+                "c.tipo_cfdi",
+
+            "clasificacion" =>
+                "c.clasificacion",
+
+            "rfc" =>
+                "rfc_contraparte",
+
+            "nombre" =>
+                "nombre_contraparte",
+
+            _ =>
+                "c.fecha_emision"
+        };
+    }
+}
