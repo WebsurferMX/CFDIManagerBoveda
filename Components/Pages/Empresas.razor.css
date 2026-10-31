@@ -1,0 +1,691 @@
+.empresas-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding-bottom: 2rem;
+}
+
+.page-heading,
+.card-heading,
+.list-toolbar,
+.form-actions,
+.switch-row,
+.path-input {
+    display: flex;
+    align-items: center;
+}
+
+.page-heading,
+.card-heading,
+.list-toolbar {
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.page-heading h1,
+.card-heading h2,
+.list-toolbar h2 {
+    margin: 0;
+}
+
+.page-heading p,
+.list-toolbar p {
+    margin: .25rem 0 0;
+    color: #64748b;
+}
+
+.eyebrow,
+.section-label {
+    color: #0891b2;
+    font-size: .7rem;
+    font-weight: 850;
+    letter-spacing: .12em;
+}
+
+.form-card,
+.list-card {
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 10px 28px rgb(15 23 42 / 6%);
+}
+
+.form-card {
+    padding: 1rem;
+    position: sticky;
+    top: 1rem;
+}
+
+.list-card {
+    overflow: hidden;
+}
+
+.list-toolbar {
+    padding: 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.id-badge,
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    font-size: .67rem;
+    font-weight: 800;
+}
+
+.id-badge {
+    padding: .35rem .6rem;
+    background: #e0f2fe;
+    color: #0369a1;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 130px;
+    gap: .85rem;
+    margin-top: 1rem;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+}
+
+.field-wide {
+    grid-column: 1 / -1;
+}
+
+.field label,
+.search-box label {
+    color: #475569;
+    font-size: .72rem;
+    font-weight: 750;
+}
+
+.field input,
+.search-box input {
+    width: 100%;
+    min-height: 40px;
+    padding: .55rem .7rem;
+    border: 1px solid #cbd5e1;
+    border-radius: .65rem;
+    background: #fff;
+    color: #0f172a;
+}
+
+.field small,
+.companies-table small {
+    display: block;
+    color: #64748b;
+    font-size: .68rem;
+}
+
+.active-field {
+    justify-content: flex-end;
+}
+
+.switch-row {
+    min-height: 40px;
+    gap: .5rem;
+    cursor: pointer;
+}
+
+.switch-row > input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.switch-control {
+    position: relative;
+    width: 42px;
+    height: 24px;
+    border-radius: 999px;
+    background: #cbd5e1;
+    transition: .2s ease;
+}
+
+.switch-control::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgb(15 23 42 / 25%);
+    transition: .2s ease;
+}
+
+.switch-row > input:checked + .switch-control {
+    background: #0891b2;
+}
+
+.switch-row > input:checked + .switch-control::after {
+    transform: translateX(18px);
+}
+
+.path-input {
+    gap: .5rem;
+}
+
+.path-button,
+.primary-button,
+.secondary-button,
+.table-action {
+    border-radius: .65rem;
+    font-weight: 750;
+    cursor: pointer;
+}
+
+.path-button,
+.secondary-button {
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #0f172a;
+}
+
+.path-button {
+    min-height: 40px;
+    padding: .5rem .75rem;
+}
+
+.form-actions {
+    justify-content: flex-end;
+    gap: .6rem;
+    margin-top: 1rem;
+}
+
+.primary-button,
+.secondary-button {
+    min-height: 40px;
+    padding: .55rem .9rem;
+}
+
+.primary-button {
+    border: 1px solid #0891b2;
+    background: #0891b2;
+    color: #fff;
+}
+
+button:disabled {
+    cursor: not-allowed;
+    opacity: .55;
+}
+
+.message {
+    display: flex;
+    gap: .5rem;
+    padding: .8rem 1rem;
+    border-radius: .75rem;
+}
+
+.error-message {
+    border: 1px solid #fecaca;
+    background: #fef2f2;
+    color: #b91c1c;
+}
+
+.success-message {
+    border: 1px solid #bbf7d0;
+    background: #f0fdf4;
+    color: #166534;
+}
+
+.search-box {
+    width: min(300px, 100%);
+}
+
+.table-container {
+    overflow-x: auto;
+}
+
+.companies-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .76rem;
+}
+
+.companies-table th,
+.companies-table td {
+    padding: .75rem;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.companies-table th {
+    background: #f8fafc;
+    color: #475569;
+    font-size: .68rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.active-company-row {
+    background: #ecfeff;
+}
+
+.rfc-cell {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-weight: 750;
+    white-space: nowrap;
+}
+
+.path-cell {
+    max-width: 230px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.status-badge {
+    min-width: 64px;
+    padding: .3rem .55rem;
+}
+
+.active-status {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.inactive-status {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+.actions-cell {
+    display: flex;
+    gap: .4rem;
+    white-space: nowrap;
+}
+
+.table-action {
+    padding: .35rem .55rem;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #334155;
+    font-size: .68rem;
+}
+
+.edit-action {
+    border-color: #93c5fd;
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.empty-state {
+    padding: 2rem;
+    text-align: center;
+    color: #64748b;
+}
+
+@media (max-width: 640px) {
+    .page-heading,
+    .list-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .field-wide {
+        grid-column: auto;
+    }
+
+.empresa-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+}
+
+.tab-button {
+    border: none;
+    padding: 10px 18px;
+    border-radius: 10px;
+    background: #eef2ff;
+    color: #334155;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.tab-button.active {
+    background: #2563eb;
+    color: white;
+}
+
+.sat-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.sat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid #e5e7eb;
+}
+
+.sat-card h3 {
+    margin-bottom: 15px;
+}
+
+.sat-options {
+    display: flex;
+    gap: 25px;
+}
+
+.sat-status {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.status-icon {
+    font-size: 32px;
+}
+
+
+}
+
+
+
+/* ===== MODO OSCURO (generado) ===== */
+
+html[data-theme="dark"] .page-heading p,
+html[data-theme="dark"] .list-toolbar p {
+    color: #b3bbc8;
+}
+
+html[data-theme="dark"] .eyebrow,
+html[data-theme="dark"] .section-label {
+    color: #a0e6f7;
+}
+
+html[data-theme="dark"] .form-card,
+html[data-theme="dark"] .list-card {
+    border: 1px solid #2a3b52;
+    background: #121c2b;
+    box-shadow: 0 10px 28px rgb(0 0 0 / 25%);
+}
+
+html[data-theme="dark"] .list-toolbar {
+    border-bottom: 1px solid #2a3b52;
+}
+
+html[data-theme="dark"] .id-badge {
+    background: #132a39;
+    color: #acddf8;
+}
+
+html[data-theme="dark"] .field label,
+html[data-theme="dark"] .search-box label {
+    color: #c5cdd8;
+}
+
+html[data-theme="dark"] .field input,
+html[data-theme="dark"] .search-box input {
+    border: 1px solid #34465b;
+    background: #121c2b;
+    color: #e8ecf7;
+}
+
+html[data-theme="dark"] .field small,
+html[data-theme="dark"] .companies-table small {
+    color: #b3bbc8;
+}
+
+html[data-theme="dark"] .switch-control {
+    background: #24303e;
+}
+
+html[data-theme="dark"] .switch-control::after {
+    background: #121c2b;
+    box-shadow: 0 1px 4px rgb(0 0 0 / 60%);
+}
+
+html[data-theme="dark"] .path-button,
+html[data-theme="dark"] .secondary-button {
+    border: 1px solid #34465b;
+    background: #121c2b;
+    color: #e8ecf7;
+}
+
+html[data-theme="dark"] .error-message {
+    border: 1px solid #5e2323;
+    background: #331111;
+    color: #f09999;
+}
+
+html[data-theme="dark"] .success-message {
+    border: 1px solid #27663d;
+    background: #11341c;
+    color: #c7f3d8;
+}
+
+html[data-theme="dark"] .companies-table th,
+html[data-theme="dark"] .companies-table td {
+    border-bottom: 1px solid #2a3b52;
+}
+
+html[data-theme="dark"] .companies-table th {
+    background: #14212e;
+    color: #c5cdd8;
+}
+
+html[data-theme="dark"] .active-company-row {
+    background: #113234;
+}
+
+html[data-theme="dark"] .active-status {
+    background: #143b21;
+    color: #c7f3d8;
+}
+
+html[data-theme="dark"] .inactive-status {
+    background: #17253a;
+    color: #c5cdd8;
+}
+
+html[data-theme="dark"] .table-action {
+    border: 1px solid #34465b;
+    background: #121c2b;
+    color: #d0d8e3;
+}
+
+html[data-theme="dark"] .edit-action {
+    border-color: #2b4d72;
+    background: #112033;
+    color: #88a3ef;
+}
+
+html[data-theme="dark"] .empty-state {
+    color: #b3bbc8;
+}
+
+@media (max-width: 640px) {
+    html[data-theme="dark"] .tab-button {
+        background: #111934;
+        color: #d0d8e3;
+    }
+
+    html[data-theme="dark"] .sat-card {
+        background: #121c2b;
+        border: 1px solid #2a3b53;
+    }
+
+}
+
+/* ===== FIN MODO OSCURO ===== */
+
+/* ---------- Regímenes, opinión y fila seleccionada ---------- */
+
+.companies-table tbody tr {
+    cursor: pointer;
+}
+
+.selected-company-row td {
+    background: #dbeafe;
+}
+
+.regimenes-cell {
+    white-space: nowrap;
+}
+
+.regimen-tag {
+    display: inline-flex;
+    margin: 1px 3px 1px 0;
+    padding: 0.15rem 0.5rem;
+    border-radius: 0.4rem;
+    background: #dbe7f6;
+    color: #1e3a5f;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: help;
+}
+
+.sin-dato {
+    color: #94a3b8;
+}
+
+.opinion-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.opinion-chip small {
+    font-weight: 600;
+    opacity: 0.85;
+}
+
+.opinion-ok { background: #dcfce7; color: #166534; }
+.opinion-mal { background: #fee2e2; color: #b91c1c; }
+.opinion-aviso { background: #fef3c7; color: #92400e; }
+.opinion-neutro { background: #e0e7ff; color: #3730a3; }
+
+.identidad {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.4rem;
+}
+
+html[data-theme="dark"] .selected-company-row td { background: #13243a; }
+html[data-theme="dark"] .regimen-tag { background: #1b2a3f; color: #c9d8ee; }
+html[data-theme="dark"] .sin-dato { color: #6b7a90; }
+html[data-theme="dark"] .opinion-ok { background: #143b21; color: #c7f3d8; }
+html[data-theme="dark"] .opinion-mal { background: #381313; color: #f09999; }
+html[data-theme="dark"] .opinion-aviso { background: #2e2410; color: #f5d68a; }
+html[data-theme="dark"] .opinion-neutro { background: #1c1f4a; color: #b4bcf5; }
+
+/* ---------- Detalle de la empresa dentro del marco "Empresas registradas" ---------- */
+
+.list-card .table-container {
+    max-height: 70vh;
+    overflow: auto;
+}
+
+.list-card .companies-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.detalle-empresa {
+    padding: 1rem;
+}
+
+.pageframe .empresa-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin: 0;
+    padding: 0 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.pageframe .tab-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: -1px;
+    padding: 0.6rem 1.1rem;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0.5rem 0.5rem 0 0;
+    background: none;
+    color: #64748b;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.pageframe .tab-button:hover {
+    color: #0f172a;
+}
+
+.pageframe .tab-button.active {
+    border-bottom-color: #2563eb;
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+
+html[data-theme="dark"] .pageframe .empresa-tabs { border-bottom-color: #2a3b52; }
+html[data-theme="dark"] .pageframe .tab-button { color: #b3bbc8; }
+html[data-theme="dark"] .pageframe .tab-button:hover { color: #e8ecf7; }
+html[data-theme="dark"] .pageframe .tab-button.active { border-bottom-color: #4d8bf5; background: #17253a; color: #e8ecf7; }
+
+/* El formulario no necesita todo el ancho del marco. */
+.detalle-empresa .form-grid {
+    max-width: 900px;
+}
+
+/* ---------- Pageframe: cabecera y búsqueda ---------- */
+
+.pf-cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1rem 0.75rem;
+}
+
+.pf-cabecera h2 { margin: 0; }
+.pf-cabecera p { margin: 0.25rem 0 0; color: #64748b; }
+
+.pf-empresa {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    margin-right: 0.4rem;
+}
+
+.pf-empresa strong { font-size: 1.05rem; }
+
+.pf-busqueda {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+html[data-theme="dark"] .pf-cabecera p { color: #b3bbc8; }
+html[data-theme="dark"] .pf-empresa strong { color: #e8ecf7; }
+html[data-theme="dark"] .pf-busqueda { border-bottom-color: #2a3b52; }

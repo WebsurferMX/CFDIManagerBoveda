@@ -1,0 +1,122 @@
+.descarga-sat {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 38px;
+    padding: 0.25rem 0.35rem 0.25rem 0.65rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.65rem;
+    background: #f8fafc;
+    color: #0f172a;
+    white-space: nowrap;
+}
+
+.descarga-sat.encendida { border-color: #93c5fd; background: #eff6ff; }
+.descarga-sat.sin-fiel { opacity: 0.75; }
+
+.descarga-auto {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0;
+    cursor: pointer;
+}
+
+.descarga-auto input {
+    flex: none;
+    float: none;
+    width: 2.2em;
+    height: 1.15em;
+    margin: 0;
+    border-radius: 2em;
+    cursor: pointer;
+    /* Mismo dibujo que .form-switch de Bootstrap sin su padding. */
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba%280,0,0,.25%29'/%3e%3c/svg%3e");
+    background-position: left center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    transition: background-position .15s ease-in-out;
+}
+
+.descarga-auto input:checked {
+    background-color: #2563eb;
+    border-color: #2563eb;
+    background-position: right center;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e");
+}
+
+.icono {
+    display: inline-block;
+    flex: none;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.descarga-auto .icono { color: #2563eb; }
+
+.textos {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+    max-width: 230px;
+}
+
+.textos b { font-size: 0.76rem; }
+
+.textos small {
+    overflow: hidden;
+    color: #64748b;
+    font-size: 0.68rem;
+    text-overflow: ellipsis;
+}
+
+.descarga-ahora {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid #93c5fd;
+    border-radius: 0.5rem;
+    background: #fff;
+    color: #1d4ed8;
+    font-size: 0.74rem;
+    font-weight: 600;
+}
+
+.descarga-ahora:hover:not(:disabled) { background: #dbeafe; }
+.descarga-ahora:disabled { opacity: 0.6; }
+
+.girando { animation: girar 1s linear infinite; }
+
+@keyframes girar { to { transform: rotate(360deg); } }
+
+/* ===== MODO OSCURO ===== */
+
+html[data-theme="dark"] .descarga-sat {
+    border: 1px solid #34465b;
+    background: #14212e;
+    color: #e8ecf7;
+}
+
+html[data-theme="dark"] .descarga-sat.encendida {
+    border-color: #2c4f86;
+    background: #111d33;
+}
+
+html[data-theme="dark"] .descarga-auto input:not(:checked) {
+    border-color: #4b5d74;
+    background-color: #0e1724;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba%28255,255,255,.4%29'/%3e%3c/svg%3e");
+}
+
+html[data-theme="dark"] .descarga-auto .icono { color: #7ca1f3; }
+
+html[data-theme="dark"] .textos small { color: #b3bbc8; }
+
+html[data-theme="dark"] .descarga-ahora {
+    border: 1px solid #2c4f86;
+    background: #121c2b;
+    color: #88a3ef;
+}
+
+html[data-theme="dark"] .descarga-ahora:hover:not(:disabled) { background: #13243a; }

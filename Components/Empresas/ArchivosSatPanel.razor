@@ -1,0 +1,245 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using CFDIManager.Web.Services.Cif
+
+@inject ArchivosSatService Archivos
+@inject ConstanciaFiscalService Constancias
+@inject CFDIManager.Web.Services.Sat.DescargaArchivosSatService Descarga
+
+@* Pestaña General de Empresas: certificados digitales y archivos SAT (constancia, opiniones y declaraciones). *@
+<div class="archivos-sat">
+
+    <section class="as-seccion">
+        <div class="as-titulo"><i class="bi bi-shield-fill-check"></i> Certificados digitales</div>
+
+        <div class="as-tarjetas">
+            <div class="as-tarjeta">
+                <div class="as-tarjeta-cabecera">
+                    <span><i class="bi bi-pen-fill"></i> e.firma (FIEL)</span>
+                    <span class="as-badge @ClaseFiel">@TextoFiel</span>
+                </div>
+                @if (FechaVencimientoFiel is DateTime vence)
+                {
+                    <small>Expira: @vence.ToString("dd 'de' MMMM 'de' yyyy", Mx)@(DiasFiel is int d and >= 0 ? $" · {d} días" : "")</small>
+                }
+            </div>
+
+            <div class="as-tarjeta">
+                <div class="as-tarjeta-cabecera">
+                    <span><i class="bi bi-key-fill"></i> Contraseña SAT (CIEC)</span>
+                    <span class="as-badge @(TieneCiec ? "ok" : "ninguno")">@(TieneCiec ? "Configurada" : "Sin CIEC")</span>
+                </div>
+                <small>Se captura en la pestaña Accesos SAT.</small>
+            </div>
+        </div>
+    </section>
+
+    <section class="as-contenedor">
+        <div class="as-titulo">
+            <i class="bi bi-folder-fill"></i> Archivos SAT
+            <small class="as-ruta" title="@Archivos.Carpeta(EmpresaId)">Storage\ArchivosSat\@EmpresaId</small>
+        </div>
+
+        @if (Error != "")
+        {
+            <div class="alert alert-danger py-2 small mb-2"><i class="bi bi-exclamation-triangle me-1"></i>@Error</div>
+        }
+
+        <div class="as-subtitulo"><i class="bi bi-file-earmark-text-fill"></i> Cédulas y constancias</div>
+        <div class="as-botones">
+            @if (TieneCif)
+            {
+                <a class="as-boton" href="@Url("cif")" target="_blank"><span class="as-punto"></span>Situación Fiscal (CSF) <i class="bi bi-box-arrow-up-right"></i></a>
+            }
+            @if (TieneCiec)
+            {
+                <button type="button" class="as-boton" disabled="@(Cargando != "")" @onclick="DescargarConstancia"
+                        title="Baja la constancia vigente del SAT con la CIEC (SAT Móvil, sin captcha)">
+                    @(Cargando == "CSF" ? "Descargando…" : "Descargar CSF del SAT") <i class="bi bi-cloud-arrow-down"></i>
+                </button>
+            }
+            <button type="button" class="as-boton" @onclick='() => IrATab.InvokeAsync("Fiscales")'>
+                @(TieneCif ? "Ver datos fiscales" : "Cargar CSF (PDF)") <i class="bi bi-arrow-right"></i>
+            </button>
+        </div>
+
+        <div class="as-subtitulo"><i class="bi bi-patch-check-fill"></i> Opiniones de cumplimiento</div>
+        <div class="as-opiniones">
+            @foreach (string tipo in new[] { "SAT", "IMSS" })
+            {
+                OpinionCumplimientoDto? opinion = tipo == "SAT" ? OpinionSat : OpinionImss;
+
+                <div class="as-opinion">
+                    <div class="as-opinion-datos">
+                        <b>Opinión @tipo</b>
+                        @if (opinion is null)
+                        {
+                            <span class="as-badge ninguno">Sin cargar</span>
+                        }
+                        else
+                        {
+                            <span class="as-badge @ClaseSentido(opinion.Sentido)">@opinion.Sentido</span>
+                            <small>
+                                @(opinion.FechaEmision is DateTime f ? $"Emitida {f:dd/MM/yyyy}" : $"Cargada {opinion.Cargada:dd/MM/yyyy}")
+                                @(opinion.Folio != "" ? $" · Folio {opinion.Folio}" : "")
+                            </small>
+                        }
+                    </div>
+                    <div class="as-botones">
+                        @if (opinion is not null)
+                        {
+                            <a class="as-boton" href="@Url(tipo == "SAT" ? "opinion-sat" : "opinion-imss")" target="_blank">Ver <i class="bi bi-box-arrow-up-right"></i></a>
+                        }
+                        @if (tipo == "SAT" && TieneCiec)
+                        {
+                            <button type="button" class="as-boton" disabled="@(Cargando != "")" @onclick="DescargarOpinion"
+                                    title="Pide una opinión nueva al SAT con la CIEC (SAT Móvil, sin captcha)">
+                                @(Cargando == "SAT-DESCARGA" ? "Descargando…" : "Descargar del SAT") <i class="bi bi-cloud-arrow-down"></i>
+                            </button>
+                        }
+                        <label class="as-boton @(Cargando == tipo ? "disabled" : "")">
+                            @(Cargando == tipo ? "Leyendo…" : "Cargar PDF")
+                            <i class="bi bi-upload"></i>
+                            <InputFile class="d-none" accept=".pdf,application/pdf" OnChange="e => CargarOpinion(e, tipo)" disabled="@(Cargando != "")" />
+                        </label>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="as-subtitulo"><i class="bi bi-calendar3"></i> Declaraciones</div>
+        <div class="as-botones">
+            <button type="button" class="as-boton" @onclick='() => IrATab.InvokeAsync("Declaraciones")'>
+                Mensuales <small>(@Declaraciones.Count(d => d.Tipo == "MENSUAL"))</small> <i class="bi bi-arrow-right"></i>
+            </button>
+            <button type="button" class="as-boton" @onclick='() => IrATab.InvokeAsync("Declaraciones")'>
+                Anuales <small>(@Declaraciones.Count(d => d.Tipo == "ANUAL"))</small> <i class="bi bi-arrow-right"></i>
+            </button>
+        </div>
+    </section>
+</div>
+
+@code {
+    private static readonly System.Globalization.CultureInfo Mx = new("es-MX");
+
+    [Parameter] public long EmpresaId { get; set; }
+    [Parameter] public string Rfc { get; set; } = "";
+    [Parameter] public bool TieneFiel { get; set; }
+    [Parameter] public DateTime? FechaVencimientoFiel { get; set; }
+    [Parameter] public bool TieneCiec { get; set; }
+
+    /// <summary>Cambia a otra pestaña de la empresa (Fiscales o Declaraciones).</summary>
+    [Parameter] public EventCallback<string> IrATab { get; set; }
+
+    /// <summary>Se avisa al cargar una opinión para refrescar la lista de empresas.</summary>
+    [Parameter] public EventCallback OpinionCambio { get; set; }
+
+    private OpinionCumplimientoDto? OpinionSat;
+    private OpinionCumplimientoDto? OpinionImss;
+    private List<DeclaracionSatDto> Declaraciones = [];
+    private bool TieneCif;
+    private string Cargando = "";
+    private string Error = "";
+    private long? EmpresaCargada;
+
+    private int? DiasFiel => FechaVencimientoFiel is DateTime f ? (f.Date - DateTime.Today).Days : null;
+
+    private string ClaseFiel =>
+        !TieneFiel ? "ninguno" : DiasFiel is < 0 ? "mal" : DiasFiel is <= 30 ? "aviso" : "ok";
+
+    private string TextoFiel =>
+        !TieneFiel ? "Sin e.firma" : DiasFiel is < 0 ? "Vencida" : DiasFiel is <= 30 ? "Por expirar" : "Vigente";
+
+    public static string ClaseSentido(string sentido) => sentido switch
+    {
+        "POSITIVO" => "ok",
+        "NEGATIVO" => "mal",
+        "SIN OBLIGACIONES" or "NO INSCRITO" => "neutro",
+        _ => "aviso"
+    };
+
+    private string Url(string clave) => $"api/empresa/{EmpresaId}/archivos-sat/{clave}";
+
+    protected override void OnParametersSet()
+    {
+        if (EmpresaCargada == EmpresaId)
+            return;
+
+        EmpresaCargada = EmpresaId;
+        Error = "";
+        OpinionSat = Archivos.ObtenerOpinion(EmpresaId, "SAT");
+        OpinionImss = Archivos.ObtenerOpinion(EmpresaId, "IMSS");
+        Declaraciones = Archivos.ObtenerDeclaraciones(EmpresaId);
+        TieneCif = Constancias.RutaPdf(EmpresaId) is not null;
+    }
+
+    private async Task DescargarOpinion()
+    {
+        Cargando = "SAT-DESCARGA";
+        Error = "";
+
+        try
+        {
+            OpinionSat = await Descarga.DescargarOpinionAsync(EmpresaId, Rfc);
+            await OpinionCambio.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Error = $"No se pudo descargar la opinión: {ex.Message}";
+        }
+        finally
+        {
+            Cargando = "";
+        }
+    }
+
+    private async Task DescargarConstancia()
+    {
+        Cargando = "CSF";
+        Error = "";
+
+        try
+        {
+            await Descarga.DescargarConstanciaAsync(EmpresaId, Rfc);
+            TieneCif = true;
+
+            // La lista de empresas muestra los regímenes de la constancia.
+            await OpinionCambio.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Error = $"No se pudo descargar la constancia: {ex.Message}";
+        }
+        finally
+        {
+            Cargando = "";
+        }
+    }
+
+    private async Task CargarOpinion(InputFileChangeEventArgs e, string tipo)
+    {
+        Cargando = tipo;
+        Error = "";
+
+        try
+        {
+            await using Stream origen = e.File.OpenReadStream(10 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await origen.CopyToAsync(ms);
+
+            OpinionCumplimientoDto opinion = await Task.Run(() => Archivos.CargarOpinion(EmpresaId, Rfc, tipo, ms.ToArray(), e.File.Name));
+
+            if (tipo == "SAT") OpinionSat = opinion;
+            else OpinionImss = opinion;
+
+            await OpinionCambio.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Cargando = "";
+        }
+    }
+}

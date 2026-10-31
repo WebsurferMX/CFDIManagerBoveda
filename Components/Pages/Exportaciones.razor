@@ -1,0 +1,460 @@
+@page "/exportaciones"
+@implements IDisposable
+
+@using Microsoft.JSInterop
+@using CFDIManager.Web.Services
+@using CFDIParser.Models
+
+@inject ExportacionExcelService Exportador
+@inject EmpresaContext EmpresaContext
+@inject IJSRuntime JS
+
+<PageTitle>Exportaciones</PageTitle>
+
+<div class="export-page">
+    <header class="page-heading">
+        <div>
+            <span class="eyebrow">CFDI MANAGER</span>
+            <h1>Exportaciones</h1>
+            <p>
+                Genera reportes independientes de CFDI emitidos y recibidos
+                para la empresa y el periodo seleccionados.
+            </p>
+        </div>
+    </header>
+
+    @if (!EmpresaContext.TieneEmpresaActiva)
+    {
+        <section class="message error-message">
+            <strong>No hay una empresa seleccionada.</strong>
+            <span>Selecciona una empresa antes de generar una exportación.</span>
+        </section>
+    }
+    else
+    {
+        <section class="company-card">
+            <div>
+                <span class="company-label">EMPRESA ACTIVA</span>
+                <strong>
+                    @EmpresaContext.Rfc · @EmpresaContext.NombreEmpresa
+                </strong>
+            </div>
+            <span class="company-status">Activa</span>
+        </section>
+
+        <section class="export-card">
+            <div class="card-heading">
+                <div>
+                    <span class="section-label">CONFIGURACIÓN</span>
+                    <h2>Datos de la exportación</h2>
+                    <p>
+                        Los CFDI emitidos y recibidos se descargan como libros
+                        independientes. Cada libro contiene una hoja de resumen
+                        y hojas separadas por tipo de CFDI cuando existen registros.
+                    </p>
+                </div>
+            </div>
+
+            <div class="filters-grid">
+                <div class="field">
+                    <label for="fecha-inicio">Fecha inicial</label>
+                    <InputDate id="fecha-inicio"
+                               class="form-control"
+                               @bind-Value="FechaInicio" />
+                </div>
+
+                <div class="field">
+                    <label for="fecha-fin">Fecha final</label>
+                    <InputDate id="fecha-fin"
+                               class="form-control"
+                               @bind-Value="FechaFin" />
+                </div>
+
+                <div class="field">
+                    <label for="alcance">Reporte a generar</label>
+                    <select id="alcance"
+                            class="form-select"
+                            @bind="Alcance">
+                        <option value="AMBOS">Emitidos y recibidos</option>
+                        <option value="INGRESOS">Solo CFDI emitidos</option>
+                        <option value="EGRESOS">Solo CFDI recibidos</option>
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label for="tipo-cfdi">Tipo de CFDI</label>
+                    <select id="tipo-cfdi"
+                            class="form-select"
+                            @bind="TipoCfdi">
+                        <option value="">Todos los tipos</option>
+                        <option value="I">I · Facturas</option>
+                        <option value="E">E · Notas de crédito</option>
+                        <option value="N">N · Nómina</option>
+                        <option value="P">P · Pagos</option>
+                        <option value="T">T · Traslados</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="selection-summary">
+                <div class="selection-item">
+                    <span>Periodo</span>
+                    <strong>
+                        @FechaInicio.ToString("dd/MM/yyyy") al
+                        @FechaFin.ToString("dd/MM/yyyy")
+                    </strong>
+                </div>
+
+                <div class="selection-item">
+                    <span>Reportes</span>
+                    <strong>@EtiquetaAlcance</strong>
+                </div>
+
+                <div class="selection-item">
+                    <span>Tipo de CFDI</span>
+                    <strong>@EtiquetaTipoCfdi</strong>
+                </div>
+            </div>
+
+            <div class="export-actions">
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="Restablecer"
+                        disabled="@Generando">
+                    Restablecer
+                </button>
+
+                <button type="button"
+                        class="primary-button"
+                        @onclick="GenerarArchivos"
+                        disabled="@(!PuedeExportar)">
+                    @if (Generando)
+                    {
+                        <span class="button-spinner"></span>
+                        <span>Generando reportes...</span>
+                    }
+                    else
+                    {
+                        <span class="bi bi-file-earmark-excel-fill"
+                              aria-hidden="true"></span>
+                        <span>Generar Excel</span>
+                    }
+                </button>
+            </div>
+        </section>
+
+        <section class="information-card">
+            <div class="information-icon">XLSX</div>
+            <div>
+                <h3>Estructura de los reportes</h3>
+                <p>
+                    Los CFDI emitidos y recibidos nunca se mezclan en el mismo
+                    libro. Al seleccionar ambos se descargan dos archivos.
+                </p>
+                <ul>
+                    <li>Libro exclusivo para CFDI emitidos.</li>
+                    <li>Libro exclusivo para CFDI recibidos.</li>
+                    <li>Hoja Resumen en cada libro.</li>
+                    <li>Hoja Facturas para comprobantes tipo I.</li>
+                    <li>Hoja NotasCredito para comprobantes tipo E.</li>
+                    <li>Hoja Nomina para comprobantes tipo N.</li>
+                    <li>Hoja Pagos para comprobantes tipo P.</li>
+                    <li>Hoja Traslados para comprobantes tipo T.</li>
+                </ul>
+            </div>
+        </section>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <section class="message error-message">
+            <strong>No se pudo generar la exportación.</strong>
+            <span>@Error</span>
+        </section>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Mensaje))
+    {
+        <section class="message success-message">
+            <strong>Exportación terminada.</strong>
+            <span>@Mensaje</span>
+        </section>
+    }
+
+    @if (UltimosResultados.Count > 0)
+    {
+        <section class="result-grid">
+            <div class="result-card total-result">
+                <span>Archivos generados</span>
+                <strong>@UltimosResultados.Count.ToString("N0")</strong>
+                <small>reportes independientes</small>
+            </div>
+
+            <div class="result-card income-result">
+                <span>CFDI emitidos</span>
+                <strong>@TotalEmitidos.ToString("N0")</strong>
+                <small>incluidos en el reporte</small>
+            </div>
+
+            <div class="result-card expense-result">
+                <span>CFDI recibidos</span>
+                <strong>@TotalRecibidos.ToString("N0")</strong>
+                <small>incluidos en el reporte</small>
+            </div>
+
+            <div class="result-card file-result">
+                <span>Total exportado</span>
+                <strong>@TotalExportado.ToString("N0")</strong>
+                <small>CFDI</small>
+            </div>
+        </section>
+
+        <section class="export-card">
+            <div class="card-heading">
+                <div>
+                    <span class="section-label">ARCHIVOS GENERADOS</span>
+                    <h2>Resultado de la exportación</h2>
+                    <p>
+                        Cada elemento corresponde a un libro independiente
+                        descargado en el navegador.
+                    </p>
+                </div>
+            </div>
+
+            <div class="generated-files">
+                @foreach (ExportacionExcelResultado resultado in UltimosResultados)
+                {
+                    <div class="generated-file">
+                        <div class="generated-file-icon">XLSX</div>
+
+                        <div class="generated-file-information">
+                            <strong>@resultado.NombreReporte</strong>
+                            <span title="@resultado.NombreArchivo">
+                                @resultado.NombreArchivo
+                            </span>
+                            <small>
+                                @resultado.TotalRegistros.ToString("N0") CFDI ·
+                                @FormatearTamano(resultado.Contenido.Length)
+                            </small>
+                        </div>
+
+                        <span class="@ObtenerClaseReporte(resultado)">
+                            @resultado.Clasificacion
+                        </span>
+                    </div>
+                }
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    private DateTime FechaInicio { get; set; }
+
+    private DateTime FechaFin { get; set; }
+
+    private string Alcance { get; set; } = "AMBOS";
+
+    private string TipoCfdi { get; set; } = "";
+
+    private bool Generando { get; set; }
+
+    private string? Error { get; set; }
+
+    private string? Mensaje { get; set; }
+
+    private List<ExportacionExcelResultado> UltimosResultados { get; set; } =
+        new();
+
+    private bool PuedeExportar =>
+        EmpresaContext.TieneEmpresaActiva &&
+        FechaFin.Date >= FechaInicio.Date &&
+        !Generando;
+
+    private int TotalEmitidos =>
+        UltimosResultados
+            .Where(resultado => resultado.Clasificacion == "EMITIDO")
+            .Sum(resultado => resultado.TotalRegistros);
+
+    private int TotalRecibidos =>
+        UltimosResultados
+            .Where(resultado => resultado.Clasificacion == "RECIBIDO")
+            .Sum(resultado => resultado.TotalRegistros);
+
+    private int TotalExportado =>
+        UltimosResultados.Sum(resultado => resultado.TotalRegistros);
+
+    private string EtiquetaAlcance =>
+        Alcance switch
+        {
+            "INGRESOS" => "Solo CFDI emitidos",
+            "EGRESOS" => "Solo CFDI recibidos",
+            _ => "Emitidos y recibidos"
+        };
+
+    private string EtiquetaTipoCfdi =>
+        TipoCfdi switch
+        {
+            "I" => "I · Facturas",
+            "E" => "E · Notas de crédito",
+            "N" => "N · Nómina",
+            "P" => "P · Pagos",
+            "T" => "T · Traslados",
+            _ => "Todos los tipos"
+        };
+
+    protected override void OnInitialized()
+    {
+        EstablecerPeriodoInicial();
+        EmpresaContext.OnChange += EmpresaActivaCambio;
+    }
+
+    private void EstablecerPeriodoInicial()
+    {
+        DateTime hoy = DateTime.Today;
+
+        FechaInicio = new DateTime(
+            hoy.Year,
+            hoy.Month,
+            1);
+
+        FechaFin = FechaInicio
+            .AddMonths(1)
+            .AddDays(-1);
+    }
+
+    private async Task GenerarArchivos()
+    {
+        LimpiarMensajes();
+
+        EmpresaDto? empresa = EmpresaContext.EmpresaActiva;
+
+        if (empresa is null)
+        {
+            Error = "Selecciona una empresa antes de exportar.";
+            return;
+        }
+
+        if (FechaFin.Date < FechaInicio.Date)
+        {
+            Error =
+                "La fecha final no puede ser menor que la fecha inicial.";
+            return;
+        }
+
+        Generando = true;
+        UltimosResultados.Clear();
+
+        try
+        {
+            List<ExportacionExcelResultado> resultados =
+                await Task.Run(
+                    () => Exportador.GenerarReportes(
+                        empresa,
+                        FechaInicio,
+                        FechaFin,
+                        Alcance,
+                        TipoCfdi));
+
+            foreach (ExportacionExcelResultado resultado in resultados)
+            {
+                await DescargarArchivo(resultado);
+                UltimosResultados.Add(resultado);
+            }
+
+            int totalCfdi = resultados.Sum(
+                resultado => resultado.TotalRegistros);
+
+            Mensaje =
+                $"Se generaron {resultados.Count:N0} reporte(s) " +
+                $"independiente(s) con {totalCfdi:N0} CFDI.";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Generando = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task DescargarArchivo(
+        ExportacionExcelResultado resultado)
+    {
+        string contenidoBase64 = Convert.ToBase64String(
+            resultado.Contenido);
+
+        await JS.InvokeVoidAsync(
+            "descargarArchivoBase64",
+            resultado.NombreArchivo,
+            resultado.TipoContenido,
+            contenidoBase64);
+    }
+
+    private void Restablecer()
+    {
+        if (Generando)
+        {
+            return;
+        }
+
+        EstablecerPeriodoInicial();
+        Alcance = "AMBOS";
+        TipoCfdi = "";
+        UltimosResultados.Clear();
+        LimpiarMensajes();
+    }
+
+    private void EmpresaActivaCambio()
+    {
+        _ = InvokeAsync(
+            () =>
+            {
+                UltimosResultados.Clear();
+                LimpiarMensajes();
+                StateHasChanged();
+            });
+    }
+
+    private void LimpiarMensajes()
+    {
+        Error = null;
+        Mensaje = null;
+    }
+
+    private static string ObtenerClaseReporte(
+        ExportacionExcelResultado resultado)
+    {
+        return resultado.Clasificacion switch
+        {
+            "EMITIDO" => "status-badge emitted-report",
+            "RECIBIDO" => "status-badge received-report",
+            _ => "status-badge"
+        };
+    }
+
+    private static string FormatearTamano(long bytes)
+    {
+        if (bytes < 1024)
+        {
+            return $"{bytes:N0} bytes";
+        }
+
+        double kilobytes = bytes / 1024.0;
+
+        if (kilobytes < 1024)
+        {
+            return $"{kilobytes:N1} KB";
+        }
+
+        double megabytes = kilobytes / 1024.0;
+        return $"{megabytes:N2} MB";
+    }
+
+    public void Dispose()
+    {
+        EmpresaContext.OnChange -= EmpresaActivaCambio;
+    }
+}

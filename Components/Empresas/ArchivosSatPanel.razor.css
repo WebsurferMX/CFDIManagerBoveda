@@ -1,0 +1,180 @@
+.archivos-sat {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.as-titulo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.6rem;
+    color: #0f172a;
+    font-weight: 750;
+}
+
+.as-ruta {
+    margin-left: auto;
+    color: #94a3b8;
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 0.7rem;
+    font-weight: 400;
+}
+
+.as-subtitulo {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0.9rem 0 0.45rem;
+    color: #334155;
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.as-tarjetas {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+}
+
+.as-tarjeta,
+.as-opinion {
+    padding: 0.7rem 0.85rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.65rem;
+    background: #fff;
+}
+
+.as-tarjeta small,
+.as-opinion small {
+    color: #64748b;
+    font-size: 0.74rem;
+}
+
+.as-tarjeta-cabecera {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+    font-weight: 650;
+}
+
+.as-contenedor {
+    padding: 0.85rem 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.8rem;
+    background: #f8fafc;
+}
+
+.as-botones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.as-boton {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.32rem 0.7rem;
+    border: 1px solid #1e3a5f;
+    border-radius: 0.45rem;
+    background: #fff;
+    color: #1e3a5f;
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.as-boton:hover { background: #eef4fb; }
+.as-boton.disabled,
+.as-boton:disabled { opacity: 0.55; pointer-events: none; }
+.as-boton small { opacity: 0.7; }
+
+.as-punto {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #16a34a;
+}
+
+.as-opiniones {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+}
+
+.as-opinion {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.as-opinion-datos {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.6rem;
+}
+
+.as-opinion-datos small { width: 100%; }
+
+.as-badge {
+    display: inline-flex;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.as-badge.ok { background: #dcfce7; color: #166534; }
+.as-badge.mal { background: #fee2e2; color: #b91c1c; }
+.as-badge.aviso { background: #fef3c7; color: #92400e; }
+.as-badge.neutro { background: #e0e7ff; color: #3730a3; }
+.as-badge.ninguno { background: #e2e8f0; color: #475569; }
+
+@media (max-width: 720px) {
+    .as-tarjetas,
+    .as-opiniones { grid-template-columns: 1fr; }
+}
+
+/* ===== MODO OSCURO ===== */
+
+html[data-theme="dark"] .archivos-sat { border-top-color: #2a3b52; }
+html[data-theme="dark"] .as-titulo { color: #e8ecf7; }
+html[data-theme="dark"] .as-subtitulo { color: #c5cdd8; }
+
+html[data-theme="dark"] .as-tarjeta,
+html[data-theme="dark"] .as-opinion {
+    border-color: #2a3b52;
+    background: #121c2b;
+}
+
+html[data-theme="dark"] .as-contenedor {
+    border-color: #2a3b52;
+    background: #0f1826;
+}
+
+html[data-theme="dark"] .as-tarjeta small,
+html[data-theme="dark"] .as-opinion small { color: #b3bbc8; }
+
+html[data-theme="dark"] .as-boton {
+    border-color: #4c6a92;
+    background: #121c2b;
+    color: #c9d8ee;
+}
+
+html[data-theme="dark"] .as-boton:hover { background: #17253a; }
+
+html[data-theme="dark"] .as-badge.ok { background: #143b21; color: #c7f3d8; }
+html[data-theme="dark"] .as-badge.mal { background: #381313; color: #f09999; }
+html[data-theme="dark"] .as-badge.aviso { background: #2e2410; color: #f5d68a; }
+html[data-theme="dark"] .as-badge.neutro { background: #1c1f4a; color: #b4bcf5; }
+html[data-theme="dark"] .as-badge.ninguno { background: #17253a; color: #c5cdd8; }

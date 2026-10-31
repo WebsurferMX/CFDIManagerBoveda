@@ -1,0 +1,636 @@
+@page "/sat-descargas"
+@implements IDisposable
+
+@using CFDIManager.Web.Models
+@using CFDIManager.Web.Services
+@using CFDIManager.Web.Services.Interfaces
+@using CFDIManager.Web.Services.Sat
+
+@inject EmpresaContext EmpresaContext
+@inject ISatDescargaService SatDescargaService
+@inject IJSRuntime JS
+
+<PageTitle>Descarga SAT</PageTitle>
+
+<h3>Descarga XML SAT</h3>
+
+@if (!EmpresaContext.TieneEmpresaActiva)
+{
+    <div class="alert alert-warning">
+        Selecciona una empresa activa para descargar sus CFDI del SAT.
+    </div>
+}
+else
+{
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <button type="button" class="nav-link @(Modo == "fiel" ? "active" : "")" @onclick='() => Modo = "fiel"'>
+                <i class="bi bi-file-earmark-lock me-1"></i>Con e.firma <small class="text-body-secondary">(descarga masiva)</small>
+            </button>
+        </li>
+        <li class="nav-item">
+            <button type="button" class="nav-link @(Modo == "ciec" ? "active" : "")" @onclick='() => Modo = "ciec"'>
+                <i class="bi bi-key me-1"></i>Con CIEC <small class="text-body-secondary">(portal SAT)</small>
+            </button>
+        </li>
+    </ul>
+
+    @if (Modo == "ciec")
+    {
+        <DescargaCiec />
+    }
+    else
+    {
+    <div class="card p-3 mb-3">
+
+        <div class="row g-3 align-items-end">
+
+            <div class="col-md-4">
+                <label class="form-label">Empresa activa</label>
+                <input class="form-control" value="@EmpresaContext.NombreEmpresa" readonly />
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">RFC</label>
+                <input class="form-control" value="@EmpresaContext.Rfc" readonly />
+            </div>
+
+            <div class="col-md-3">
+                <button class="btn btn-warning w-100" disabled="@Ocupado" @onclick="ProbarCertificados">
+                    Probar certificados
+                </button>
+            </div>
+
+            <div class="col-md-3">
+                <button class="btn btn-outline-secondary w-100" disabled="@Ocupado" @onclick="ProbarConexion">
+                    Probar conexión SAT
+                </button>
+            </div>
+
+        </div>
+
+        @if (Estado != null)
+        {
+            <div class="alert @(Estado.Lista ? "alert-success" : "alert-danger") mt-3 mb-0">
+                <div class="fw-semibold">@Estado.Mensaje</div>
+                <div class="small mt-1">
+                    CER @(Estado.ExisteCer ? "✅" : "❌") ·
+                    KEY @(Estado.ExisteKey ? "✅" : "❌") ·
+                    Contraseña @(Estado.LlaveValida ? "✅" : "❌") ·
+                    e.firma (no CSD) @(Estado.EsFiel ? "✅" : "❌") ·
+                    RFC @(Estado.RfcCoincide ? "✅" : "❌") @Estado.RfcCertificado ·
+                    Vigente @(Estado.Vigente ? "✅" : "❌")
+                    @if (Estado.FechaVencimiento is DateTime vence)
+                    {
+                        <span> hasta @vence.ToString("dd/MM/yyyy")</span>
+                    }
+                </div>
+            </div>
+        }
+
+    </div>
+
+    <div class="card p-3 mb-3">
+
+        <h5 class="mb-3">Nueva solicitud</h5>
+
+        <div class="row g-3 align-items-end">
+
+            <div class="col-md-2">
+                <label class="form-label">Fecha inicial</label>
+                <InputDate class="form-control" @bind-Value="FechaInicial" />
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Fecha final</label>
+                <InputDate class="form-control" @bind-Value="FechaFinal" />
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Descargar</label>
+                <select class="form-select" @bind="TipoDescarga">
+                    <option value="emitidos">Emitidos</option>
+                    <option value="recibidos">Recibidos</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Qué</label>
+                <select class="form-select" @bind="QueDescargar">
+                    <option value="xml">XML (CFDI)</option>
+                    <option value="metadatos">Metadatos (lista y estatus)</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Comprobante</label>
+                <select class="form-select" @bind="TipoComprobante">
+                    <option value="">Todos</option>
+                    <option value="I">Ingreso</option>
+                    <option value="E">Egreso</option>
+                    <option value="P">Pago</option>
+                    <option value="N">Nómina</option>
+                    <option value="T">Traslado</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">RFC contraparte</label>
+                <input class="form-control" maxlength="13" placeholder="Opcional" @bind="RfcContraparte" />
+            </div>
+
+            <div class="col-md-9 small text-muted">
+                El SAT procesa la solicitud en minutos u horas. Mientras esta pantalla esté abierta se verifica
+                cada minuto; cuando quede <b>Terminada</b>, descárgala y los XML se importan a CFDI Manager.
+                Los XML recibidos cancelados no los entrega el SAT; consúltalos con Metadatos.
+            </div>
+
+            <div class="col-md-3">
+                <button class="btn btn-primary w-100" disabled="@Ocupado" @onclick="ConsultarSAT">
+                    Consultar SAT
+                </button>
+            </div>
+
+        </div>
+
+    </div>
+
+    @if (Mensaje != "")
+    {
+        <div class="alert @(MensajeError ? "alert-danger" : "alert-info")">@Mensaje</div>
+    }
+
+    <div class="card p-3 mb-3">
+
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h5 class="mb-0">Solicitudes</h5>
+            <div class="d-flex gap-2 align-items-center">
+                <label class="form-check-label small">
+                    <input type="checkbox" class="form-check-input" @bind="VerificarAutomatico" />
+                    Verificar cada minuto
+                </label>
+                <button class="btn btn-sm btn-outline-secondary" disabled="@Ocupado" @onclick="VerificarPendientes">
+                    Verificar pendientes
+                </button>
+            </div>
+        </div>
+
+        @if (!Solicitudes.Any())
+        {
+            <div class="text-muted">Aún no hay solicitudes para esta empresa.</div>
+        }
+        else
+        {
+            <table class="table table-sm table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Creada</th>
+                        <th>Periodo</th>
+                        <th>Qué</th>
+                        <th>Estado</th>
+                        <th class="text-end">CFDI</th>
+                        <th>Paquetes</th>
+                        <th>Resultado</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in Solicitudes)
+                    {
+                        <tr>
+                            <td>@s.Creada.ToString("dd/MM/yyyy HH:mm")</td>
+                            <td>
+                                @if (s.Uuid == "")
+                                {
+                                    @($"{s.FechaInicial:dd/MM/yyyy} – {s.FechaFinal:dd/MM/yyyy}")
+                                }
+                            </td>
+                            <td>@s.Descripcion</td>
+                            <td class="text-nowrap">
+                                <span class="badge @ClaseEstado(s.Estado)">@s.Estado</span>
+                                @if (s.Cancelable)
+                                {
+                                    <button class="btn btn-sm btn-link p-0 ms-1 text-warning" title="Cancelar: dejar de verificar y descargar esta solicitud"
+                                            disabled="@Ocupado" @onclick="() => Cancelar(s)">
+                                        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z" />
+                                            <path d="M11.354 4.646a.5.5 0 0 0-.708 0l-6 6a.5.5 0 0 0 .708.708l6-6a.5.5 0 0 0 0-.708z" />
+                                        </svg>
+                                    </button>
+                                }
+                                <button class="btn btn-sm btn-link p-0 ms-1 text-danger" title="Eliminar la solicitud de la lista (los CFDI importados se conservan)"
+                                        disabled="@Ocupado" @onclick="() => Eliminar(s)">
+                                    <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                                        <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z" />
+                                        <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z" />
+                                    </svg>
+                                </button>
+                            </td>
+                            <td class="text-end">@s.NumeroCfdis</td>
+                            <td>@s.PaquetesDescargados.Count / @s.Paquetes.Count</td>
+                            <td class="small">
+                                @s.Mensaje
+                                @if (s.IdSolicitudSat != "")
+                                {
+                                    <div class="font-monospace text-muted" title="Id de la solicitud en el SAT">
+                                        Solicitud: @s.IdSolicitudSat
+                                    </div>
+                                }
+                            </td>
+                            <td class="text-nowrap">
+                                @if (s.Pendiente)
+                                {
+                                    <button class="btn btn-sm btn-outline-primary" disabled="@Ocupado" @onclick="() => Verificar(s)">
+                                        Verificar
+                                    </button>
+                                }
+                                @if (s.ListaParaDescargar)
+                                {
+                                    <button class="btn btn-sm btn-success" disabled="@Ocupado" @onclick="() => Descargar(s)">
+                                        @(s.Metadatos ? "Descargar" : "Descargar e importar")
+                                    </button>
+                                }
+                                @if (s.Metadatos && s.Estado == "Descargada")
+                                {
+                                    <button class="btn btn-sm btn-outline-success" @onclick="() => VerMetadatos(s)">
+                                        Ver CFDI
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+    </div>
+
+    @if (SolicitudMetadatos != null)
+    {
+        <div class="card p-3">
+
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                <h5 class="mb-0">
+                    CFDI en el SAT · @SolicitudMetadatos.Descripcion
+                    · @($"{SolicitudMetadatos.FechaInicial:dd/MM/yyyy} – {SolicitudMetadatos.FechaFinal:dd/MM/yyyy}")
+                </h5>
+                <div class="d-flex gap-2">
+                    <input class="form-control form-control-sm" style="width: 240px" placeholder="Filtrar UUID, RFC o nombre"
+                           @bind="FiltroMetadatos" @bind:event="oninput" />
+                    <button class="btn btn-sm btn-primary" disabled="@Ocupado" @onclick="DescargarXmlDelPeriodo">
+                        Descargar XML de este periodo
+                    </button>
+                </div>
+            </div>
+
+            <div class="small text-muted mb-2">
+                @Resultados.Count CFDI · @Resultados.Count(r => r.Estatus == "Cancelado") cancelados ·
+                @Resultados.Count(r => !r.YaImportado && r.Estatus == "Vigente") vigentes sin importar en CFDI Manager
+            </div>
+
+            <table class="table table-sm table-striped align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>UUID</th>
+                        <th>Fecha</th>
+                        <th>RFC Emisor</th>
+                        <th>RFC Receptor</th>
+                        <th>Tipo</th>
+                        <th class="text-end">Monto</th>
+                        <th>Estatus</th>
+                        <th>En CFDI Manager</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in ResultadosFiltrados.Take(500))
+                    {
+                        <tr>
+                            <td class="font-monospace small">@item.Uuid</td>
+                            <td>@item.Fecha.ToString("dd/MM/yyyy")</td>
+                            <td title="@item.NombreEmisor">@item.RfcEmisor</td>
+                            <td title="@item.NombreReceptor">@item.RfcReceptor</td>
+                            <td>@item.Tipo</td>
+                            <td class="text-end">@item.Monto.ToString("N2")</td>
+                            <td class="@(item.Estatus == "Cancelado" ? "text-danger" : "text-success")">@item.Estatus</td>
+                            <td>@(item.YaImportado ? "✅" : "—")</td>
+                            <td>
+                                @if (!item.YaImportado && item.Estatus == "Vigente")
+                                {
+                                    <button class="btn btn-success btn-sm" disabled="@Ocupado" @onclick="() => DescargarUno(item)">
+                                        Descargar
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+
+            @if (ResultadosFiltrados.Count() > 500)
+            {
+                <div class="small text-muted mt-2">Se muestran 500 de @ResultadosFiltrados.Count(); usa el filtro para encontrar un CFDI.</div>
+            }
+
+        </div>
+    }
+    }
+}
+
+@code {
+
+    // fiel: descarga masiva con e.firma (web service) · ciec: portal del SAT con contraseña.
+    private string Modo = "fiel";
+
+    private DateTime FechaInicial = DateTime.Today.AddDays(-30);
+
+    private DateTime FechaFinal = DateTime.Today;
+
+    // Texto y no bool: Blazor pinta un bool como "True"/"False" y el select no encuentra su opción.
+    private string TipoDescarga = "emitidos";
+
+    private string QueDescargar = "xml";
+
+    private string TipoComprobante = "";
+
+    private string RfcContraparte = "";
+
+    private bool VerificarAutomatico = true;
+
+    private SatEstadoDto? Estado;
+
+    private List<SolicitudSatDto> Solicitudes = new();
+
+    private SolicitudSatDto? SolicitudMetadatos;
+
+    private List<SatCfdiDto> Resultados = new();
+
+    private string FiltroMetadatos = "";
+
+    private string Mensaje = "";
+
+    private bool MensajeError;
+
+    private bool Ocupado;
+
+    private Timer? _temporizador;
+
+    // Un solo proceso a la vez: los botones y la verificación automática comparten la e.firma y el archivo de solicitudes.
+    private readonly SemaphoreSlim _candado = new(1, 1);
+
+    private IEnumerable<SatCfdiDto> ResultadosFiltrados =>
+        string.IsNullOrWhiteSpace(FiltroMetadatos)
+            ? Resultados
+            : Resultados.Where(r =>
+                r.Uuid.Contains(FiltroMetadatos, StringComparison.OrdinalIgnoreCase) ||
+                r.RfcEmisor.Contains(FiltroMetadatos, StringComparison.OrdinalIgnoreCase) ||
+                r.RfcReceptor.Contains(FiltroMetadatos, StringComparison.OrdinalIgnoreCase) ||
+                r.NombreEmisor.Contains(FiltroMetadatos, StringComparison.OrdinalIgnoreCase) ||
+                r.NombreReceptor.Contains(FiltroMetadatos, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        EmpresaContext.OnChange += EmpresaCambio;
+
+        await CargarSolicitudes();
+
+        _temporizador = new Timer(
+            _ => _ = InvokeAsync(VerificarAutomaticamente),
+            null,
+            TimeSpan.FromMinutes(1),
+            TimeSpan.FromMinutes(1));
+    }
+
+    private void EmpresaCambio()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            Estado = null;
+            SolicitudMetadatos = null;
+            Resultados = new();
+            Mensaje = "";
+            await CargarSolicitudes();
+            StateHasChanged();
+        });
+    }
+
+    private async Task CargarSolicitudes()
+    {
+        Solicitudes = EmpresaContext.TieneEmpresaActiva
+            ? await SatDescargaService.ListarSolicitudesAsync(EmpresaContext.EmpresaId)
+            : new();
+    }
+
+    private async Task Ejecutar(Func<Task> accion)
+    {
+        if (!await _candado.WaitAsync(0))
+        {
+            return;
+        }
+
+        Ocupado = true;
+        Mensaje = "";
+        MensajeError = false;
+
+        try
+        {
+            await accion();
+        }
+        catch (Exception ex)
+        {
+            Mensaje = ex.Message;
+            MensajeError = true;
+        }
+        finally
+        {
+            Ocupado = false;
+            _candado.Release();
+            await CargarSolicitudes();
+            StateHasChanged();
+        }
+    }
+
+    private Task ProbarCertificados() => Ejecutar(async () =>
+    {
+        Estado = await SatDescargaService.ValidarConfiguracionAsync(EmpresaContext.EmpresaActiva!);
+    });
+
+    private Task ProbarConexion() => Ejecutar(async () =>
+    {
+        DateTime vigencia = await SatDescargaService.ProbarConexionAsync(EmpresaContext.EmpresaActiva!);
+        Mensaje = $"Conexión con el SAT correcta. Token vigente hasta las {vigencia:HH:mm:ss}.";
+    });
+
+    private Task ConsultarSAT() => Ejecutar(async () =>
+    {
+        SolicitudSatDto s = await SatDescargaService.CrearSolicitudAsync(
+            EmpresaContext.EmpresaActiva!,
+            new ParametrosSolicitudSat
+            {
+                FechaInicial = FechaInicial.Date,
+                FechaFinal = FechaFinal.Date.AddDays(1).AddSeconds(-1),
+                Recibidos = TipoDescarga == "recibidos",
+                Metadatos = QueDescargar == "metadatos",
+                TipoComprobante = TipoComprobante,
+                RfcContraparte = RfcContraparte
+            });
+
+        Mensaje = $"Solicitud {s.Estado.ToLowerInvariant()} por el SAT: {s.Mensaje}";
+        MensajeError = s.Estado == "Rechazada";
+    });
+
+    private Task Verificar(SolicitudSatDto solicitud) => Ejecutar(async () =>
+    {
+        SolicitudSatDto s = await SatDescargaService.VerificarAsync(EmpresaContext.EmpresaActiva!, solicitud.Id);
+        Mensaje = $"Solicitud {s.Estado}: {s.Mensaje}";
+    });
+
+    private Task VerificarPendientes() => Ejecutar(async () =>
+    {
+        foreach (SolicitudSatDto s in Solicitudes.Where(x => x.Pendiente).ToList())
+        {
+            await SatDescargaService.VerificarAsync(EmpresaContext.EmpresaActiva!, s.Id);
+        }
+    });
+
+    // A diferencia de los botones, no limpia el mensaje en pantalla y omite errores puntuales del SAT.
+    private async Task VerificarAutomaticamente()
+    {
+        if (!VerificarAutomatico || !EmpresaContext.TieneEmpresaActiva || !Solicitudes.Any(s => s.Pendiente))
+        {
+            return;
+        }
+
+        if (!await _candado.WaitAsync(0))
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (SolicitudSatDto s in Solicitudes.Where(x => x.Pendiente).ToList())
+            {
+                try
+                {
+                    await SatDescargaService.VerificarAsync(EmpresaContext.EmpresaActiva!, s.Id);
+                }
+                catch
+                {
+                    // Se reintenta en el siguiente minuto.
+                }
+            }
+        }
+        finally
+        {
+            _candado.Release();
+            await CargarSolicitudes();
+            StateHasChanged();
+        }
+    }
+
+    private Task Descargar(SolicitudSatDto solicitud) => Ejecutar(async () =>
+    {
+        var progreso = new Progress<string>(texto =>
+        {
+            Mensaje = texto;
+            _ = InvokeAsync(StateHasChanged);
+        });
+
+        SolicitudSatDto s = await SatDescargaService.DescargarAsync(EmpresaContext.EmpresaActiva!, solicitud.Id, progreso);
+        Mensaje = $"Descarga terminada: {s.Mensaje}.";
+
+        if (s.Metadatos)
+        {
+            MostrarMetadatos(s);
+        }
+    });
+
+    private async Task Cancelar(SolicitudSatDto solicitud)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"¿Cancelar la solicitud {solicitud.Descripcion} del {solicitud.FechaInicial:dd/MM/yyyy} al {solicitud.FechaFinal:dd/MM/yyyy}?\nEl SAT no permite cancelarla allá; aquí ya no se verificará ni se descargará."))
+        {
+            return;
+        }
+
+        await Ejecutar(async () =>
+        {
+            await SatDescargaService.CancelarAsync(EmpresaContext.EmpresaId, solicitud.Id);
+            Mensaje = "Solicitud cancelada.";
+        });
+    }
+
+    private async Task Eliminar(SolicitudSatDto solicitud)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", $"¿Eliminar la solicitud {solicitud.Descripcion} del {solicitud.FechaInicial:dd/MM/yyyy} al {solicitud.FechaFinal:dd/MM/yyyy}?\nLos CFDI ya importados se conservan."))
+        {
+            return;
+        }
+
+        await Ejecutar(async () =>
+        {
+            await SatDescargaService.EliminarAsync(EmpresaContext.EmpresaId, solicitud.Id);
+
+            if (SolicitudMetadatos?.Id == solicitud.Id)
+            {
+                SolicitudMetadatos = null;
+                Resultados = new();
+            }
+
+            Mensaje = "Solicitud eliminada.";
+        });
+    }
+
+    private void VerMetadatos(SolicitudSatDto solicitud)
+    {
+        MostrarMetadatos(solicitud);
+    }
+
+    private void MostrarMetadatos(SolicitudSatDto solicitud)
+    {
+        SolicitudMetadatos = solicitud;
+        Resultados = SatDescargaService.LeerMetadatos(EmpresaContext.EmpresaActiva!, solicitud.Id);
+        FiltroMetadatos = "";
+    }
+
+    private Task DescargarUno(SatCfdiDto cfdi) => Ejecutar(async () =>
+    {
+        SolicitudSatDto s = await SatDescargaService.CrearSolicitudPorUuidAsync(EmpresaContext.EmpresaActiva!, cfdi.Uuid);
+        Mensaje = $"Solicitud del XML {cfdi.Uuid}: {s.Estado}. {s.Mensaje}";
+        MensajeError = s.Estado == "Rechazada";
+    });
+
+    private Task DescargarXmlDelPeriodo() => Ejecutar(async () =>
+    {
+        SolicitudSatDto m = SolicitudMetadatos!;
+
+        SolicitudSatDto s = await SatDescargaService.CrearSolicitudAsync(
+            EmpresaContext.EmpresaActiva!,
+            new ParametrosSolicitudSat
+            {
+                FechaInicial = m.FechaInicial,
+                FechaFinal = m.FechaFinal,
+                Recibidos = m.Recibidos,
+                Metadatos = false,
+                TipoComprobante = m.TipoComprobante,
+                RfcContraparte = m.RfcContraparte
+            });
+
+        Mensaje = $"Solicitud de XML {s.Estado.ToLowerInvariant()}: {s.Mensaje}";
+        MensajeError = s.Estado == "Rechazada";
+    });
+
+    private static string ClaseEstado(string estado) => estado switch
+    {
+        "Descargada" => "bg-success",
+        "Terminada" => "bg-primary",
+        "Aceptada" or "En proceso" => "bg-warning text-dark",
+        "Cancelada" => "bg-secondary",
+        _ => "bg-danger"
+    };
+
+    public void Dispose()
+    {
+        EmpresaContext.OnChange -= EmpresaCambio;
+        _temporizador?.Dispose();
+    }
+}

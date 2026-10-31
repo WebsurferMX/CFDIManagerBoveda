@@ -1,0 +1,161 @@
+.declaraciones {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.dc-barra {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 0.6rem;
+}
+
+.dc-barra > label:not(.btn) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.dc-ayuda,
+.dc-vacio { color: #64748b; font-size: 0.74rem; }
+
+.dc-titulo {
+    margin-top: 0.7rem;
+    color: #0f172a;
+    font-weight: 750;
+}
+
+.dc-meses {
+    display: grid;
+    grid-template-columns: repeat(13, minmax(0, 1fr));
+    gap: 0.3rem;
+}
+
+.dc-mes {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.4rem 0.1rem;
+    border: 1px solid transparent;
+    border-radius: 0.45rem;
+    font-size: 0.66rem;
+    font-weight: 800;
+}
+
+.dc-mes .bi { font-size: 0.95rem; }
+.dc-mes.presentada { border-color: #86efac; background: #dcfce7; color: #166534; }
+.dc-mes.pendiente { border-color: #fde68a; background: #fef3c7; color: #92400e; }
+.dc-mes.futuro { border-color: #e2e8f0; background: #f8fafc; color: #94a3b8; }
+.dc-mes.anual { border-style: dashed; }
+
+.dc-tabla {
+    width: 100%;
+    margin-top: 0.5rem;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.dc-tabla th,
+.dc-tabla td {
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid #e2e8f0;
+    text-align: left;
+}
+
+.dc-tabla th {
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+}
+
+.dc-tabla .num { text-align: right; font-variant-numeric: tabular-nums; }
+.dc-tabla .mono { font-family: ui-monospace, Consolas, monospace; font-size: 0.74rem; }
+
+.dc-acciones {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.dc-acciones a,
+.dc-acciones button {
+    border: none;
+    background: none;
+    color: #1d4ed8;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.dc-acciones button { color: #b91c1c; }
+
+.dc-sat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0.75rem;
+    border: 1px solid #bfdbfe;
+    border-radius: 0.6rem;
+    background: #f0f7ff;
+}
+
+.dc-sat-fila {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.dc-sat-ejercicio { color: #475569; font-size: 0.8rem; }
+.dc-sat-sesion { color: #166534; font-size: 0.8rem; font-weight: 700; }
+.dc-sat-progreso { color: #1e3a5f; font-size: 0.8rem; }
+
+.dc-captcha {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 160px;
+    height: 52px;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.45rem;
+    background: #fff;
+    color: #64748b;
+    font-size: 0.72rem;
+    overflow: hidden;
+}
+
+.dc-captcha img { max-height: 50px; }
+.dc-captcha-texto { max-width: 170px; text-transform: uppercase; }
+
+@media (max-width: 720px) {
+    .dc-meses { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+}
+
+/* ===== MODO OSCURO ===== */
+
+html[data-theme="dark"] .dc-titulo { color: #e8ecf7; }
+
+html[data-theme="dark"] .dc-barra > label:not(.btn),
+html[data-theme="dark"] .dc-ayuda,
+html[data-theme="dark"] .dc-vacio { color: #b3bbc8; }
+
+html[data-theme="dark"] .dc-mes.presentada { border-color: #2f7c4b; background: #143b21; color: #c7f3d8; }
+html[data-theme="dark"] .dc-mes.pendiente { border-color: #6b5320; background: #2e2410; color: #f5d68a; }
+html[data-theme="dark"] .dc-mes.futuro { border-color: #2a3b52; background: #121c2b; color: #6b7a90; }
+
+html[data-theme="dark"] .dc-tabla th,
+html[data-theme="dark"] .dc-tabla td { border-bottom-color: #2a3b52; }
+html[data-theme="dark"] .dc-tabla th { background: #14212e; color: #b3bbc8; }
+html[data-theme="dark"] .dc-acciones a { color: #88a3ef; }
+html[data-theme="dark"] .dc-acciones button { color: #f09999; }
+
+html[data-theme="dark"] .dc-sat { border-color: #2b4d72; background: #112033; }
+html[data-theme="dark"] .dc-sat-ejercicio { color: #b3bbc8; }
+html[data-theme="dark"] .dc-sat-sesion { color: #8ee3ad; }
+html[data-theme="dark"] .dc-sat-progreso { color: #c9d8ee; }
+html[data-theme="dark"] .dc-captcha { border-color: #34465b; background: #121c2b; color: #b3bbc8; }

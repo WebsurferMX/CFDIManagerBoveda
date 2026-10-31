@@ -1,0 +1,650 @@
+@implements IDisposable
+
+@using System.Globalization
+@using CFDIManager.Web.Services
+@using CFDIParser.Models
+@using CFDIParser.Services
+
+@inject ConsultaEstadoSatService ConsultaEstadoSat
+@inject ValidacionSatLoteService ValidacionSatLote
+@inject PostgreSqlRepository Repo
+@inject EmpresaContext EmpresaContext
+
+<div class="cfdi-page">
+    <header class="page-heading">
+        <div>
+            <span class="eyebrow">CFDI MANAGER</span>
+            <h1>@Titulo</h1>
+            <p>@Descripcion</p>
+        </div>
+
+        <button type="button" class="primary-button" @onclick="Consultar" disabled="@Cargando">
+            @(Cargando ? "Consultando..." : "Consultar")
+        </button>
+    </header>
+
+    <section class="filters-card">
+        <div class="filter-field">
+            <label>Tipo CFDI</label>
+            <select @bind="Filtro.TipoCfdi">
+                <option value="">Todos</option>
+                <option value="I">I · Facturas</option>
+                <option value="N">N · Nómina</option>
+                <option value="E">E · Notas de crédito</option>
+                <option value="T">T · Traslados</option>
+                <option value="P">P · Pagos</option>
+            </select>
+        </div>
+
+        <div class="filter-field">
+            <label>Fecha inicial</label>
+            <InputDate @bind-Value="Filtro.FechaInicio" />
+        </div>
+
+        <div class="filter-field">
+            <label>Fecha final</label>
+            <InputDate @bind-Value="Filtro.FechaFin" />
+        </div>
+
+        <div class="filter-field search-field">
+            <label>Búsqueda</label>
+            <input @bind="Filtro.Busqueda"
+                   @bind:event="oninput"
+                   @onkeydown="ManejarTecla"
+                   placeholder="UUID, RFC, razón social, serie o folio" />
+        </div>
+
+        <div class="filter-actions">
+            <button type="button" class="primary-button" @onclick="Consultar" disabled="@Cargando">
+                Consultar
+            </button>
+            <button type="button" class="secondary-button" @onclick="LimpiarFiltros" disabled="@Cargando">
+                Limpiar
+            </button>
+        </div>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <section class="message error-message">
+            <strong>No se pudo completar la consulta.</strong>
+            <span>@Error</span>
+        </section>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(MensajeSat))
+    {
+        <section class="@ClaseMensajeSat">
+            <strong>Validación SAT</strong>
+            <span>@MensajeSat</span>
+        </section>
+    }
+
+    @if (Cargando)
+    {
+        <section class="message loading-message">
+            Consultando @Titulo.ToLowerInvariant() en PostgreSQL...
+        </section>
+    }
+    else
+    {
+        @if (ValidandoLoteSat || UltimoResultadoLote is not null)
+        {
+            <section class="sat-batch-card">
+                <div class="sat-batch-heading">
+                    <div>
+                        <strong>Validación SAT por lote</strong>
+                        <span>@TextoProgresoSat</span>
+                    </div>
+                    <strong>@PorcentajeSat.ToString("0")%</strong>
+                </div>
+
+                <div class="sat-progress-track">
+                    <div class="sat-progress-value @(ValidandoLoteSat ? "sat-progress-running" : "")"
+                         style="@($"width: {PorcentajeSat:0.##}%")">
+                    </div>
+                </div>
+
+                <div class="sat-result-grid">
+                    <span>Procesados <strong>@ProcesadosSat</strong></span>
+                    <span>Vigentes <strong>@VigentesSat</strong></span>
+                    <span>Cancelados <strong>@CanceladosSat</strong></span>
+                    <span>No encontrados <strong>@NoEncontradosSat</strong></span>
+                    <span>Otros <strong>@OtrosSat</strong></span>
+                    <span>Errores <strong>@ErroresSat</strong></span>
+                </div>
+            </section>
+        }
+
+        <section class="summary-strip">
+            <button type="button" class="summary-item invoice @(Filtro.TipoCfdi == "I" ? "active-kpi" : "")" @onclick='() => AplicarTipo("I")'>
+                <span class="summary-code">I</span>
+                <span><small>Facturas @SufijoFemenino (@Resumen.CantidadFacturas)</small><strong>@Moneda(Resumen.TotalFacturas)</strong></span>
+            </button>
+            <button type="button" class="summary-item payroll @(Filtro.TipoCfdi == "N" ? "active-kpi" : "")" @onclick='() => AplicarTipo("N")'>
+                <span class="summary-code">N</span>
+                <span><small>Nómina @SufijoFemenino (@Resumen.CantidadNominas)</small><strong>@Moneda(Resumen.TotalNominas)</strong></span>
+            </button>
+            <button type="button" class="summary-item credit-note @(Filtro.TipoCfdi == "E" ? "active-kpi" : "")" @onclick='() => AplicarTipo("E")'>
+                <span class="summary-code">E</span>
+                <span><small>Notas de crédito @SufijoFemenino (@Resumen.CantidadNotasCredito)</small><strong>@Moneda(Resumen.TotalNotasCredito)</strong></span>
+            </button>
+            <button type="button" class="summary-item transfer @(Filtro.TipoCfdi == "T" ? "active-kpi" : "")" @onclick='() => AplicarTipo("T")'>
+                <span class="summary-code">T</span>
+                <span><small>Traslados @SufijoMasculino (@Resumen.CantidadTraslados.ToString("N0"))</small><strong>@Moneda(Resumen.TotalTraslados)</strong></span>
+            </button>
+            <button type="button" class="summary-item payment @(Filtro.TipoCfdi == "P" ? "active-kpi" : "")" @onclick='() => AplicarTipo("P")'>
+                <span class="summary-code">P</span>
+                <span><small>Pagos @SufijoMasculino (@Resumen.CantidadPagos.ToString("N0"))</small><strong>@Moneda(Resumen.TotalPagos)</strong></span>
+            </button>
+            <button type="button" class="summary-item total @(string.IsNullOrWhiteSpace(Filtro.TipoCfdi) ? "active-kpi" : "")" @onclick='() => AplicarTipo("")'>
+                <span class="summary-code">Σ</span>
+                <span><small>Total @SufijoMasculino (@Resumen.TotalCfdi.ToString("N0"))</small><strong>@Moneda(Resumen.ImporteTotal)</strong></span>
+            </button>
+        </section>
+
+        <section class="grid-card">
+            <div class="grid-toolbar">
+                <div>
+                    <strong>@Titulo</strong>
+                    <span>Mostrando @Resultado.RegistroInicial–@Resultado.RegistroFinal de @Resultado.TotalRegistros.ToString("N0")</span>
+                </div>
+                <div class="sat-batch-tools">
+                    <label>Lote SAT</label>
+                    <select @bind="TamanoLoteSat"
+                            disabled="@ValidandoLoteSat">
+                        <option value="10">10</option>
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+
+                    <button type="button"
+                            class="secondary-button sat-batch-button"
+                            disabled="@(ValidandoLoteSat || Cargando)"
+                            @onclick="ValidarPendientesSatAsync">
+                        @(ValidandoLoteSat
+                            ? $"Validando {ProcesadosSat}/{TotalSat}..."
+                            : "Validar pendientes SAT")
+                    </button>
+
+                    @if (ValidandoLoteSat)
+                    {
+                        <button type="button"
+                                class="secondary-button cancel-batch-button"
+                                @onclick="CancelarValidacionSat">
+                            Cancelar
+                        </button>
+                    }
+                </div>
+
+                <div class="page-size">
+                    <label>Filas</label>
+                    <select value="@Filtro.RegistrosPorPagina" @onchange="CambiarTamanoPagina">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="cfdi-table">
+                    <thead>
+                        <tr>
+                            <th><button type="button" @onclick='() => Ordenar("fecha_emision")'>Fecha</button></th>
+                            <th><button type="button" @onclick='() => Ordenar("tipo_cfdi")'>Tipo</button></th>
+                            <th>Serie / Folio</th>
+                            <th><button type="button" @onclick='() => Ordenar("rfc")'>@EtiquetaRfc</button></th>
+                            <th><button type="button" @onclick='() => Ordenar("nombre")'>@EtiquetaNombre</button></th>
+                            <th><button type="button" @onclick='() => Ordenar("total")'>Total</button></th>
+                            <th>Moneda</th>
+                            <th>UUID</th>
+                            <th>Estado SAT</th>
+                            <th class="actions-header">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Resultado.Registros.Count == 0)
+                        {
+                            <tr><td colspan="10" class="empty-cell">No se encontraron CFDI con los filtros seleccionados.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (CfdiConsultaDto cfdi in Resultado.Registros)
+                            {
+                                <tr class="@(Seleccionado?.CfdiId == cfdi.CfdiId ? "selected-row" : "")" @onclick="() => Seleccionar(cfdi)">
+                                    <td>@cfdi.FechaEmision.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td><span class="type-badge @ClaseTipo(cfdi.TipoCfdi)">@cfdi.TipoCfdi</span></td>
+                                    <td><strong>@cfdi.Serie</strong> @cfdi.Folio</td>
+                                    <td class="mono">@ObtenerRfc(cfdi)</td>
+                                    <td class="name-cell" title="@ObtenerNombre(cfdi)">@ObtenerNombre(cfdi)</td>
+                                    <td class="amount-cell">@Moneda(cfdi.Total)</td>
+                                    <td>@cfdi.Moneda</td>
+                                    <td class="uuid-cell" title="@cfdi.UUID">@AbreviarUuid(cfdi.UUID)</td>
+                                    <td><span class="@ObtenerClaseEstadoSat(cfdi.EstadoSat)">@ObtenerTextoEstadoSat(cfdi.EstadoSat)</span></td>
+                                    <td class="actions-cell" @onclick:stopPropagation="true">
+                                        <a class="row-action xml-action" href="@ObtenerUrlXml(cfdi.CfdiId)" target="_blank" rel="noopener noreferrer" title="Ver XML">XML</a>
+                                        <a class="row-action pdf-action" href="@ObtenerUrlPdf(cfdi.CfdiId)" target="_blank" rel="noopener noreferrer" title="Generar PDF">PDF</a>
+                                        <button type="button"
+                                                class="@ObtenerClaseBotonSat(cfdi)"
+                                                title="@ObtenerTituloBotonSat(cfdi)"
+                                                disabled="@(EstaValidandoSat(cfdi.CfdiId) || ValidandoLoteSat)"
+                                                @onclick="() => ValidarEstadoSatAsync(cfdi)">
+                                            @if (EstaValidandoSat(cfdi.CfdiId))
+                                            {
+                                                <span class="spinner-sat"></span>
+                                                <span>SAT...</span>
+                                            }
+                                            else
+                                            {
+                                                <span>SAT</span>
+                                            }
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination">
+                <button type="button" @onclick="PaginaAnterior" disabled="@(!Resultado.TienePaginaAnterior || Cargando)">Anterior</button>
+                <span>Página @Resultado.PaginaActual de @Math.Max(Resultado.TotalPaginas, 1)</span>
+                <button type="button" @onclick="PaginaSiguiente" disabled="@(!Resultado.TienePaginaSiguiente || Cargando)">Siguiente</button>
+            </div>
+        </section>
+
+        @if (Seleccionado is not null)
+        {
+            <section class="detail-card">
+                <div class="detail-heading">
+                    <div>
+                        <span class="type-badge @ClaseTipo(Seleccionado.TipoCfdi)">@Seleccionado.TipoCfdi</span>
+                        <h2>@ObtenerNombre(Seleccionado)</h2>
+                        <p class="mono">@Seleccionado.UUID</p>
+                    </div>
+                    <button type="button" class="close-detail" @onclick="() => Seleccionado = null">×</button>
+                </div>
+                <div class="detail-grid">
+                    <div><span>Clasificación</span><strong>@Seleccionado.Clasificacion</strong></div>
+                    <div><span>Fecha</span><strong>@Seleccionado.FechaEmision.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                    <div><span>Serie / Folio</span><strong>@Seleccionado.Serie @Seleccionado.Folio</strong></div>
+                    <div><span>@EtiquetaRfc</span><strong class="mono">@ObtenerRfc(Seleccionado)</strong></div>
+                    <div><span>@EtiquetaNombre</span><strong>@ObtenerNombre(Seleccionado)</strong></div>
+                    <div><span>Subtotal</span><strong>@Moneda(Seleccionado.Subtotal)</strong></div>
+                    <div><span>Total</span><strong>@Moneda(Seleccionado.Total)</strong></div>
+                    <div><span>Estado SAT</span><strong><span class="@ObtenerClaseEstadoSat(Seleccionado.EstadoSat)">@ObtenerTextoEstadoSat(Seleccionado.EstadoSat)</span></strong></div>
+                    <div class="detail-path"><span>Ruta XML</span><strong>@Seleccionado.RutaXml</strong></div>
+                </div>
+            </section>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public string Titulo { get; set; } = "Consulta de CFDI";
+    [Parameter] public string Descripcion { get; set; } = "";
+    [Parameter] public string Clasificacion { get; set; } = "";
+    [Parameter] public string EtiquetaRfc { get; set; } = "RFC";
+    [Parameter] public string EtiquetaNombre { get; set; } = "Razón social";
+
+    private CfdiFiltroDto Filtro { get; set; } = CrearFiltroInicial();
+    private ResultadoPaginadoDto<CfdiConsultaDto> Resultado { get; set; } = new();
+    private CfdiResumenConsultaDto Resumen { get; set; } = new();
+    private CfdiConsultaDto? Seleccionado { get; set; }
+    private bool Cargando { get; set; } = true;
+    private string? Error { get; set; }
+    private readonly HashSet<long> CfdiValidandoSat = new();
+    private string MensajeSat { get; set; } = "";
+    private bool MensajeSatEsError { get; set; }
+
+    private bool ValidandoLoteSat { get; set; }
+    private int TamanoLoteSat { get; set; } = 25;
+    private int ProcesadosSat { get; set; }
+    private int TotalSat { get; set; }
+    private int VigentesSat { get; set; }
+    private int CanceladosSat { get; set; }
+    private int NoEncontradosSat { get; set; }
+    private int OtrosSat { get; set; }
+    private int ErroresSat { get; set; }
+    private string UltimoUuidSat { get; set; } = "";
+    private string UltimoEstadoSat { get; set; } = "";
+    private ResultadoValidacionSatLote? UltimoResultadoLote { get; set; }
+    private CancellationTokenSource? CancelacionLoteSat { get; set; }
+
+    private double PorcentajeSat =>
+        TotalSat <= 0
+            ? 0
+            : Math.Min(100d, (double)ProcesadosSat / TotalSat * 100d);
+
+    private string TextoProgresoSat =>
+        ValidandoLoteSat
+            ? string.IsNullOrWhiteSpace(UltimoUuidSat)
+                ? "Preparando comprobantes pendientes..."
+                : $"{UltimoUuidSat}: {UltimoEstadoSat}"
+            : UltimoResultadoLote is null
+                ? "Sin ejecución"
+                : $"Lote terminado: {UltimoResultadoLote.Procesados} procesado(s).";
+
+    private string ClaseMensajeSat => MensajeSatEsError ? "message error-message" : "message sat-success-message";
+    private string SufijoFemenino => Clasificacion == "EMITIDO" ? "emitidas" : "recibidas";
+    private string SufijoMasculino => Clasificacion == "EMITIDO" ? "emitidos" : "recibidos";
+
+    protected override void OnInitialized()
+    {
+        EmpresaContext.OnChange += CambiarEmpresa;
+        InicializarEmpresa();
+        CargarDatos();
+    }
+
+    protected override void OnParametersSet() => Filtro.Clasificacion = NormalizarClasificacion(Clasificacion);
+
+    private void InicializarEmpresa()
+    {
+        if (EmpresaContext.TieneEmpresaActiva) return;
+        EmpresaDto? primeraEmpresa = Repo.ObtenerEmpresasActivas().FirstOrDefault();
+        if (primeraEmpresa is not null) EmpresaContext.Seleccionar(primeraEmpresa);
+    }
+
+    private void Consultar() { Filtro.Pagina = 1; Seleccionado = null; CargarDatos(); }
+
+    private void CargarDatos()
+    {
+        Cargando = true;
+        Error = null;
+        try
+        {
+            InicializarEmpresa();
+            if (!EmpresaContext.TieneEmpresaActiva) throw new InvalidOperationException("No existen empresas activas registradas.");
+            Filtro.EmpresaId = EmpresaContext.EmpresaId;
+            Filtro.Clasificacion = NormalizarClasificacion(Clasificacion);
+            Resultado = Repo.BuscarCfdi(Filtro);
+            Resumen = Repo.ObtenerResumenCfdi(CrearFiltroResumen());
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+            Resultado = new();
+            Resumen = new();
+        }
+        finally { Cargando = false; }
+    }
+
+    private void LimpiarFiltros()
+    {
+        Filtro = CrearFiltroInicial();
+        Filtro.EmpresaId = EmpresaContext.EmpresaId;
+        Filtro.Clasificacion = NormalizarClasificacion(Clasificacion);
+        Seleccionado = null;
+        MensajeSat = "";
+        CargarDatos();
+    }
+
+    private void AplicarTipo(string tipo) { Filtro.TipoCfdi = tipo; Filtro.Pagina = 1; Seleccionado = null; CargarDatos(); }
+    private void Seleccionar(CfdiConsultaDto cfdi) => Seleccionado = cfdi;
+
+    private void PaginaAnterior()
+    {
+        if (!Resultado.TienePaginaAnterior) return;
+        Filtro.Pagina--;
+        Seleccionado = null;
+        CargarDatos();
+    }
+
+    private void PaginaSiguiente()
+    {
+        if (!Resultado.TienePaginaSiguiente) return;
+        Filtro.Pagina++;
+        Seleccionado = null;
+        CargarDatos();
+    }
+
+    private void CambiarTamanoPagina(ChangeEventArgs args)
+    {
+        if (!int.TryParse(args.Value?.ToString(), out int cantidad)) return;
+        Filtro.RegistrosPorPagina = cantidad;
+        Filtro.Pagina = 1;
+        Seleccionado = null;
+        CargarDatos();
+    }
+
+    private void Ordenar(string campo)
+    {
+        if (Filtro.OrdenarPor == campo) Filtro.OrdenDescendente = !Filtro.OrdenDescendente;
+        else { Filtro.OrdenarPor = campo; Filtro.OrdenDescendente = true; }
+        Filtro.Pagina = 1;
+        CargarDatos();
+    }
+
+    private void ManejarTecla(KeyboardEventArgs args) { if (args.Key == "Enter") Consultar(); }
+
+    private void CambiarEmpresa()
+    {
+        _ = InvokeAsync(() =>
+        {
+            Filtro.EmpresaId = EmpresaContext.EmpresaId;
+            Filtro.Pagina = 1;
+            Seleccionado = null;
+            MensajeSat = "";
+            CargarDatos();
+            StateHasChanged();
+        });
+    }
+
+    private async Task ValidarPendientesSatAsync()
+    {
+        if (!EmpresaContext.TieneEmpresaActiva)
+        {
+            MostrarMensajeSat(
+                "Selecciona una empresa antes de validar.",
+                true);
+            return;
+        }
+
+        if (ValidandoLoteSat)
+        {
+            return;
+        }
+
+        ReiniciarProgresoSat();
+        ValidandoLoteSat = true;
+        CancelacionLoteSat = new CancellationTokenSource();
+        MostrarMensajeSat(
+            $"Iniciando validación de hasta {TamanoLoteSat} CFDI pendientes...",
+            false);
+
+        var progreso = new Progress<ProgresoValidacionSat>(
+            dato =>
+            {
+                ProcesadosSat = dato.Procesados;
+                TotalSat = dato.Total;
+                UltimoUuidSat = dato.UUID;
+                UltimoEstadoSat = string.IsNullOrWhiteSpace(dato.Estado)
+                    ? dato.CodigoEstatus
+                    : dato.Estado;
+
+                _ = InvokeAsync(StateHasChanged);
+            });
+
+        try
+        {
+            ResultadoValidacionSatLote resultado =
+                await ValidacionSatLote.ValidarPendientesAsync(
+                    EmpresaContext.EmpresaId,
+                    TamanoLoteSat,
+                    progreso,
+                    CancelacionLoteSat.Token);
+
+            UltimoResultadoLote = resultado;
+            ProcesadosSat = resultado.Procesados;
+            TotalSat = resultado.Total;
+            VigentesSat = resultado.Vigentes;
+            CanceladosSat = resultado.Cancelados;
+            NoEncontradosSat = resultado.NoEncontrados;
+            OtrosSat = resultado.Otros;
+            ErroresSat = resultado.Errores;
+
+            MostrarMensajeSat(
+                resultado.Total == 0
+                    ? "No hay CFDI pendientes de validación SAT para este lote."
+                    : $"Lote terminado. Vigentes: {resultado.Vigentes}, " +
+                      $"cancelados: {resultado.Cancelados}, " +
+                      $"no encontrados: {resultado.NoEncontrados}, " +
+                      $"otros: {resultado.Otros}, errores: {resultado.Errores}.",
+                resultado.Errores > 0);
+
+            CargarDatos();
+        }
+        catch (OperationCanceledException)
+        {
+            MostrarMensajeSat(
+                $"Validación cancelada después de {ProcesadosSat} CFDI.",
+                false);
+            CargarDatos();
+        }
+        catch (Exception ex)
+        {
+            MostrarMensajeSat(
+                $"No se pudo completar la validación por lote: {ex.Message}",
+                true);
+        }
+        finally
+        {
+            ValidandoLoteSat = false;
+            CancelacionLoteSat?.Dispose();
+            CancelacionLoteSat = null;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void CancelarValidacionSat()
+    {
+        CancelacionLoteSat?.Cancel();
+    }
+
+    private void ReiniciarProgresoSat()
+    {
+        ProcesadosSat = 0;
+        TotalSat = 0;
+        VigentesSat = 0;
+        CanceladosSat = 0;
+        NoEncontradosSat = 0;
+        OtrosSat = 0;
+        ErroresSat = 0;
+        UltimoUuidSat = "";
+        UltimoEstadoSat = "";
+        UltimoResultadoLote = null;
+    }
+
+    private async Task ValidarEstadoSatAsync(CfdiConsultaDto cfdi)
+    {
+        if (!EmpresaContext.TieneEmpresaActiva) { MostrarMensajeSat("Selecciona una empresa antes de validar.", true); return; }
+        if (string.IsNullOrWhiteSpace(cfdi.UUID)) { MostrarMensajeSat("El CFDI no contiene UUID.", true); return; }
+        if (!CfdiValidandoSat.Add(cfdi.CfdiId)) return;
+
+        MostrarMensajeSat($"Consultando el CFDI {cfdi.UUID} en el SAT...", false);
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            EstadoSatDto resultado = await ConsultaEstadoSat.ConsultarAsync(cfdi.UUID, cfdi.RfcEmisor, cfdi.RfcReceptor, cfdi.Total);
+            if (!resultado.ConsultaExitosa)
+            {
+                MostrarMensajeSat(resultado.MensajeError ?? resultado.CodigoEstatus ?? "No fue posible consultar el CFDI en el SAT.", true);
+                return;
+            }
+
+            Repo.ActualizarEstadoSat(EmpresaContext.EmpresaId, cfdi.CfdiId, resultado);
+            cfdi.EstadoSat = resultado.Estado;
+            if (Seleccionado?.CfdiId == cfdi.CfdiId) Seleccionado.EstadoSat = resultado.Estado;
+
+            string codigo = string.IsNullOrWhiteSpace(resultado.CodigoEstatus) ? "" : $" {resultado.CodigoEstatus}.";
+            string cancelable = string.IsNullOrWhiteSpace(resultado.EsCancelable) ? "" : $" Cancelabilidad: {resultado.EsCancelable}.";
+            string cancelacion = string.IsNullOrWhiteSpace(resultado.EstatusCancelacion) ? "" : $" Estatus de cancelación: {resultado.EstatusCancelacion}.";
+            MostrarMensajeSat($"CFDI {cfdi.UUID}: {resultado.Estado}." + codigo + cancelable + cancelacion, false);
+        }
+        catch (Exception ex) { MostrarMensajeSat($"No se pudo validar el CFDI: {ex.Message}", true); }
+        finally { CfdiValidandoSat.Remove(cfdi.CfdiId); await InvokeAsync(StateHasChanged); }
+    }
+
+    private static string ObtenerClaseBotonSat(CfdiConsultaDto cfdi)
+    {
+        string estado = (cfdi.EstadoSat ?? "").Trim().ToUpperInvariant();
+
+        return estado switch
+        {
+            "VIGENTE" => "row-action sat-action sat-button-vigente",
+            "CANCELADO" => "row-action sat-action sat-button-cancelado",
+            "NO ENCONTRADO" => "row-action sat-action sat-button-no-encontrado",
+            "ERROR" => "row-action sat-action sat-button-error",
+            _ => "row-action sat-action sat-button-pendiente"
+        };
+    }
+
+    private static string ObtenerTituloBotonSat(CfdiConsultaDto cfdi)
+    {
+        string estado = ObtenerTextoEstadoSat(cfdi.EstadoSat);
+        return $"Consultar estado en el SAT. Estado actual: {estado}.";
+    }
+
+    private bool EstaValidandoSat(long cfdiId) => CfdiValidandoSat.Contains(cfdiId);
+    private void MostrarMensajeSat(string mensaje, bool esError) { MensajeSat = mensaje; MensajeSatEsError = esError; }
+    private static string ObtenerTextoEstadoSat(string? estado) => string.IsNullOrWhiteSpace(estado) || estado.Equals("NO VERIFICADO", StringComparison.OrdinalIgnoreCase) ? "No validado" : estado.Trim();
+
+    private static string ObtenerClaseEstadoSat(string? estado) => (estado ?? "").Trim().ToUpperInvariant() switch
+    {
+        "VIGENTE" => "estado-sat estado-vigente",
+        "CANCELADO" => "estado-sat estado-cancelado",
+        "NO ENCONTRADO" => "estado-sat estado-no-encontrado",
+        "ERROR" => "estado-sat estado-error",
+        _ => "estado-sat estado-pendiente"
+    };
+
+    private string ObtenerRfc(CfdiConsultaDto cfdi) => Clasificacion == "EMITIDO" ? cfdi.RfcReceptor : cfdi.RfcEmisor;
+    private string ObtenerNombre(CfdiConsultaDto cfdi) => Clasificacion == "EMITIDO" ? cfdi.NombreReceptor : cfdi.NombreEmisor;
+    private string ObtenerUrlXml(long cfdiId) => $"/api/empresa/{EmpresaContext.EmpresaId}/cfdi/{cfdiId}/xml";
+    private string ObtenerUrlPdf(long cfdiId) => $"/api/empresa/{EmpresaContext.EmpresaId}/cfdi/{cfdiId}/pdf";
+    public void Dispose()
+    {
+        CancelacionLoteSat?.Cancel();
+        CancelacionLoteSat?.Dispose();
+        EmpresaContext.OnChange -= CambiarEmpresa;
+    }
+
+    private static CfdiFiltroDto CrearFiltroInicial() => new()
+    {
+        FechaInicio = new DateTime(2024, 1, 1),
+        FechaFin = DateTime.Today,
+        Pagina = 1,
+        RegistrosPorPagina = 25,
+        OrdenarPor = "fecha_emision",
+        OrdenDescendente = true
+    };
+
+    private static string NormalizarClasificacion(string clasificacion)
+    {
+        string valor = (clasificacion ?? "").Trim().ToUpperInvariant();
+        if (valor is not ("EMITIDO" or "RECIBIDO")) throw new InvalidOperationException("La consulta debe indicar EMITIDO o RECIBIDO.");
+        return valor;
+    }
+
+    private static string Moneda(decimal valor) => valor.ToString("C2", CultureInfo.GetCultureInfo("es-MX"));
+    private static string AbreviarUuid(string uuid) => string.IsNullOrWhiteSpace(uuid) ? "" : uuid.Length <= 13 ? uuid : $"{uuid[..8]}…{uuid[^4..]}";
+    private static string ClaseTipo(string tipo) => tipo switch { "I" => "invoice", "N" => "payroll", "E" => "credit-note", "T" => "transfer", "P" => "payment", _ => "unknown" };
+
+    private CfdiFiltroDto CrearFiltroResumen() => new()
+    {
+        EmpresaId = EmpresaContext.EmpresaId,
+        FechaInicio = Filtro.FechaInicio,
+        FechaFin = Filtro.FechaFin,
+        Clasificacion = NormalizarClasificacion(Clasificacion),
+        TipoCfdi = "",
+        Busqueda = Filtro.Busqueda,
+        Pagina = 1,
+        RegistrosPorPagina = 25,
+        OrdenarPor = "fecha_emision",
+        OrdenDescendente = true
+    };
+}

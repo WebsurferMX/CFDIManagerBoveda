@@ -1,0 +1,28 @@
+﻿<!DOCTYPE html>
+<html lang="es" data-theme="dark" data-bs-theme="dark">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+
+    @* Antes de los estilos para que no parpadee el tema guardado. *@
+    <script src="js/theme.js"></script>
+    <script>window.cfdiTheme.initialize();</script>
+
+    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="lib/bootstrap-icons/font/bootstrap-icons.min.css" />
+    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="CFDIManager.Web.styles.css" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+
+
+<body>
+    <Routes @rendermode="InteractiveServer" />
+
+    <script src="js/descargas.js"></script>
+    <script src="_framework/blazor.web.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,19 @@
+{
+
+// launchSettings.json
+
+"$schema": "http://json.schemastore.org/launchsettings.json",
+"launchUrl": "",
+  "profiles": {
+    "CFDIManager.Web": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://localhost:7185;http://localhost:5185",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
+

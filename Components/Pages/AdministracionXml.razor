@@ -1,0 +1,1489 @@
+@page "/administracion-xml"
+@implements IDisposable
+
+@using CFDIParser.Models
+@using CFDIParser.Services
+@using CFDIManager.Web.Services
+@using CFDIManager.Web.Services.AdministracionXml
+@using Microsoft.AspNetCore.Components.Forms
+
+@inject EmpresaContext EmpresaContext
+@inject PostgreSqlRepository Repo
+@inject AdministracionXmlService Admin
+@inject CatalogoLogosService Logos
+@inject IJSRuntime JS
+@inject CFDIManager.Web.Services.Storage.EstadoSincronizacionStorage Sincronizacion
+@inject RutaXmlService Rutas
+@inject CFDIManager.Web.Services.Sat.EstadoDescargaAutomaticaSat DescargaSat
+
+<PageTitle>Administración de XML</PageTitle>
+
+<div class="admin-xml">
+
+    @if (!EmpresaContext.TieneEmpresaActiva)
+    {
+        <div class="alert alert-warning m-3">Selecciona una empresa activa para administrar sus XML.</div>
+    }
+    else
+    {
+        <section class="principal">
+
+            @* Dos tarjetas separadas: filtros (tipo, año, mes) y resumen del comprobante elegido. *@
+            <div class="encabezado">
+            <div class="filtros">
+                <div class="lista-filtro">
+                    <span>Tipo</span>
+                    <ul class="lista">
+                        <li class="@(Clasificacion == "EMITIDO" ? "sel" : "")" @onclick='() => CambiarClasificacion("EMITIDO")'>Emitidos</li>
+                        <li class="@(Clasificacion == "RECIBIDO" ? "sel" : "")" @onclick='() => CambiarClasificacion("RECIBIDO")'>Recibidos</li>
+                    </ul>
+                    <span class="mt-2">Año</span>
+                    <ul class="lista corta">
+                        @foreach (int a in Anios)
+                        {
+                            <li class="@(a == Anio ? "sel" : "")" @onclick="() => CambiarAnio(a)">@a</li>
+                        }
+                    </ul>
+                </div>
+
+                <div class="lista-filtro">
+                    <span class="d-flex justify-content-between gap-2">
+                        Mes
+                        <label class="check"><input type="checkbox" checked="@Acumular" @onchange="CambiarAcumular" /> Acumular</label>
+                    </span>
+                    <ul class="lista alta" title="Ctrl + clic para elegir varios meses">
+                        @foreach (int m in MesesDisponibles)
+                        {
+                            <li class="@(MesesElegidos.Contains(m) ? "sel" : "")" @onclick="e => ElegirMes(m, e)">
+                                @m.ToString("00") · @Cultura.DateTimeFormat.GetMonthName(m)
+                            </li>
+                        }
+                    </ul>
+                </div>
+            </div>
+
+                <div class="resumen">
+                    @if (Activa is { } sel)
+                    {
+                        <div class="resumen-datos">
+                        <dl>
+                            <dt>Tipo</dt><dd>@NombreTipo(sel.TipoCfdi) @sel.Version</dd>
+                            <dt>Emisor</dt><dd>@sel.RfcEmisor · @sel.NombreEmisor</dd>
+                            <dt>Receptor</dt><dd>@sel.RfcReceptor · @sel.NombreReceptor</dd>
+                            <dt>UUID</dt><dd>@sel.Uuid</dd>
+                            <dt>Total</dt><dd>@sel.Total.ToString("N2") @sel.Moneda</dd>
+                            @if (Relacionados.Count > 0)
+                            {
+                                <dt>Relacionados</dt><dd>@string.Join(", ", Relacionados.Select(r => $"{r.UUID} ({r.TipoRelacion})"))</dd>
+                            }
+                            <dt>Archivo</dt><dd>@sel.RutaXml</dd>
+                        </dl>
+                        </div>
+
+                        @* Segunda mitad: el XML y su representación impresa lado a lado. *@
+                        <div class="vista-previa">
+                            <pre class="vista-xml" title="Doble clic para abrir el XML" @ondblclick="AbrirXml">@XmlVista</pre>
+                            @* El iframe no avisa del doble clic a la página: una capa encima lo recibe. *@
+                            <div class="vista-pdf-marco" title="Doble clic para abrir el PDF" @ondblclick="GenerarPdf">
+                                <iframe class="vista-pdf" src="@($"{UrlCfdi(sel.CfdiId, "pdf")}#toolbar=0&navpanes=0&view=FitH")" title="Representación impresa" tabindex="-1"></iframe>
+                                <div class="vista-pdf-capa"></div>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="tenue">Selecciona un comprobante para ver su resumen.</p>
+                    }
+                </div>
+            </div>
+
+            <div class="barra-busqueda">
+                <label>
+                    Buscar por
+                    <input class="form-control form-control-sm" placeholder="UUID, RFC, nombre, serie o folio"
+                           @bind="Busqueda" @bind:event="oninput" @bind:after="BuscarConPausa" />
+                </label>
+                <label>
+                    Nvo. reporte de
+                    <select class="form-select form-select-sm" @bind="TipoReporte">
+                        <option value="general">Reporte general (por tipo)</option>
+                        <option value="conceptos">Conceptos</option>
+                        <option value="agrupado:emisor">Agrupado por emisor</option>
+                        <option value="agrupado:receptor">Agrupado por receptor</option>
+                        <option value="agrupado:mes">Agrupado por mes</option>
+                        <option value="pareto">Análisis 80-20 (Pareto) con dashboard</option>
+                    </select>
+                </label>
+                <div class="progreso">
+                    <div class="barra" style="width:@(Proceso is { Total: > 0 } p ? (p.Hechos * 100 / p.Total) : 0)%"></div>
+                    <span>@TextoProceso</span>
+                    @if (Cancelacion is not null)
+                    {
+                        <button class="btn btn-link btn-sm cancelar" @onclick="() => Cancelacion?.Cancel()">Cancelar</button>
+                    }
+                </div>
+            </div>
+
+            <div class="pestanas">
+                @foreach (var (clave, titulo, cantidad) in Pestanas)
+                {
+                    <button class="@ColorPestana(clave) @(Pestana == clave ? "activa" : "")" @onclick="() => CambiarPestana(clave)">
+                        @titulo <small>(@cantidad)</small>
+                    </button>
+                }
+            </div>
+
+            <div class="rejilla">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="sel"><input type="checkbox" checked="@TodoElFiltro" @onchange="MarcarTodoElFiltro" title="Seleccionar todo el filtro (todas las páginas)" /></th>
+                            @foreach (Columna c in ColumnasVisibles)
+                            {
+                                <th class="ordenable @(c.Numero ? "num" : "") @(Orden == c.Clave ? "ordenada" : "")"
+                                    title="Ordenar por @c.Titulo" @onclick="() => Ordenar(c.Clave)">
+                                    @c.Titulo
+                                    <i class="bi @(Orden != c.Clave ? "bi-chevron-expand" : Descendente ? "bi-caret-down-fill" : "bi-caret-up-fill")"></i>
+                                </th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (AdminXmlFilaDto x in Filas)
+                        {
+                            <tr class="@(x.CfdiId == ActivaId ? "activa" : "")" @onclick="e => ClicFila(x, e)" @ondblclick="AbrirXml"
+                                title="Ctrl + clic marca o desmarca · Shift + clic marca un rango">
+                                <td class="sel" @onclick:stopPropagation="true">
+                                    <input type="checkbox" checked="@(TodoElFiltro || Marcadas.Contains(x.CfdiId))" @onchange="e => Marcar(x.CfdiId, e)" />
+                                </td>
+                                @foreach (Columna c in ColumnasVisibles)
+                                {
+                                    <td class="@(c.Numero ? "num" : "") @c.Clase(x)">@c.Valor(x)</td>
+                                }
+                            </tr>
+                        }
+                        @if (Filas.Count == 0)
+                        {
+                            <tr><td colspan="@(ColumnasVisibles.Count + 1)" class="tenue">Sin comprobantes para este filtro.</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pie">
+                <span>
+                    No. XML: <b>@(Filas.Count == 0 ? 0 : Pagina * TamanoPagina + 1)–@(Pagina * TamanoPagina + Filas.Count)</b> de <b>@((Totales?.EnPestana ?? 0).ToString("N0"))</b> en el filtro
+                    @(TodoElFiltro ? "· todo el filtro marcado" : Marcadas.Count > 0 ? $"· {Marcadas.Count} marcados" : "")
+                </span>
+                @if (TotalPaginas > 1)
+                {
+                    <span class="paginador">
+                        <button class="btn btn-sm btn-outline-secondary" disabled="@(Pagina == 0)" @onclick="() => IrPagina(0)" title="Primera"><i class="bi bi-chevron-double-left"></i></button>
+                        <button class="btn btn-sm btn-outline-secondary" disabled="@(Pagina == 0)" @onclick="() => IrPagina(Pagina - 1)" title="Anterior"><i class="bi bi-chevron-left"></i></button>
+                        Página <input type="number" min="1" max="@TotalPaginas" value="@(Pagina + 1)" @onchange="IrPaginaEscrita" style="width:4.5em" /> de @TotalPaginas
+                        <button class="btn btn-sm btn-outline-secondary" disabled="@(Pagina >= TotalPaginas - 1)" @onclick="() => IrPagina(Pagina + 1)" title="Siguiente"><i class="bi bi-chevron-right"></i></button>
+                        <button class="btn btn-sm btn-outline-secondary" disabled="@(Pagina >= TotalPaginas - 1)" @onclick="() => IrPagina(TotalPaginas - 1)" title="Última"><i class="bi bi-chevron-double-right"></i></button>
+                    </span>
+                }
+                <span class="ok">Vigente: <b>@((Totales?.Vigente ?? 0).ToString("N2"))</b></span>
+                <span class="mal">Cancelado: <b>@((Totales?.Cancelado ?? 0).ToString("N2"))</b></span>
+                <span class="flex-grow-1"></span>
+                <label class="filtrar">
+                    Filtrar
+                    <select class="form-select form-select-sm" @bind="Filtrar" @bind:after="Consultar">
+                        <option value="">Todos</option>
+                        <option value="vigentes">Vigentes</option>
+                        <option value="cancelados">Cancelados</option>
+                        <option value="sinvalidar">Sin validar en SAT</option>
+                        <option value="verificados">Verificados</option>
+                        <option value="noverificados">No verificados</option>
+                        <option value="duplicados">Duplicados (mismo UUID en varios XML)</option>
+                        <option value="ppd">PPD (pago en parcialidades)</option>
+                    </select>
+                </label>
+                <button class="btn btn-sm btn-outline-secondary" @onclick='() => AbrirModal("columnas")'><i class="bi bi-layout-three-columns me-1"></i>Columnas visibles</button>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => MostrarDetalles = !MostrarDetalles">
+                    <i class="bi @(MostrarDetalles ? "bi-chevron-bar-down" : "bi-chevron-bar-up") me-1"></i>@(MostrarDetalles ? "Ocultar detalles" : "Mostrar detalles")
+                </button>
+            </div>
+
+            @if (MostrarDetalles)
+            {
+                <div class="detalles">
+                    <div class="detalle-tablas">
+                        <div class="pestanas chicas">
+                            <button class="@(Det == "conceptos" ? "activa" : "")" @onclick='() => CambiarDetalle("conceptos")'>Conceptos</button>
+                            <button class="@(Det == "impuestos" ? "activa" : "")" @onclick='() => CambiarDetalle("impuestos")'>Impuestos</button>
+                            <button class="@(Det == "locales" ? "activa" : "")" @onclick='() => CambiarDetalle("locales")'>Impuestos locales</button>
+                            <button class="@(Det == "complemento" ? "activa" : "")" @onclick='() => CambiarDetalle("complemento")'>Complemento</button>
+                        </div>
+                        <div class="detalle-cuerpo">
+                            @if (Activa is null)
+                            {
+                                <p class="tenue p-2">Selecciona un comprobante.</p>
+                            }
+                            else if (Det == "conceptos")
+                            {
+                                <table>
+                                    <thead><tr><th>ClaveProdServ</th><th>NoIdentificación</th><th class="num">Cantidad</th><th>Clave unidad</th><th>Unidad</th><th>Descripción</th><th class="num">Valor unitario</th><th class="num">Descuento</th><th class="num">Importe</th></tr></thead>
+                                    <tbody>
+                                        @foreach (ConceptoDto k in Conceptos)
+                                        {
+                                            <tr><td>@k.ClaveProdServ</td><td>@k.NoIdentificacion</td><td class="num">@k.Cantidad.ToString("N2")</td><td>@k.ClaveUnidad</td><td>@k.Unidad</td><td class="largo">@k.Descripcion</td><td class="num">@k.ValorUnitario.ToString("N2")</td><td class="num">@((k.Descuento ?? 0).ToString("N2"))</td><td class="num">@k.Importe.ToString("N2")</td></tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                            else if (Det == "impuestos")
+                            {
+                                <table>
+                                    <thead><tr><th>Concepto</th><th>Tipo</th><th>Impuesto</th><th>Factor</th><th class="num">Tasa o cuota</th><th class="num">Base</th><th class="num">Importe</th></tr></thead>
+                                    <tbody>
+                                        @for (int i = 0; i < Conceptos.Count; i++)
+                                        {
+                                            int n = i + 1;
+                                            foreach (ImpuestoDto imp in Conceptos[i].Impuestos)
+                                            {
+                                                <tr><td>@n</td><td>@imp.Tipo</td><td>@NombreImpuesto(imp.Impuesto)</td><td>@imp.TipoFactor</td><td class="num">@imp.Tasa.ToString("0.######")</td><td class="num">@imp.Base.ToString("N2")</td><td class="num">@imp.Importe.ToString("N2")</td></tr>
+                                            }
+                                        }
+                                    </tbody>
+                                </table>
+                                <p class="tenue p-2 mb-0">
+                                    Comprobante: IVA @Activa.Iva.ToString("N2") · IEPS @Activa.Ieps.ToString("N2") ·
+                                    ret. IVA @Activa.RetIva.ToString("N2") · ret. ISR @Activa.RetIsr.ToString("N2")
+                                </p>
+                            }
+                            else if (Det == "complemento")
+                            {
+                                @if (ComplementosDetalle.Count == 0)
+                                {
+                                    <p class="tenue p-2">Sin complementos.</p>
+                                }
+                                @foreach (NodoXml n in ComplementosDetalle)
+                                {
+                                    @PintarNodo(n)
+                                }
+                            }
+                            else
+                            {
+                                <table>
+                                    <thead><tr><th>Tipo</th><th>Impuesto</th><th class="num">Tasa</th><th class="num">Importe</th></tr></thead>
+                                    <tbody>
+                                        @foreach (ImpuestoLocalDto l in ImpuestosLocales)
+                                        {
+                                            <tr><td>@l.Tipo</td><td>@l.Nombre</td><td class="num">@l.Tasa.ToString("0.####")</td><td class="num">@l.Importe.ToString("N2")</td></tr>
+                                        }
+                                        @if (ImpuestosLocales.Count == 0)
+                                        {
+                                            <tr><td colspan="4" class="tenue">Sin impuestos locales.</td></tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="totales">
+                        @if (Totales is { } t)
+                        {
+                            <div class="total azul"><span>Facturas <small>(@t.Facturas.Cantidad)</small></span><b>$@t.Facturas.Total.ToString("N2")</b></div>
+                            <div class="total verde"><span>Nómina 1.1 <small>(@t.Nominas11.Cantidad)</small></span><b>$@t.Nominas11.Total.ToString("N2")</b></div>
+                            <div class="total verde"><span>Nómina 1.2 <small>(@t.Nominas12.Cantidad)</small></span><b>$@t.Nominas12.Total.ToString("N2")</b></div>
+                            <div class="total mal"><span>Notas de crédito <small>(@t.NotasCredito.Cantidad)</small></span><b>$@t.NotasCredito.Total.ToString("N2")</b></div>
+                            <div class="total ambar"><span>Traslados <small>(@t.Traslados.Cantidad)</small></span><b>$@t.Traslados.Total.ToString("N2")</b></div>
+                            <div class="total morado"><span>Pagos <small>(@t.Pagos.Cantidad)</small></span><b>$@t.Pagos.Total.ToString("N2")</b></div>
+                            <div class="total archivos"><span>Total archivos XML</span><b>@t.Archivos.ToString("N0")</b></div>
+                        }
+                    </div>
+                </div>
+            }
+        </section>
+
+        <aside class="herramientas">
+            <h6>Básica</h6>
+            <button @onclick="() => Exportar(TipoReporte)"><i class="ic verde bi bi-file-earmark-excel"></i>Exportar a Excel</button>
+            <button @onclick="GuardarExcel"><i class="ic verde bi bi-floppy"></i>Guardar a Excel</button>
+            <button @onclick="AbrirXml"><i class="ic azul bi bi-filetype-xml"></i>Abrir XML</button>
+            <button @onclick="GenerarPdf"><i class="ic rojo bi bi-file-earmark-pdf"></i>Generar PDF</button>
+            <button @onclick="ValidarEstadoSat"><i class="ic azul bi bi-shield-check"></i>Valida Estado SAT</button>
+            <h6>Herramientas</h6>
+            <button @onclick="Localizar"><i class="ic azul bi bi-search"></i>Localizar XML</button>
+            <button @onclick='() => AbrirModal("importar")'><i class="ic azul bi bi-upload"></i>Importar XML</button>
+            <button @onclick="AlternarVerificado"><i class="ic verde bi bi-check2-square"></i>Verificado ó Asoc.</button>
+            <button @onclick="CopiarRutas"><i class="ic ambar bi bi-clipboard"></i>Copiar ruta(s) XML</button>
+            <button @onclick="PdfMasivo"><i class="ic rojo bi bi-files"></i>PDFs masivos</button>
+            <button @onclick='() => Exportar("conceptos")'><i class="ic azul bi bi-list-ul"></i>Conceptos</button>
+            <button @onclick='() => AbrirModal("agrupaciones")'><i class="ic ambar bi bi-diagram-3"></i>Agrupaciones</button>
+            <button @onclick='() => AbrirModal("renombrar")'><i class="ic azul bi bi-input-cursor-text"></i>Re-nombrar XML</button>
+            <button @onclick='() => AbrirModal("logos")'><i class="ic ambar bi bi-images"></i>Catálogo de logos</button>
+            <button @onclick='() => AbrirModal("series")'><i class="ic azul bi bi-123"></i>Verifica series</button>
+            <button @onclick="LeerComplemento"><i class="ic verde bi bi-braces"></i>Leer complemento</button>
+            <button @onclick='() => AbrirModal("externos")'><i class="ic ambar bi bi-box-arrow-in-down"></i>XML externos</button>
+            <button @onclick='() => AbrirModal("red")'><i class="ic azul bi bi-hdd-network"></i>Bóveda en red</button>
+        </aside>
+    }
+
+    @if (Aviso != "")
+    {
+        <div class="aviso @(AvisoError ? "error" : "")">
+            <span>@Aviso</span>
+            @if (CarpetaAviso != "")
+            {
+                <button class="btn btn-sm btn-light" @onclick="() => AbrirCarpeta(CarpetaAviso)"><i class="bi bi-folder2-open me-1"></i>Abrir carpeta</button>
+            }
+            <button class="btn btn-sm btn-link text-reset" @onclick='() => Aviso = ""'>✕</button>
+        </div>
+    }
+
+    @if (Modal != "")
+    {
+        <div class="fondo-modal" @onclick="CerrarModal">
+            <div class="modal-caja" @onclick:stopPropagation="true">
+                <div class="modal-cabecera">
+                    <h5>@TituloModal</h5>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="CerrarModal">✕</button>
+                </div>
+                <div class="modal-cuerpo">
+                    @switch (Modal)
+                    {
+                        case "xml":
+                            <div class="d-flex gap-2 mb-2">
+                                <a class="btn btn-sm btn-primary" href="@UrlCfdi(ActivaId, "xml", true)" target="_blank">Descargar XML</a>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="GenerarPdf"><i class="bi bi-file-earmark-pdf me-1"></i>Ver PDF</button>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick="Localizar"><i class="bi bi-folder2-open me-1"></i>Localizar en carpeta</button>
+                            </div>
+                            <pre>@TextoXml</pre>
+                            break;
+
+                        case "columnas":
+                            <div class="columnas-elegir">
+                                @foreach (Columna c in Columnas)
+                                {
+                                    <label class="check"><input type="checkbox" checked="@(!Ocultas.Contains(c.Clave))" @onchange="e => AlternarColumna(c.Clave, e)" /> @c.Titulo</label>
+                                }
+                            </div>
+                            break;
+
+                        case "importar":
+                        case "externos":
+                            <p class="tenue">
+                                Los XML se importan a <b>@EmpresaContext.NombreEmpresa</b> igual que en Importaciones: se clasifican como
+                                emitidos o recibidos, se copian a <b>@RutaEmpresa</b> y se registran en la base de datos. Los repetidos se actualizan.
+                            </p>
+                            @if (Modal == "importar")
+                            {
+                                <label class="form-label">Archivos XML</label>
+                                <InputFile class="form-control mb-3" multiple accept=".xml" OnChange="ElegirArchivos" />
+                                <button class="btn btn-primary mb-3" disabled="@(ArchivosElegidos.Count == 0 || Cancelacion is not null)" @onclick="ImportarArchivos">
+                                    Importar @ArchivosElegidos.Count archivo(s)
+                                </button>
+                                <hr />
+                            }
+                            <label class="form-label">Importar una carpeta completa (incluye subcarpetas), por ejemplo la bóveda de AdminXML</label>
+                            <div class="d-flex gap-2">
+                                <input class="form-control" @bind="CarpetaImportar" placeholder="C:\AdminXML\BovedaCFDi\@EmpresaContext.Rfc" />
+                                <button class="btn btn-primary text-nowrap" disabled="@(Cancelacion is not null)" @onclick="ImportarCarpeta"><i class="bi bi-folder-plus me-1"></i>Importar carpeta</button>
+                            </div>
+                            break;
+
+                        case "agrupaciones":
+                            <div class="d-flex gap-2 align-items-end mb-2">
+                                <label class="form-label mb-0">
+                                    Agrupar por
+                                    <select class="form-select form-select-sm" @bind="AgruparPor" @bind:after="CargarAgrupaciones">
+                                        <option value="emisor">Emisor</option>
+                                        <option value="receptor">Receptor</option>
+                                        <option value="mes">Mes</option>
+                                        <option value="uso">Uso CFDI</option>
+                                        <option value="metodo">Método de pago</option>
+                                        <option value="tipo">Tipo</option>
+                                    </select>
+                                </label>
+                                <button class="btn btn-sm btn-outline-secondary" @onclick='() => Exportar("agrupado:" + AgruparPor)'><i class="bi bi-file-earmark-excel me-1"></i>Exportar a Excel</button>
+                            </div>
+                            <p class="tenue small">Facturas menos notas de crédito del filtro actual (sin importar la pestaña).</p>
+                            <table>
+                                <thead><tr><th>Clave</th><th>Nombre</th><th class="num">Comprobantes</th><th class="num">SubTotal</th><th class="num">IVA</th><th class="num">Total</th></tr></thead>
+                                <tbody>
+                                    @foreach (AdminXmlAgrupacionDto a in Agrupaciones)
+                                    {
+                                        <tr><td>@a.Clave</td><td class="largo">@a.Nombre</td><td class="num">@a.Cantidad</td><td class="num">@a.Subtotal.ToString("N2")</td><td class="num">@a.Iva.ToString("N2")</td><td class="num">@a.Total.ToString("N2")</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                            break;
+
+                        case "renombrar":
+                            <p class="tenue">Se crean <b>copias</b> con el nombre nuevo en Storage\Renombrados; los XML originales no se tocan. Se aplicará a @DescribirAlcance().</p>
+                            <div class="d-flex gap-2 align-items-end">
+                                <select class="form-select" @bind="PatronNombre">
+                                    <option value="serie_folio_uuid">Serie_Folio_UUID</option>
+                                    <option value="tipo_serie_folio_uuid">Tipo_Serie_Folio_UUID</option>
+                                    <option value="fecha_rfc_uuid">Fecha_RFCContraparte_UUID</option>
+                                </select>
+                                <button class="btn btn-primary text-nowrap" @onclick="Renombrar"><i class="bi bi-copy me-1"></i>Crear copias</button>
+                            </div>
+                            break;
+
+                        case "logos":
+                            <p class="tenue">El logo del RFC emisor aparece en sus PDF. PNG o JPG.</p>
+                            <div class="d-flex gap-2 align-items-end mb-3">
+                                <label class="form-label mb-0">RFC <input class="form-control" @bind="RfcLogo" /></label>
+                                <InputFile class="form-control" accept=".png,.jpg,.jpeg" OnChange="GuardarLogo" />
+                            </div>
+                            <div class="logos">
+                                @foreach (string rfc in LogosGuardados)
+                                {
+                                    <figure>
+                                        <img src="/api/logos/@rfc?v=@VersionLogos" alt="" />
+                                        <figcaption>@rfc</figcaption>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => QuitarLogo(rfc)"><i class="bi bi-trash me-1"></i>Quitar</button>
+                                    </figure>
+                                }
+                                @if (LogosGuardados.Count == 0)
+                                {
+                                    <p class="tenue">Aún no hay logos.</p>
+                                }
+                            </div>
+                            break;
+
+                        case "series":
+                            <p class="tenue small">Folios numéricos del filtro actual (sin importar la pestaña).</p>
+                            <table>
+                                <thead><tr><th>Serie</th><th>Tipos</th><th class="num">Desde</th><th class="num">Hasta</th><th class="num">Cantidad</th><th>Faltantes</th><th>Repetidos</th></tr></thead>
+                                <tbody>
+                                    @foreach (AdminXmlSerieDto s in Series)
+                                    {
+                                        <tr>
+                                            <td>@s.Serie</td><td>@s.Tipos</td><td class="num">@s.Desde</td><td class="num">@s.Hasta</td><td class="num">@s.Cantidad</td>
+                                            <td class="@(s.Faltantes.Count > 0 ? "mal" : "ok") ajusta">@(s.Faltantes.Count == 0 ? "Ninguno" : $"{s.Faltantes.Count}{(s.Faltantes.Count >= 500 ? "+" : "")}: {string.Join(", ", s.Faltantes.Take(60))}{(s.Faltantes.Count > 60 ? "…" : "")}")</td>
+                                            <td class="@(s.Repetidos.Count > 0 ? "mal" : "ok") ajusta">@(s.Repetidos.Count == 0 ? "Ninguno" : string.Join(", ", s.Repetidos.Take(30)))</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                            break;
+
+                        case "complemento":
+                            @if (Complementos.Count == 0)
+                            {
+                                <p class="tenue">Sin complementos.</p>
+                            }
+                            @foreach (NodoXml n in Complementos)
+                            {
+                                @PintarNodo(n)
+                            }
+                            break;
+
+                        case "red":
+                            <p>Los XML de <b>@EmpresaContext.NombreEmpresa</b> se guardan en:</p>
+                            <pre>@RutaEmpresa</pre>
+                            <p class="tenue">
+                                Todas las empresas usan la ruta XML general <code>@Rutas.CarpetaGeneral</code> más su RFC.
+                                Para usar una carpeta de red (por ejemplo <code>\\servidor\Boveda</code>), cambia <code>AppSettings:CarpetaXml</code>
+                                en appsettings.json y reinicia la aplicación.
+                            </p>
+                            break;
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private const int TamanoPagina = 200;
+    private static readonly System.Globalization.CultureInfo Cultura = System.Globalization.CultureInfo.GetCultureInfo("es-MX");
+
+    // ---------- filtros ----------
+    private string Clasificacion = "EMITIDO";
+    private List<int> Anios = new();
+    private int? Anio;
+    private List<int> MesesDisponibles = new();
+    private HashSet<int> MesesElegidos = new();
+    private bool Acumular;
+    private string Busqueda = "";
+    private string Filtrar = "";
+    private string Pestana = "facturas";
+    private string TipoReporte = "general";
+
+    // ---------- tabla ----------
+    private List<AdminXmlFilaDto> Filas = new();
+    private int Pagina;
+    private int TotalPaginas => Math.Max(1, ((Totales?.EnPestana ?? 0) + TamanoPagina - 1) / TamanoPagina);
+    private AdminXmlTotalesDto? Totales;
+    private HashSet<long> Marcadas = new();
+
+    /// <summary>Casilla del encabezado: todo el filtro, en todas las páginas (no solo lo visible).</summary>
+    private bool TodoElFiltro;
+
+    /// <summary>Renglón desde donde Shift + clic marca un rango.</summary>
+    private long _ancla;
+    private long ActivaId;
+    private AdminXmlFilaDto? Activa => Filas.FirstOrDefault(f => f.CfdiId == ActivaId);
+
+    // ---------- detalle ----------
+    private bool MostrarDetalles = true;
+    private string Det = "conceptos";
+    private List<ConceptoDto> Conceptos = new();
+    private List<CfdiRelacionadoDto> Relacionados = new();
+    private List<ImpuestoLocalDto> ImpuestosLocales = new();
+    private List<NodoXml> ComplementosDetalle = new();
+
+    // ---------- modales y procesos ----------
+    private string Modal = "";
+    private string TituloModal = "";
+    private string TextoXml = "";
+    private List<AdminXmlAgrupacionDto> Agrupaciones = new();
+    private string AgruparPor = "emisor";
+    private List<AdminXmlSerieDto> Series = new();
+    private List<NodoXml> Complementos = new();
+    private string PatronNombre = "serie_folio_uuid";
+    private List<IBrowserFile> ArchivosElegidos = new();
+    private string CarpetaImportar = "";
+    private string RfcLogo = "";
+    private List<string> LogosGuardados = new();
+    private int VersionLogos;
+    private ResultadoProcesoXml? Proceso;
+    private string TextoProceso = "";
+    private CancellationTokenSource? Cancelacion;
+    private string Aviso = "";
+    private bool AvisoError;
+    private string CarpetaAviso = "";
+    private CancellationTokenSource? _pausaBusqueda;
+
+    private string RutaEmpresa => Rutas.CarpetaEmpresa(EmpresaContext.Rfc);
+
+    // Orden de los comprobantes en toda la pantalla: facturas, nómina 1.1, nómina 1.2,
+    // notas de crédito, traslados y pagos.
+    private IEnumerable<(string, string, int)> Pestanas => new[]
+    {
+        ("", "Todos", Totales?.Archivos ?? 0),
+        ("facturas", "Facturas", Totales?.Facturas.Cantidad ?? 0),
+        ("nomina11", "Nómina 1.1", Totales?.Nominas11.Cantidad ?? 0),
+        ("nomina12", "Nómina 1.2", Totales?.Nominas12.Cantidad ?? 0),
+        ("notascredito", "Notas de crédito", Totales?.NotasCredito.Cantidad ?? 0),
+        ("traslados", "Traslados", Totales?.Traslados.Cantidad ?? 0),
+        ("pagos", "Pagos", Totales?.Pagos.Cantidad ?? 0)
+    };
+
+    /// <summary>Mismo color que el tipo tiene en el totalizador.</summary>
+    private static string ColorPestana(string clave) => clave switch
+    {
+        "facturas" => "azul",
+        "pagos" => "morado",
+        "nomina11" or "nomina12" => "verde",
+        "notascredito" => "mal",
+        "traslados" => "ambar",
+        _ => "todos"
+    };
+
+    // ---------- columnas ----------
+    private sealed record Columna(string Clave, string Titulo, Func<AdminXmlFilaDto, string> Valor, bool Numero = false, Func<AdminXmlFilaDto, string>? ClaseFn = null, string[]? Pestanas = null)
+    {
+        public string Clase(AdminXmlFilaDto x) => ClaseFn?.Invoke(x) ?? "";
+    }
+
+    private static string N(decimal? v) => v is decimal d ? d.ToString("N2") : "";
+
+    private static readonly List<Columna> Columnas = new()
+    {
+        new("verificado", "Verificado ó Asoc.", x => x.Verificado ? "✓" : "", ClaseFn: _ => "ok"),
+        new("estado_sat", "Estado SAT", x => x.EstadoSat, ClaseFn: x => x.EstadoSat.Equals("Cancelado", StringComparison.OrdinalIgnoreCase) ? "mal" : x.EstadoSat.Equals("Vigente", StringComparison.OrdinalIgnoreCase) ? "ok" : ""),
+        new("version", "Versión", x => x.Version),
+        new("tipo", "Tipo", x => NombreTipo(x.TipoCfdi)),
+        new("fecha", "Fecha emisión", x => x.FechaEmision.ToString("dd/MM/yyyy")),
+        new("timbrado", "Fecha timbrado", x => x.FechaTimbrado?.ToString("yyyy-MM-dd HH:mm:ss") ?? ""),
+        new("serie", "Serie", x => x.Serie),
+        new("folio", "Folio", x => x.Folio),
+        new("uuid", "UUID", x => x.Uuid, ClaseFn: _ => "uuid"),
+        new("rfc_emisor", "RFC emisor", x => x.RfcEmisor),
+        new("nombre_emisor", "Nombre emisor", x => x.NombreEmisor, ClaseFn: _ => "largo"),
+        new("rfc_receptor", "RFC receptor", x => x.RfcReceptor),
+        new("nombre_receptor", "Nombre receptor", x => x.NombreReceptor, ClaseFn: _ => "largo"),
+        new("uso", "Uso CFDI", x => x.UsoCfdi),
+        new("metodo", "Método pago", x => x.MetodoPago),
+        new("forma", "Forma pago", x => x.FormaPago),
+        new("moneda", "Moneda", x => x.Moneda),
+        new("subtotal", "SubTotal", x => N(x.Subtotal), true),
+        new("descuento", "Descuento", x => N(x.Descuento), true),
+        new("iva", "IVA", x => N(x.Iva), true),
+        new("ieps", "IEPS", x => N(x.Ieps), true),
+        new("ret_iva", "Ret. IVA", x => N(x.RetIva), true),
+        new("ret_isr", "Ret. ISR", x => N(x.RetIsr), true),
+        new("total", "Total", x => N(x.Total), true),
+        new("pagos", "Monto pagos", x => N(x.MontoTotalPagos), true, Pestanas: new[] { "pagos" })
+    };
+
+    private HashSet<string> Ocultas = new() { "descuento", "ieps", "ret_iva", "ret_isr", "forma" };
+
+    private List<Columna> ColumnasVisibles =>
+        Columnas.Where(c => !Ocultas.Contains(c.Clave) && (c.Pestanas is null || c.Pestanas.Contains(Pestana))).ToList();
+
+
+    private static string NombreTipo(string t) => t switch
+    {
+        "I" => "Factura", "E" => "NotaCredito", "T" => "Traslado", "P" => "Pago", "N" => "Nómina", _ => t
+    };
+
+    private static string NombreImpuesto(string i) => i switch { "001" => "ISR", "002" => "IVA", "003" => "IEPS", _ => i };
+
+    // ---------- ciclo de vida ----------
+    protected override async Task OnInitializedAsync()
+    {
+        EmpresaContext.OnChange += EmpresaCambio;
+        Sincronizacion.Cambio += SincronizacionCambio;
+        DescargaSat.Cambio += DescargaSatCambio;
+        _ultimaPasadaVista = Sincronizacion.UltimaPasada;
+        await CargarOpciones();
+
+        // La carpeta Storage\XML es la fuente de verdad: al abrir se vuelve a leer y,
+        // si registra o retira XML, SincronizacionCambio recarga la tabla.
+        Sincronizacion.SolicitarAhora();
+    }
+
+    private DateTime? _ultimaPasadaVista;
+
+    // ---------- descarga automática del SAT (el switch está junto al selector de empresa) ----------
+    private DateTime? _ultimaDescargaVista;
+
+    // Al terminar un ciclo que importó XML de esta empresa, se recarga la tabla.
+    private void DescargaSatCambio()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (!DescargaSat.EnCurso &&
+                DescargaSat.PorEmpresa.TryGetValue(EmpresaContext.EmpresaId, out var r) &&
+                r.Fin != _ultimaDescargaVista)
+            {
+                _ultimaDescargaVista = r.Fin;
+
+                if (r.Importados > 0 && Cancelacion is null)
+                {
+                    await CargarOpciones();
+                    StateHasChanged();
+                }
+            }
+        });
+    }
+
+    // Si la sincronización de Storage registró o retiró CFDI de esta empresa, se recarga la tabla.
+    private void SincronizacionCambio()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (Sincronizacion.EnCurso || Sincronizacion.UltimaPasada == _ultimaPasadaVista)
+            {
+                return;
+            }
+
+            _ultimaPasadaVista = Sincronizacion.UltimaPasada;
+
+            if (Sincronizacion.PorEmpresa.TryGetValue(EmpresaContext.EmpresaId, out var r) && r.Nuevos + r.Reubicados + r.Eliminados > 0 && Cancelacion is null)
+            {
+                await CargarOpciones();
+                StateHasChanged();
+            }
+        });
+    }
+
+    private void EmpresaCambio()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            Anio = null;
+            MesesElegidos.Clear();
+            await CargarOpciones();
+            StateHasChanged();
+            Sincronizacion.SolicitarAhora();
+        });
+    }
+
+    public void Dispose()
+    {
+        EmpresaContext.OnChange -= EmpresaCambio;
+        Sincronizacion.Cambio -= SincronizacionCambio;
+        DescargaSat.Cambio -= DescargaSatCambio;
+        Cancelacion?.Cancel();
+        _pausaBusqueda?.Cancel();
+    }
+
+    private AdminXmlFiltroDto Filtro() => new()
+    {
+        EmpresaId = EmpresaContext.EmpresaId,
+        Clasificacion = Clasificacion,
+        Anio = Anio,
+        Meses = MesesElegidos.ToList(),
+        Acumular = Acumular,
+        Pestana = Pestana,
+        Busqueda = Busqueda,
+        Filtrar = Filtrar,
+        Orden = Orden,
+        Descendente = Descendente
+    };
+
+    // Sin columna elegida la base ordena por fecha de emisión descendente.
+    private string Orden = "";
+
+    private bool Descendente;
+
+    // Primer clic ascendente, segundo descendente, tercero regresa al orden por omisión.
+    // Ordena todo el filtro en la base (no solo la página) y conserva las marcas.
+    private void Ordenar(string clave)
+    {
+        if (Orden != clave)
+        {
+            Orden = clave;
+            Descendente = false;
+        }
+        else if (!Descendente)
+        {
+            Descendente = true;
+        }
+        else
+        {
+            Orden = "";
+            Descendente = false;
+        }
+
+        IrPagina(0);
+    }
+
+    // Las acciones masivas usan los renglones marcados; si no hay (o está marcado todo el filtro), todo el filtro.
+    private AdminXmlFiltroDto FiltroAccion() =>
+        !TodoElFiltro && Marcadas.Count > 0 ? new AdminXmlFiltroDto { EmpresaId = EmpresaContext.EmpresaId, Ids = Marcadas.ToList() } : Filtro();
+
+    private string DescribirAlcance() =>
+        !TodoElFiltro && Marcadas.Count > 0 ? $"los {Marcadas.Count} comprobantes marcados" : $"los {Totales?.EnPestana ?? 0} comprobantes del filtro actual";
+
+    private async Task CargarOpciones()
+    {
+        if (!EmpresaContext.TieneEmpresaActiva)
+        {
+            return;
+        }
+
+        Anios =Repo.ObtenerAniosAdministracionXml(EmpresaContext.EmpresaId, Clasificacion);
+
+        if (Anio is null || !Anios.Contains(Anio.Value))
+        {
+            Anio = Anios.FirstOrDefault() is int a and > 0 ? a : null;
+            MesesElegidos.Clear();
+        }
+
+        MesesDisponibles = Anio is int anio ? Repo.ObtenerMesesAdministracionXml(EmpresaContext.EmpresaId, Clasificacion, anio) : new();
+        MesesElegidos.RemoveWhere(m => !MesesDisponibles.Contains(m));
+
+        if (MesesElegidos.Count == 0 && MesesDisponibles.Count > 0)
+        {
+            MesesElegidos.Add(MesesDisponibles[^1]);
+        }
+
+        await Consultar();
+    }
+
+    private Task Consultar()
+    {
+        try
+        {
+            Pagina = 0;
+            Marcadas.Clear();
+            TodoElFiltro = false;
+            AdminXmlFiltroDto f = Filtro();
+            Totales = Repo.ObtenerTotalesAdministracionXml(f);
+            Filas = Repo.BuscarAdministracionXml(f, 0, TamanoPagina);
+            Seleccionar(Filas.FirstOrDefault());
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    // Las marcas se conservan al cambiar de página (son ids).
+    private void IrPagina(int pagina)
+    {
+        try
+        {
+            Pagina = Math.Clamp(pagina, 0, TotalPaginas - 1);
+            Filas = Repo.BuscarAdministracionXml(Filtro(), Pagina, TamanoPagina);
+            Seleccionar(Filas.FirstOrDefault());
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+        }
+    }
+
+    private void IrPaginaEscrita(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int pagina))
+        {
+            IrPagina(pagina - 1);
+        }
+    }
+
+    private async Task BuscarConPausa()
+    {
+        _pausaBusqueda?.Cancel();
+        _pausaBusqueda = new CancellationTokenSource();
+
+        try
+        {
+            await Task.Delay(350, _pausaBusqueda.Token);
+            await Consultar();
+        }
+        catch (TaskCanceledException)
+        {
+            // Llegó otra tecla; esa búsqueda la reemplaza.
+        }
+    }
+
+    private Task CambiarClasificacion(string c)
+    {
+        Clasificacion = c;
+        return CargarOpciones();
+    }
+
+    private Task CambiarAnio(int a)
+    {
+        Anio = a;
+        MesesElegidos.Clear();
+        return CargarOpciones();
+    }
+
+    private Task ElegirMes(int mes, MouseEventArgs e)
+    {
+        if (e.CtrlKey)
+        {
+            if (!MesesElegidos.Remove(mes))
+            {
+                MesesElegidos.Add(mes);
+            }
+        }
+        else
+        {
+            MesesElegidos = new() { mes };
+        }
+
+        return Consultar();
+    }
+
+    private Task CambiarAcumular(ChangeEventArgs e)
+    {
+        Acumular = e.Value is true;
+        return Consultar();
+    }
+
+    private Task CambiarPestana(string p)
+    {
+        Pestana = p;
+        return Consultar();
+    }
+
+    private void Marcar(long id, ChangeEventArgs e)
+    {
+        SalirDeTodoElFiltro();
+        if (e.Value is true) Marcadas.Add(id); else Marcadas.Remove(id);
+        _ancla = id;
+    }
+
+    private void MarcarTodoElFiltro(ChangeEventArgs e)
+    {
+        TodoElFiltro = e.Value is true;
+        Marcadas.Clear();
+    }
+
+    // Al tocar renglones sueltos se deja de usar "todo el filtro"; lo visible queda marcado como estaba.
+    private void SalirDeTodoElFiltro()
+    {
+        if (!TodoElFiltro)
+        {
+            return;
+        }
+
+        TodoElFiltro = false;
+        Marcadas = Filas.Select(f => f.CfdiId).ToHashSet();
+    }
+
+    /// <summary>Clic: renglón activo. Ctrl + clic: marca o desmarca. Shift + clic: marca el rango desde el último renglón.</summary>
+    private void ClicFila(AdminXmlFilaDto x, MouseEventArgs e)
+    {
+        if (e.ShiftKey && Filas.FindIndex(f => f.CfdiId == _ancla) is int desde and >= 0)
+        {
+            SalirDeTodoElFiltro();
+            int hasta = Filas.FindIndex(f => f.CfdiId == x.CfdiId);
+
+            for (int i = Math.Min(desde, hasta); i <= Math.Max(desde, hasta); i++)
+            {
+                Marcadas.Add(Filas[i].CfdiId);
+            }
+        }
+        else if (e.CtrlKey || e.MetaKey)
+        {
+            SalirDeTodoElFiltro();
+
+            if (!Marcadas.Remove(x.CfdiId))
+            {
+                Marcadas.Add(x.CfdiId);
+            }
+
+            _ancla = x.CfdiId;
+        }
+        else
+        {
+            _ancla = x.CfdiId;
+        }
+
+        Seleccionar(x);
+    }
+
+    private void Seleccionar(AdminXmlFilaDto? x)
+    {
+        ActivaId = x?.CfdiId ?? 0;
+        Conceptos = x is null ? new() : Repo.ObtenerConceptosCfdi(EmpresaContext.EmpresaId, x.CfdiId);
+        Relacionados = x is null ? new() : Repo.ObtenerRelacionadosCfdi(EmpresaContext.EmpresaId, x.CfdiId);
+        ImpuestosLocales = new();
+        ComplementosDetalle = new();
+        CargarXmlVista();
+
+        if (Det == "locales")
+        {
+            CargarLocales();
+        }
+        else if (Det == "complemento")
+        {
+            CargarComplementoDetalle();
+        }
+    }
+
+    private string XmlVista = "";
+
+    private void CargarXmlVista()
+    {
+        try
+        {
+            XmlVista = Activa is null ? "" : FormatearXml(Admin.LeerXml(EmpresaContext.EmpresaActiva!, ActivaId));
+        }
+        catch (Exception ex)
+        {
+            XmlVista = ex.Message;
+        }
+    }
+
+    private static string FormatearXml(string xml) =>
+        System.Text.RegularExpressions.Regex.Replace(xml.TrimStart('﻿'), @">\s*<", ">\n<");
+
+    private void CambiarDetalle(string d)
+    {
+        Det = d;
+
+        if (d == "locales")
+        {
+            CargarLocales();
+        }
+        else if (d == "complemento")
+        {
+            CargarComplementoDetalle();
+        }
+    }
+
+    private void CargarComplementoDetalle()
+    {
+        try
+        {
+            ComplementosDetalle = Activa is null ? new() : Admin.LeerComplementos(EmpresaContext.EmpresaActiva!, ActivaId);
+        }
+        catch (Exception ex)
+        {
+            ComplementosDetalle = new();
+            Avisar(ex.Message, error: true);
+        }
+    }
+
+    private void CargarLocales()
+    {
+        try
+        {
+            ImpuestosLocales = Activa is null ? new() : Admin.LeerImpuestosLocales(EmpresaContext.EmpresaActiva!, ActivaId);
+        }
+        catch (Exception ex)
+        {
+            ImpuestosLocales = new();
+            Avisar(ex.Message, error: true);
+        }
+    }
+
+    private const string ClaveColumnasOcultas = "adminxml-columnas-ocultas";
+
+    // Las columnas visibles se recuerdan en el navegador; sin almacenamiento disponible se usan las de omisión.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            string? guardadas = await JS.InvokeAsync<string?>("localStorage.getItem", ClaveColumnasOcultas);
+
+            if (guardadas is not null)
+            {
+                Ocultas = guardadas.Split(',', StringSplitOptions.RemoveEmptyEntries).ToHashSet();
+                StateHasChanged();
+            }
+        }
+        catch (Exception)
+        {
+            // Sin localStorage (navegador privado o bloqueado).
+        }
+    }
+
+    private async Task AlternarColumna(string clave, ChangeEventArgs e)
+    {
+        if (e.Value is true) Ocultas.Remove(clave); else Ocultas.Add(clave);
+
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", ClaveColumnasOcultas, string.Join(",", Ocultas));
+        }
+        catch (Exception)
+        {
+            // Si no se puede guardar, solo dura esta sesión.
+        }
+    }
+
+    // ---------- avisos y modales ----------
+    private void Avisar(string texto, bool error = false, string carpeta = "")
+    {
+        Aviso = texto;
+        AvisoError = error;
+        CarpetaAviso = carpeta;
+    }
+
+    private bool RequiereActiva()
+    {
+        if (Activa is null)
+        {
+            Avisar("Selecciona un comprobante en la tabla.", error: true);
+            return false;
+        }
+
+        return true;
+    }
+
+    private void AbrirModal(string modal)
+    {
+        try
+        {
+            switch (modal)
+            {
+                case "agrupaciones":
+                    CargarAgrupaciones();
+                    TituloModal = "Agrupaciones";
+                    break;
+                case "series":
+                    Series = Repo.VerificarSeriesAdministracionXml(FiltroSinPestana());
+                    TituloModal = "Verifica series";
+                    break;
+                case "logos":
+                    LogosGuardados = Logos.Listar();
+                    RfcLogo = EmpresaContext.Rfc;
+                    TituloModal = "Catálogo de logos";
+                    break;
+                case "importar":
+                    ArchivosElegidos.Clear();
+                    TituloModal = "Importar XML";
+                    break;
+                case "externos":
+                    TituloModal = "XML externos";
+                    break;
+                case "renombrar":
+                    TituloModal = "Re-nombrar XML";
+                    break;
+                case "columnas":
+                    TituloModal = "Columnas visibles";
+                    break;
+                case "red":
+                    TituloModal = "Bóveda en red";
+                    break;
+            }
+
+            Modal = modal;
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+        }
+    }
+
+    private void CerrarModal() => Modal = "";
+
+    private AdminXmlFiltroDto FiltroSinPestana()
+    {
+        AdminXmlFiltroDto f = Filtro();
+        f.Pestana = "";
+        return f;
+    }
+
+    private void CargarAgrupaciones()
+    {
+        Agrupaciones = Repo.AgruparAdministracionXml(FiltroSinPestana(), AgruparPor);
+    }
+
+    private RenderFragment PintarNodo(NodoXml n) => __builder =>
+    {
+        <div class="nodo">
+            <b>@n.Nombre</b>
+            @if (n.Atributos.Count > 0)
+            {
+                <dl>
+                    @foreach (var a in n.Atributos)
+                    {
+                        <dt>@a.Key</dt><dd>@a.Value</dd>
+                    }
+                </dl>
+            }
+            @foreach (NodoXml h in n.Hijos)
+            {
+                @PintarNodo(h)
+            }
+        </div>
+    };
+
+    private string UrlCfdi(long id, string tipo, bool descargar = false) =>
+        $"/api/empresa/{EmpresaContext.EmpresaId}/cfdi/{id}/{tipo}{(descargar ? "?descargar=true" : "")}";
+
+    // ---------- acciones ----------
+    private async Task Exportar(string reporte)
+    {
+        try
+        {
+            AdminXmlFiltroDto f = FiltroAccion();
+            EmpresaDto empresa = EmpresaContext.EmpresaActiva!;
+            (byte[] contenido, string nombre) = await Task.Run(() => Admin.GenerarExcel(empresa, f, reporte));
+            await JS.InvokeVoidAsync("descargarArchivoBase64", nombre,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Convert.ToBase64String(contenido));
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+        }
+    }
+
+    private async Task GuardarExcel()
+    {
+        try
+        {
+            AdminXmlFiltroDto f = FiltroAccion();
+            string ruta = await Task.Run(() => Admin.GuardarExcel(EmpresaContext.EmpresaActiva!, f, TipoReporte));
+            Avisar($"Guardado en {ruta}", carpeta: Path.GetDirectoryName(ruta)!);
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+        }
+    }
+
+    private void AbrirXml()
+    {
+        if (!RequiereActiva()) return;
+
+        try
+        {
+            TextoXml = FormatearXml(Admin.LeerXml(EmpresaContext.EmpresaActiva!, ActivaId));
+            TituloModal = $"XML {Activa!.Uuid}";
+            Modal = "xml";
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+        }
+    }
+
+    private async Task GenerarPdf()
+    {
+        if (!RequiereActiva()) return;
+        await JS.InvokeVoidAsync("open", UrlCfdi(ActivaId, "pdf"), "_blank");
+    }
+
+    private void Localizar()
+    {
+        if (!RequiereActiva()) return;
+
+        try
+        {
+            Admin.Localizar(EmpresaContext.EmpresaActiva!, ActivaId);
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+        }
+    }
+
+    private void AbrirCarpeta(string carpeta)
+    {
+        try
+        {
+            Admin.AbrirCarpeta(carpeta);
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+        }
+    }
+
+    /// <summary>Marcados (o todo el filtro, con confirmación) o, si no hay, el renglón activo. Desmarca solo si todos ya estaban verificados.</summary>
+    private async Task AlternarVerificado()
+    {
+        List<AdminXmlFilaDto> objetivo;
+
+        try
+        {
+            objetivo = TodoElFiltro || Marcadas.Count > 0
+                ? Repo.ObtenerSeleccionAdministracionXml(FiltroAccion())
+                : Activa is { } a ? new() { a } : new();
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+            return;
+        }
+
+        if (objetivo.Count == 0)
+        {
+            Avisar("Marca o selecciona comprobantes.", error: true);
+            return;
+        }
+
+        bool verificar = !objetivo.All(f => f.Verificado);
+
+        if (TodoElFiltro && !await JS.InvokeAsync<bool>("confirm",
+                $"¿{(verificar ? "Marcar" : "Desmarcar")} como verificados los {objetivo.Count:N0} comprobantes del filtro?"))
+        {
+            return;
+        }
+
+        List<long> ids = objetivo.Select(f => f.CfdiId).ToList();
+        int n = Repo.MarcarVerificadosAdministracionXml(EmpresaContext.EmpresaId, ids, verificar);
+
+        foreach (AdminXmlFilaDto f in Filas.Where(f => ids.Contains(f.CfdiId)))
+        {
+            f.Verificado = verificar;
+        }
+
+        Avisar($"{n} {(verificar ? "marcados como verificados" : "desmarcados")}.");
+    }
+
+    private async Task CopiarRutas()
+    {
+        try
+        {
+            List<string> rutas = Repo.ObtenerSeleccionAdministracionXml(FiltroAccion()).Select(f => f.RutaXml).ToList();
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", string.Join("\r\n", rutas));
+            Avisar($"{rutas.Count} rutas copiadas al portapapeles.");
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+        }
+    }
+
+    private void LeerComplemento()
+    {
+        if (!RequiereActiva()) return;
+
+        try
+        {
+            Complementos = Admin.LeerComplementos(EmpresaContext.EmpresaActiva!, ActivaId);
+            TituloModal = $"Complementos de {Activa!.Uuid}";
+            Modal = "complemento";
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+        }
+    }
+
+    // ---------- procesos con progreso ----------
+    /// <param name="alAvanzar">Se llama con cada avance y al terminar (bajo el candado del resultado).</param>
+    /// <param name="texto">Texto de avance propio; por omisión "hechos de total".</param>
+    private async Task Ejecutar(string titulo, Func<IProgress<ResultadoProcesoXml>, CancellationToken, Task<ResultadoProcesoXml>> proceso, bool recargar,
+        Action<ResultadoProcesoXml>? alAvanzar = null, Func<ResultadoProcesoXml, string>? texto = null)
+    {
+        if (Cancelacion is not null)
+        {
+            Avisar("Ya hay un proceso en curso.", error: true);
+            return;
+        }
+
+        Cancelacion = new CancellationTokenSource();
+        Proceso = new ResultadoProcesoXml();
+        TextoProceso = $"{titulo}…";
+
+        var progreso = new Progress<ResultadoProcesoXml>(r =>
+        {
+            lock (r)
+            {
+                Proceso = r;
+                alAvanzar?.Invoke(r);
+                TextoProceso = texto?.Invoke(r) ?? $"{titulo}: {r.Hechos:N0} de {r.Total:N0}{(r.Errores > 0 ? $" · {r.Errores} errores" : "")}";
+            }
+
+            _ = InvokeAsync(StateHasChanged);
+        });
+
+        try
+        {
+            ResultadoProcesoXml r = await proceso(progreso, Cancelacion.Token);
+            Proceso = r;
+
+            lock (r)
+            {
+                alAvanzar?.Invoke(r);
+            }
+
+            string detalle = r.Detalle.Count > 0 ? " · " + string.Join(", ", r.Detalle.Select(d => $"{d.Key}: {d.Value}")) : "";
+            TextoProceso = $"{titulo}: terminado ({r.Hechos:N0})";
+            Avisar($"{titulo}: {r.Correctos:N0} correctos, {r.Errores:N0} con error{detalle}.", error: r.Errores > 0 && r.Correctos == 0, carpeta: r.Carpeta);
+        }
+        catch (OperationCanceledException)
+        {
+            TextoProceso = $"{titulo}: cancelado";
+        }
+        catch (Exception ex)
+        {
+            TextoProceso = $"{titulo}: error";
+            Avisar(ex.Message, error: true);
+        }
+        finally
+        {
+            Cancelacion = null;
+        }
+
+        if (recargar)
+        {
+            await CargarOpciones();
+        }
+    }
+
+    /// <summary>
+    /// Valida los marcados o, si no hay, todo el filtro (con su pestaña): tres consultas a la vez, avance por tipo
+    /// y cada celda de Estado SAT se actualiza al recibir la respuesta. "Cancelar" lo detiene.
+    /// </summary>
+    private async Task ValidarEstadoSat()
+    {
+        if (Cancelacion is not null)
+        {
+            Avisar("Ya hay un proceso en curso.", error: true);
+            return;
+        }
+
+        List<AdminXmlFilaDto> filas;
+
+        try
+        {
+            filas = Repo.ObtenerSeleccionAdministracionXml(FiltroAccion());
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+            return;
+        }
+
+        if (filas.Count == 0)
+        {
+            Avisar("No hay comprobantes para validar.", error: true);
+            return;
+        }
+
+        string conteo = string.Join(", ", AdministracionXmlService.OrdenTiposSat
+            .Select(t => (Tipo: t, Cantidad: filas.Count(x => x.TipoCfdi == t)))
+            .Where(p => p.Cantidad > 0)
+            .Select(p => $"{NombreTipo(p.Tipo)}: {p.Cantidad:N0}"));
+
+        if (!await JS.InvokeAsync<bool>("confirm", $"Se validará el estado SAT de {filas.Count:N0} comprobantes ({conteo}). ¿Continuar?"))
+        {
+            return;
+        }
+
+        await Ejecutar("Valida Estado SAT", (p, ct) => Admin.ValidarEstadoSatAsync(EmpresaContext.EmpresaActiva!, filas, p, ct), recargar: false,
+            alAvanzar: PintarEstadosSat,
+            texto: r => $"Valida Estado SAT: {r.Hechos:N0} de {r.Total:N0} · " +
+                        string.Join(" · ", r.PorTipo.Select(t => $"{NombreTipo(t.Key)} {t.Value.Hechos:N0}/{t.Value.Total:N0}")) +
+                        (r.Errores > 0 ? $" · {r.Errores} sin respuesta" : ""));
+
+        // Vigente / Cancelado del pie cambian con los nuevos estados.
+        Totales = Repo.ObtenerTotalesAdministracionXml(Filtro());
+    }
+
+    private void PintarEstadosSat(ResultadoProcesoXml r)
+    {
+        while (r.Estados.TryDequeue(out var e))
+        {
+            if (Filas.FirstOrDefault(f => f.CfdiId == e.CfdiId) is { } fila)
+            {
+                fila.EstadoSat = e.Estado;
+            }
+        }
+    }
+
+    private Task PdfMasivo()
+    {
+        AdminXmlFiltroDto f = FiltroAccion();
+        return Ejecutar("PDFs masivos", (p, ct) => Admin.PdfMasivoAsync(EmpresaContext.EmpresaActiva!, f, p, ct), recargar: false);
+    }
+
+    private Task Renombrar()
+    {
+        CerrarModal();
+        AdminXmlFiltroDto f = FiltroAccion();
+        return Ejecutar("Re-nombrar XML", (p, ct) => Admin.RenombrarAsync(EmpresaContext.EmpresaActiva!, f, PatronNombre, p, ct), recargar: false);
+    }
+
+    private void ElegirArchivos(InputFileChangeEventArgs e)
+    {
+        ArchivosElegidos = e.GetMultipleFiles(5000).ToList();
+    }
+
+    // El modal queda abierto: los archivos se leen a través del InputFile y dejan de ser legibles si se quita.
+    private Task ImportarArchivos()
+    {
+        List<IBrowserFile> archivos = ArchivosElegidos.ToList();
+        ArchivosElegidos = new();
+        return Ejecutar("Importar XML", (p, ct) => Admin.ImportarArchivosAsync(EmpresaContext.EmpresaActiva!, archivos, p, ct), recargar: true);
+    }
+
+    private Task ImportarCarpeta()
+    {
+        string carpeta = CarpetaImportar.Trim();
+        CerrarModal();
+        return Ejecutar("Importar carpeta", (p, ct) => Admin.ImportarCarpetaAsync(EmpresaContext.EmpresaActiva!, carpeta, p, ct), recargar: true);
+    }
+
+    private async Task GuardarLogo(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            using var memoria = new MemoryStream();
+            await e.File.OpenReadStream(5 * 1024 * 1024).CopyToAsync(memoria);
+            Logos.Guardar(RfcLogo, memoria.ToArray());
+            LogosGuardados = Logos.Listar();
+            VersionLogos++;
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+        }
+    }
+
+    private void QuitarLogo(string rfc)
+    {
+        Logos.Quitar(rfc);
+        LogosGuardados = Logos.Listar();
+    }
+}

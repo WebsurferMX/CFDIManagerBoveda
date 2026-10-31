@@ -1,0 +1,530 @@
+@page "/efos"
+@implements IDisposable
+
+@using CFDIParser.Models
+@using CFDIParser.Services
+@using CFDIManager.Web.Services
+@using CFDIManager.Web.Services.Interfaces
+@using CFDIManager.Web.Services.Storage
+@using Microsoft.AspNetCore.Components.Forms
+
+@inject PostgreSqlRepository Repository
+@inject EmpresaContext EmpresaContext
+@inject IEfosSatService EfosSat
+@inject EstadoSincronizacionStorage Sincronizacion
+
+<PageTitle>EFOS / EDOS</PageTitle>
+
+<h3 class="mb-3">🛡️ EFOS / EDOS <small class="text-muted fs-6">Artículo 69-B del CFF</small></h3>
+
+@if (_mensaje != "")
+{
+    <div class="alert @(_mensajeError ? "alert-danger" : "alert-info") d-flex justify-content-between">
+        <span>@_mensaje</span>
+        <button class="btn-close" @onclick='() => _mensaje = ""'></button>
+    </div>
+}
+
+<div class="row g-3 mb-3">
+    <div class="col-lg-7">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <div class="fw-semibold">Lista 69-B del SAT</div>
+                        @if (_listado is { Total: > 0 } l)
+                        {
+                            <div class="small text-muted">
+                                @l.Total.ToString("N0") contribuyentes ·
+                                información al <b>@(l.FechaCorte?.ToString("dd/MM/yyyy") ?? "fecha no indicada")</b> ·
+                                cargada el @l.FechaCarga?.ToString("dd/MM/yyyy HH:mm") (@l.Origen)
+                            </div>
+                            <div class="small mt-1">
+                                @foreach (var (s, n) in l.PorSituacion.OrderBy(x => OrdenSituacion(x.Key)))
+                                {
+                                    <span class="badge @ClaseSituacion(s) me-1">@NombreSituacion(s): @n.ToString("N0")</span>
+                                }
+                            </div>
+                            @if (l.FechaCarga is null)
+                            {
+                                <div class="small text-danger mt-1">
+                                    Esta lista no proviene del listado oficial. Cárgalo del SAT para que el análisis sea válido.
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="small text-danger">No hay lista cargada. Descárgala del SAT para hacer el análisis.</div>
+                        }
+                    </div>
+                </div>
+                <div class="d-flex gap-2 mt-3 flex-wrap">
+                    <button class="btn btn-primary btn-sm" disabled="@_ocupado" @onclick="DescargarListaSat">Descargar del SAT</button>
+                    <label class="btn btn-outline-secondary btn-sm mb-0 @(_ocupado ? "disabled" : "")">
+                        Cargar CSV del SAT
+                        <InputFile class="d-none" accept=".csv" OnChange="CargarListaArchivo" />
+                    </label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card shadow-sm h-100">
+            <div class="card-body">
+                <div class="fw-semibold">XML de @EmpresaContext.NombreEmpresa</div>
+                <div class="small text-muted">
+                    @_cfdiRegistrados.ToString("N0") CFDI registrados · la carpeta de la empresa se sincroniza sola
+                    @if (Sincronizacion.SiguientePasada is DateTime siguiente && !Sincronizacion.EnCurso)
+                    {
+                        <span>(siguiente revisión @siguiente.ToString("HH:mm"))</span>
+                    }
+                </div>
+                @if (ResultadoEmpresa is { } sinc)
+                {
+                    <div class="small mt-1 @(sinc.Aviso != "" ? "text-danger" : "")">
+                        @(sinc.Fin is null ? $"Revisando {sinc.Revisados:N0} de {sinc.PorRevisar:N0} XML nuevos o modificados…" : $"Última revisión {sinc.Fin:dd/MM HH:mm}: {sinc.Resumen}")
+                    </div>
+                }
+                else if (Sincronizacion.EnCurso)
+                {
+                    <div class="small mt-1">Revisando carpetas…</div>
+                }
+                <button class="btn btn-outline-primary btn-sm mt-3" disabled="@Sincronizacion.EnCurso" @onclick="SincronizarAhora">
+                    @(Sincronizacion.EnCurso ? "Sincronizando…" : "Sincronizar ahora")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (!EmpresaContext.TieneEmpresaActiva)
+{
+    <div class="alert alert-warning">Selecciona una empresa.</div>
+}
+else
+{
+    <div class="row g-3 mb-3">
+        <div class="col-md-3">
+            <div class="card border-primary shadow-sm h-100">
+                <div class="card-body text-center">
+                    <div class="text-muted">Proveedores en la lista</div>
+                    <h2>@Recibidos.Select(x => x.Rfc).Distinct().Count()</h2>
+                    <small class="text-muted">emisores de CFDI recibidos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-danger shadow-sm h-100">
+                <div class="card-body text-center">
+                    <div class="text-muted">CFDI recibidos en riesgo</div>
+                    <h2>@ConRiesgo.Sum(x => x.Cfdi - x.Cancelados)</h2>
+                    <small class="text-muted">vigentes, de presuntos y definitivos</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-warning shadow-sm h-100">
+                <div class="card-body text-center">
+                    <div class="text-muted">Monto en riesgo</div>
+                    <h5 class="mb-1">@ConRiesgo.Sum(x => x.ImporteNeto).ToString("C")</h5>
+                    <small class="text-muted">
+                        Deducción @ConRiesgo.Sum(x => x.BaseNeta).ToString("C") ·
+                        IVA acreditable @ConRiesgo.Sum(x => x.IvaNeto).ToString("C")
+                    </small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-@Semaforo.Color shadow-sm h-100">
+                <div class="card-body text-center">
+                    <div style="font-size:40px">@Semaforo.Icono</div>
+                    <div class="fw-bold">@Semaforo.Texto</div>
+                    <small class="text-muted">@Semaforo.Detalle</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        @foreach (var (s, clase) in new[] { ("PRESUNTO", "bg-warning text-dark"), ("DEFINITIVO", "bg-danger text-white"), ("DESVIRTUADO", "bg-info text-white"), ("FAVORABLE", "bg-success text-white") })
+        {
+            <div class="col-md-3">
+                <div class="card @clase shadow-sm">
+                    <div class="card-body text-center py-2">
+                        <h2 class="mb-0">@Recibidos.Where(x => x.Situacion == s).Select(x => x.Rfc).Distinct().Count()</h2>
+                        <div>@NombreSituacion(s)</div>
+                        <small>@Recibidos.Where(x => x.Situacion == s).Sum(x => x.ImporteNeto).ToString("C")</small>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="card shadow-sm mb-3">
+        <div class="card-header"><strong>Proveedores en la lista 69-B</strong> <small class="text-muted">· CFDI recibidos (riesgo EDOS)</small></div>
+        <div class="card-body p-0">
+            @TablaCoincidencias(Recibidos, true)
+        </div>
+    </div>
+
+    @if (Emitidos.Count > 0)
+    {
+        <div class="card shadow-sm mb-3">
+            <div class="card-header"><strong>Clientes en la lista 69-B</strong> <small class="text-muted">· CFDI emitidos (informativo; no afecta tus deducciones)</small></div>
+            <div class="card-body p-0">
+                @TablaCoincidencias(Emitidos, false)
+            </div>
+        </div>
+    }
+
+    @if (_detalle.Any())
+    {
+        <div class="card shadow-sm mb-3">
+            <div class="card-header d-flex justify-content-between">
+                <div>CFDI @(_clasificacionDetalle == "RECIBIDO" ? "recibidos de" : "emitidos a") <b>@_rfcDetalle</b></div>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="CerrarDetalle">✖ Cerrar</button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th><th>Tipo</th><th>Serie-Folio</th><th>UUID</th>
+                                <th class="text-end">Base</th><th class="text-end">IVA</th><th class="text-end">Total</th>
+                                <th>Estado SAT</th><th>Observación</th><th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (EfosCfdiDto c in _detalle)
+                            {
+                                <tr>
+                                    <td>@c.FechaEmision.ToString("dd/MM/yyyy")</td>
+                                    <td>@NombreTipo(c.TipoCfdi)</td>
+                                    <td>@string.Join("-", new[] { c.Serie, c.Folio }.Where(x => x != ""))</td>
+                                    <td class="small font-monospace">@c.UUID</td>
+                                    <td class="text-end">@c.Base.ToString("C")</td>
+                                    <td class="text-end">@c.Iva.ToString("C")</td>
+                                    <td class="text-end">@c.Total.ToString("C")</td>
+                                    <td>@c.EstadoSat</td>
+                                    <td class="small">@ObservacionCfdi(c)</td>
+                                    <td class="text-nowrap">
+                                        <a href="@($"/api/empresa/{EmpresaContext.EmpresaId}/cfdi/{c.CfdiId}/xml")" target="_blank">XML</a> ·
+                                        <a href="@($"/api/empresa/{EmpresaContext.EmpresaId}/cfdi/{c.CfdiId}/pdf")" target="_blank">PDF</a>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body small text-muted">
+            <b>Criterio del análisis (art. 69-B CFF).</b>
+            Se cruzan los CFDI registrados de la empresa contra el Listado completo 69-B. El riesgo EDOS son los CFDI
+            <b>recibidos</b> de contribuyentes listados; los cancelados no se cuentan y las notas de crédito restan.
+            <b>Definitivo</b>: los comprobantes no producen efectos fiscales; quien los recibió tiene 30 días siguientes a la
+            publicación del listado definitivo en el DOF para acreditar ante el SAT que las operaciones existieron o
+            autocorregirse (los plazos en días del CFF son hábiles; la fecha mostrada es aproximada, sin días inhábiles oficiales).
+            <b>Presunto</b>: aún no es definitivo; conviene reunir evidencia de materialidad y evitar nuevas operaciones.
+            <b>Desvirtuado</b> y <b>sentencia favorable</b>: sin efectos negativos, solo informativo.
+        </div>
+    </div>
+}
+
+@code {
+    private EfosListadoEstadoDto? _listado;
+    private List<EfosCoincidenciaDto> _coincidencias = new();
+    private List<EfosCfdiDto> _detalle = new();
+    private string? _rfcDetalle;
+    private string _clasificacionDetalle = "";
+    private int _cfdiRegistrados;
+    private bool _ocupado;
+    private string _mensaje = "";
+    private bool _mensajeError;
+    private DateTime? _ultimaPasadaVista;
+
+    private ResultadoSincronizacion? ResultadoEmpresa =>
+        Sincronizacion.PorEmpresa.TryGetValue(EmpresaContext.EmpresaId, out ResultadoSincronizacion? r) ? r : null;
+
+    private List<EfosCoincidenciaDto> Recibidos => _coincidencias.Where(x => x.Clasificacion == "RECIBIDO").ToList();
+    private List<EfosCoincidenciaDto> Emitidos => _coincidencias.Where(x => x.Clasificacion == "EMITIDO").ToList();
+    private List<EfosCoincidenciaDto> ConRiesgo => Recibidos.Where(x => x.Situacion is "DEFINITIVO" or "PRESUNTO").ToList();
+
+    private (string Texto, string Color, string Icono, string Detalle) Semaforo =>
+        _listado is not { Total: > 0 } ? ("SIN LISTA CARGADA", "secondary", "⚪", "Descarga la lista 69-B del SAT")
+        : Recibidos.Any(x => x.Situacion == "DEFINITIVO" && x.Cfdi > x.Cancelados) ? ("RIESGO ALTO", "danger", "🔴", "Proveedores definitivos: CFDI sin efectos fiscales")
+        : Recibidos.Any(x => x.Situacion == "PRESUNTO" && x.Cfdi > x.Cancelados) ? ("RIESGO MEDIO", "warning", "🟡", "Proveedores presuntos")
+        : _coincidencias.Count > 0 ? ("RIESGO BAJO", "success", "🟢", "Solo desvirtuados, favorables o clientes")
+        : ("SIN COINCIDENCIAS", "success", "🟢", "Ningún CFDI con contribuyentes listados");
+
+    protected override void OnInitialized()
+    {
+        EmpresaContext.OnChange += EmpresaCambio;
+        Sincronizacion.Cambio += SincronizacionCambio;
+        _ultimaPasadaVista = Sincronizacion.UltimaPasada;
+        CargarDatos();
+    }
+
+    public void Dispose()
+    {
+        EmpresaContext.OnChange -= EmpresaCambio;
+        Sincronizacion.Cambio -= SincronizacionCambio;
+    }
+
+    // Al terminar una pasada se recarga el análisis para incluir los XML nuevos.
+    private void SincronizacionCambio()
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (!Sincronizacion.EnCurso && Sincronizacion.UltimaPasada != _ultimaPasadaVista)
+            {
+                _ultimaPasadaVista = Sincronizacion.UltimaPasada;
+                CargarDatos();
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    private void SincronizarAhora() => Sincronizacion.SolicitarAhora();
+
+    private void EmpresaCambio()
+    {
+        _ = InvokeAsync(() =>
+        {
+            CerrarDetalle();
+            CargarDatos();
+            StateHasChanged();
+        });
+    }
+
+    private void CargarDatos()
+    {
+        try
+        {
+            _listado = Repository.ObtenerEstadoListadoEfos();
+
+            if (!EmpresaContext.TieneEmpresaActiva)
+            {
+                _coincidencias = new();
+                return;
+            }
+
+            _coincidencias = Repository.ObtenerCoincidenciasEfos(EmpresaContext.EmpresaId);
+            _cfdiRegistrados = Repository.ContarCfdiEmpresa(EmpresaContext.EmpresaId);
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+        }
+    }
+
+    private void Avisar(string texto, bool error = false)
+    {
+        _mensaje = texto;
+        _mensajeError = error;
+    }
+
+    private async Task Ejecutar(Func<Task> accion)
+    {
+        _ocupado = true;
+        _mensaje = "";
+
+        try
+        {
+            await accion();
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+        }
+        finally
+        {
+            _ocupado = false;
+            CargarDatos();
+        }
+    }
+
+    private Task DescargarListaSat() => Ejecutar(async () =>
+    {
+        Avisar("Descargando el Listado completo 69-B del SAT…");
+        StateHasChanged();
+        ResultadoImportacionEfosDto r = await EfosSat.DescargarDelSatAsync();
+        AvisarCarga(r);
+    });
+
+    private Task CargarListaArchivo(InputFileChangeEventArgs e) => Ejecutar(async () =>
+    {
+        await using Stream archivo = e.File.OpenReadStream(50L * 1024 * 1024);
+        ResultadoImportacionEfosDto r = await EfosSat.ImportarAsync(archivo, e.File.Name);
+        AvisarCarga(r);
+    });
+
+    private void AvisarCarga(ResultadoImportacionEfosDto r)
+    {
+        Avisar($"Lista 69-B cargada: {r.Insertados:N0} RFC de {r.Procedimientos:N0} procedimientos (información al {r.FechaCorte:dd/MM/yyyy})" +
+               (r.Suprimidos > 0 ? $"; {r.Suprimidos} renglones con datos suprimidos por orden judicial" : "") +
+               (r.Errores > 0 ? $"; {r.Errores} renglones sin situación reconocida" : "") + ".");
+    }
+
+    private void VerDetalle(EfosCoincidenciaDto c)
+    {
+        _rfcDetalle = c.Rfc;
+        _clasificacionDetalle = c.Clasificacion;
+        _detalle = Repository.ObtenerCfdiEfos(EmpresaContext.EmpresaId, c.Rfc, c.Clasificacion);
+    }
+
+    private void CerrarDetalle()
+    {
+        _detalle = new();
+        _rfcDetalle = null;
+    }
+
+    private RenderFragment TablaCoincidencias(List<EfosCoincidenciaDto> filas, bool recibidos) => __builder =>
+    {
+        <div class="table-responsive">
+            <table class="table table-sm table-striped table-hover mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>RFC</th><th>Nombre</th><th>Situación</th><th>Publicación DOF</th>
+                        <th class="text-end">CFDI</th><th class="text-end">Base</th><th class="text-end">IVA</th><th class="text-end">Importe neto</th>
+                        <th>@(recibidos ? "Acción requerida" : "Nota")</th><th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (filas.Count == 0)
+                    {
+                        <tr><td colspan="10" class="text-center text-muted">Sin coincidencias.</td></tr>
+                    }
+                    @foreach (EfosCoincidenciaDto c in filas)
+                    {
+                        <tr>
+                            <td>@c.Rfc</td>
+                            <td>@c.Nombre</td>
+                            <td><span class="badge @ClaseSituacion(c.Situacion)">@NombreSituacion(c.Situacion)</span></td>
+                            <td class="small">@Publicaciones(c)</td>
+                            <td class="text-end">@c.Cfdi@(c.Cancelados > 0 ? $" ({c.Cancelados} canc.)" : "")</td>
+                            <td class="text-end">@c.BaseNeta.ToString("C")</td>
+                            <td class="text-end">@c.IvaNeto.ToString("C")</td>
+                            <td class="text-end">@c.ImporteNeto.ToString("C")</td>
+                            <td class="small">@(recibidos ? Accion(c) : "Cliente en la lista; tus ingresos no pierden efectos, pero conviene revisar la relación comercial.")</td>
+                            <td><button class="btn btn-sm btn-outline-primary" @onclick="() => VerDetalle(c)">🔍</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    };
+
+    private static string Publicaciones(EfosCoincidenciaDto c)
+    {
+        var partes = new List<string>();
+        if (c.PublicacionPresuntoDof is DateTime p) partes.Add($"Presunto {p:dd/MM/yyyy}");
+        if (c.PublicacionDefinitivoDof is DateTime d) partes.Add($"Definitivo {d:dd/MM/yyyy}");
+        else if (c.PublicacionDefinitivoSat is DateTime ds) partes.Add($"Definitivo (portal SAT, DOF pendiente) {ds:dd/MM/yyyy}");
+        if (c.PublicacionDesvirtuadoDof is DateTime v) partes.Add($"Desvirtuado {v:dd/MM/yyyy}");
+        if (c.PublicacionFavorableDof is DateTime f) partes.Add($"Sentencia {f:dd/MM/yyyy}");
+        if (c.Procedimientos > 1) partes.Add($"{c.Procedimientos} procedimientos; se toma el más grave");
+        return partes.Count == 0 ? "—" : string.Join(" · ", partes);
+    }
+
+    private static string Accion(EfosCoincidenciaDto c)
+    {
+        switch (c.Situacion)
+        {
+            case "DEFINITIVO":
+                string texto = "Los CFDI no producen efectos fiscales. Acreditar materialidad ante el SAT o autocorregir.";
+
+                if (c.PublicacionDefinitivoDof is DateTime d)
+                {
+                    DateTime vence = SumarDiasHabiles(d, 30);
+                    texto += vence < DateTime.Today
+                        ? $" Plazo de 30 días hábiles vencido (aprox. {vence:dd/MM/yyyy})."
+                        : $" Plazo de 30 días hábiles hasta aprox. {vence:dd/MM/yyyy}.";
+                }
+                else if (c.PublicacionDefinitivoSat is not null)
+                {
+                    texto += " El plazo de 30 días hábiles corre desde la publicación en el DOF, aún pendiente.";
+                }
+
+                if (c.PosterioresAlDefinitivo > 0)
+                {
+                    texto += $" {c.PosterioresAlDefinitivo} CFDI recibidos después de la publicación definitiva.";
+                }
+
+                return texto;
+
+            case "PRESUNTO":
+                return "Presunción en trámite: reunir evidencia de materialidad (contratos, entregables, pagos) y evitar nuevas operaciones.";
+
+            case "DESVIRTUADO":
+                return "Desvirtuó la presunción: sin efectos negativos.";
+
+            default:
+                return "Sentencia favorable: sin efectos negativos.";
+        }
+    }
+
+    private string ObservacionCfdi(EfosCfdiDto c)
+    {
+        if (c.EstadoSat.Equals("Cancelado", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Cancelado: no se considera.";
+        }
+
+        EfosCoincidenciaDto? k = _coincidencias.FirstOrDefault(x => x.Rfc == _rfcDetalle && x.Clasificacion == _clasificacionDetalle);
+
+        if (k is { Situacion: "DEFINITIVO" } && (k.PublicacionDefinitivoDof ?? k.PublicacionDefinitivoSat) is DateTime d && c.FechaEmision.Date > d)
+        {
+            return $"Emitido después de la publicación definitiva ({d:dd/MM/yyyy}).";
+        }
+
+        return c.TipoCfdi == "E" ? "Nota de crédito: resta al importe." : "";
+    }
+
+    /// <summary>Suma días hábiles saltando fines de semana (no contempla días inhábiles oficiales).</summary>
+    private static DateTime SumarDiasHabiles(DateTime desde, int dias)
+    {
+        DateTime f = desde.Date;
+
+        while (dias > 0)
+        {
+            f = f.AddDays(1);
+
+            if (f.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday))
+            {
+                dias--;
+            }
+        }
+
+        return f;
+    }
+
+    private static int OrdenSituacion(string s) => s switch { "DEFINITIVO" => 0, "PRESUNTO" => 1, "DESVIRTUADO" => 2, _ => 3 };
+
+    private static string NombreSituacion(string s) => s switch
+    {
+        "PRESUNTO" => "Presunto",
+        "DEFINITIVO" => "Definitivo",
+        "DESVIRTUADO" => "Desvirtuado",
+        "FAVORABLE" => "Sentencia favorable",
+        _ => s
+    };
+
+    private static string ClaseSituacion(string s) => s switch
+    {
+        "DEFINITIVO" => "bg-danger",
+        "PRESUNTO" => "bg-warning text-dark",
+        "DESVIRTUADO" => "bg-info",
+        _ => "bg-success"
+    };
+
+    private static string NombreTipo(string t) => t switch
+    {
+        "I" => "Ingreso", "E" => "Egreso", "P" => "Pago", "N" => "Nómina", "T" => "Traslado", _ => t
+    };
+}

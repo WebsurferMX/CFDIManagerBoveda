@@ -1,0 +1,22 @@
+.ciec-tarjeta {
+    padding: 1rem;
+    border: 1px solid #dde2e8;
+    border-radius: 0.65rem;
+    background: #f8fafc;
+}
+
+.ciec-etiqueta {
+    margin-bottom: 0.2rem;
+    color: #64748b;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+html[data-theme="dark"] .ciec-tarjeta {
+    border-color: #34465b;
+    background: #14212e;
+}
+
+html[data-theme="dark"] .ciec-etiqueta { color: #b3bbc8; }

@@ -1,0 +1,230 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using CFDIManager.Web.Services.Cif
+
+@inject ConstanciaFiscalService Constancias
+
+@* Datos de la Constancia de Situación Fiscal (CIF) que se sube en PDF. *@
+<div class="datos-fiscales">
+
+    <div class="cif-carga">
+        <div>
+            <b><i class="bi bi-file-earmark-text me-1"></i>Constancia de Situación Fiscal</b>
+            <div class="small text-body-secondary">
+                @if (Cif is null)
+                {
+                    <span>Sube el PDF de la constancia descargado del SAT para ver regímenes, actividades y obligaciones.</span>
+                }
+                else
+                {
+                    <span>
+                        @(Cif.IdCif != "" ? $"idCIF {Cif.IdCif} · " : "")
+                        @(Cif.LugarFechaEmision != "" ? $"Emitida en {Cif.LugarFechaEmision} · " : "")
+                        Cargada el @Cif.Cargada.ToString("dd/MM/yyyy HH:mm")
+                    </span>
+                }
+            </div>
+        </div>
+
+        <label class="btn btn-outline-primary mb-0 text-nowrap @(EmpresaId <= 0 || Cargando ? "disabled" : "")">
+            <i class="bi bi-upload me-1"></i>@(Cargando ? "Leyendo…" : Cif is null ? "Cargar CIF (PDF)" : "Actualizar CIF")
+            <InputFile class="d-none" accept=".pdf,application/pdf" OnChange="Cargar" disabled="@(EmpresaId <= 0 || Cargando)" />
+        </label>
+    </div>
+
+    @if (EmpresaId <= 0)
+    {
+        <div class="alert alert-info mt-3 mb-0">Guarda la empresa primero para poder cargar su constancia.</div>
+    }
+
+    @if (Error != "")
+    {
+        <div class="alert alert-danger mt-3 mb-0"><i class="bi bi-exclamation-triangle me-1"></i>@Error</div>
+    }
+
+    @if (Cif is not null)
+    {
+        @foreach (string aviso in Cif.Avisos)
+        {
+            <div class="alert alert-warning py-2 small mt-3 mb-0"><i class="bi bi-exclamation-triangle me-1"></i>@aviso</div>
+        }
+
+        <dl class="cif-identificacion">
+            <dt>RFC</dt><dd>@Cif.Rfc</dd>
+            <dt>Nombre</dt><dd>@Cif.Nombre</dd>
+            @if (Cif.Curp != "")
+            {
+                <dt>CURP</dt><dd>@Cif.Curp</dd>
+            }
+            @if (Cif.RegimenCapital != "")
+            {
+                <dt>Régimen capital</dt><dd>@Cif.RegimenCapital</dd>
+            }
+            @if (Cif.NombreComercial != "")
+            {
+                <dt>Nombre comercial</dt><dd>@Cif.NombreComercial</dd>
+            }
+            <dt>Estatus en el padrón</dt>
+            <dd class="@(Cif.EstatusPadron.Equals("ACTIVO", StringComparison.OrdinalIgnoreCase) ? "text-success fw-semibold" : "")">@Cif.EstatusPadron</dd>
+            <dt>Inicio de operaciones</dt><dd>@Cif.InicioOperaciones</dd>
+            @if (Domicilio != "")
+            {
+                <dt>Domicilio fiscal</dt><dd>@Domicilio</dd>
+            }
+        </dl>
+
+        <section class="cif-seccion">
+            <button type="button" class="cif-cabecera" @onclick='() => Alternar("regimenes")'>
+                <i class="bi bi-list-ul"></i><b>Regímenes</b>
+                <span class="cif-cuenta">@Cif.Regimenes.Count</span>
+                <i class="bi @(Cerradas.Contains("regimenes") ? "bi-chevron-down" : "bi-chevron-up")"></i>
+            </button>
+            @if (!Cerradas.Contains("regimenes"))
+            {
+                <div class="cif-cuerpo">
+                    @foreach (RegimenCif r in Cif.Regimenes)
+                    {
+                        <div class="cif-elemento">
+                            <span class="cif-clave">@r.Clave</span>
+                            <span class="flex-grow-1">@r.Nombre</span>
+                            <small class="text-body-secondary text-nowrap">Desde @r.FechaInicio@(r.FechaFin != "" ? $" · hasta {r.FechaFin}" : "")</small>
+                        </div>
+                    }
+                    @if (Cif.Regimenes.Count == 0)
+                    {
+                        <div class="text-body-secondary small">No se encontraron regímenes en la constancia.</div>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="cif-seccion">
+            <button type="button" class="cif-cabecera" @onclick='() => Alternar("actividades")'>
+                <i class="bi bi-briefcase-fill"></i><b>Actividades</b>
+                <span class="cif-cuenta">@Cif.Actividades.Count</span>
+                <i class="bi @(Cerradas.Contains("actividades") ? "bi-chevron-down" : "bi-chevron-up")"></i>
+            </button>
+            @if (!Cerradas.Contains("actividades"))
+            {
+                <div class="cif-cuerpo">
+                    @foreach (ActividadCif a in Cif.Actividades)
+                    {
+                        <div class="cif-elemento">
+                            <span class="cif-clave">@(a.Porcentaje != "" ? $"{a.Porcentaje}%" : "")</span>
+                            <span class="flex-grow-1">@a.Descripcion</span>
+                            <small class="text-body-secondary text-nowrap">Desde @a.FechaInicio@(a.FechaFin != "" ? $" · hasta {a.FechaFin}" : "")</small>
+                        </div>
+                    }
+                    @if (Cif.Actividades.Count == 0)
+                    {
+                        <div class="text-body-secondary small">No se encontraron actividades en la constancia.</div>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="cif-seccion">
+            <button type="button" class="cif-cabecera" @onclick='() => Alternar("obligaciones")'>
+                <i class="bi bi-file-earmark-text-fill"></i><b>Obligaciones</b>
+                <span class="cif-cuenta">@Cif.Obligaciones.Count</span>
+                <i class="bi @(Cerradas.Contains("obligaciones") ? "bi-chevron-down" : "bi-chevron-up")"></i>
+            </button>
+            @if (!Cerradas.Contains("obligaciones"))
+            {
+                <div class="cif-cuerpo">
+                    @foreach (ObligacionCif o in Cif.Obligaciones)
+                    {
+                        <div class="cif-elemento cif-obligacion">
+                            <div>@o.Descripcion</div>
+                            <small class="text-body-secondary">
+                                @o.Vencimiento@(o.Periodicidad != "" ? $" ({o.Periodicidad})" : "")
+                                · desde @o.FechaInicio@(o.FechaFin != "" ? $" · hasta {o.FechaFin}" : "")
+                            </small>
+                        </div>
+                    }
+                    @if (Cif.Obligaciones.Count == 0)
+                    {
+                        <div class="text-body-secondary small">No se encontraron obligaciones en la constancia.</div>
+                    }
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public long EmpresaId { get; set; }
+
+    [Parameter]
+    public string Rfc { get; set; } = "";
+
+    private ConstanciaFiscalDto? Cif;
+    private long? EmpresaCargada;
+    private string Error = "";
+    private bool Cargando;
+    private readonly HashSet<string> Cerradas = new();
+
+    private const long TamanoMaximo = 5 * 1024 * 1024;
+
+    private string Domicilio =>
+        Cif is null ? "" : string.Join(", ", new[]
+        {
+            $"{Valor("Tipo de Vialidad")} {Valor("Nombre de Vialidad")} {Valor("Número Exterior")}".Trim() +
+                (Valor("Número Interior") is { Length: > 0 } interior ? $" Int. {interior}" : ""),
+            Valor("Nombre de la Colonia"),
+            Valor("Código Postal") is { Length: > 0 } cp ? $"C.P. {cp}" : "",
+            Valor("Nombre del Municipio o Demarcación Territorial"),
+            Valor("Nombre de la Entidad Federativa")
+        }.Where(s => !string.IsNullOrWhiteSpace(s)));
+
+    private string Valor(string campo) =>
+        Cif?.Domicilio.TryGetValue(campo, out string? v) == true ? v : "";
+
+    protected override void OnParametersSet()
+    {
+        if (EmpresaCargada == EmpresaId)
+            return;
+
+        EmpresaCargada = EmpresaId;
+        Error = "";
+
+        try
+        {
+            Cif = EmpresaId > 0 ? Constancias.Obtener(EmpresaId) : null;
+        }
+        catch (Exception ex)
+        {
+            Cif = null;
+            Error = $"No se pudo leer la constancia guardada: {ex.Message}";
+        }
+    }
+
+    private void Alternar(string seccion)
+    {
+        if (!Cerradas.Remove(seccion))
+            Cerradas.Add(seccion);
+    }
+
+    private async Task Cargar(InputFileChangeEventArgs e)
+    {
+        Cargando = true;
+        Error = "";
+
+        try
+        {
+            using var ms = new MemoryStream();
+            await e.File.OpenReadStream(TamanoMaximo).CopyToAsync(ms);
+
+            byte[] pdf = ms.ToArray();
+            Cif = await Task.Run(() => Constancias.Cargar(EmpresaId, Rfc, pdf, e.File.Name));
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+}

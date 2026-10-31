@@ -1,0 +1,148 @@
+﻿@inherits LayoutComponentBase
+
+@using Microsoft.JSInterop
+@using CFDIManager.Web.Services
+@using CFDIParser.Models
+@using CFDIParser.Services
+
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject PostgreSqlRepository Repo
+@inject EmpresaContext EmpresaContext
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <EmpresaSelector />
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui"
+     data-nosnippet>
+    Ocurrió un error inesperado.
+
+    <a href="."
+       class="reload">
+        Recargar
+    </a>
+
+    <span class="dismiss">
+        🗙
+    </span>
+</div>
+
+@code {
+    private bool _recargaRevisada;
+
+    protected override void OnInitialized()
+    {
+        InicializarEmpresaPredeterminada();
+    }
+
+    private void InicializarEmpresaPredeterminada()
+    {
+        if (EmpresaContext.TieneEmpresaActiva)
+        {
+            return;
+        }
+
+        List<EmpresaDto> empresas =
+            Repo.ObtenerEmpresasActivas();
+
+        EmpresaDto? empresaPredeterminada =
+            empresas.FirstOrDefault();
+
+        if (empresaPredeterminada is null)
+        {
+            return;
+        }
+
+        EmpresaContext.Seleccionar(
+            empresaPredeterminada);
+    }
+
+    protected override async Task OnAfterRenderAsync(
+        bool firstRender)
+    {
+        if (!firstRender ||
+            _recargaRevisada)
+        {
+            return;
+        }
+
+        try
+        {
+            bool esRecarga =
+                await JS.InvokeAsync<bool>(
+                    "cfdiNavigation.esRecarga");
+
+            /*
+             * La comprobación se marca como realizada solamente
+             * después de que JavaScript respondió correctamente.
+             */
+            _recargaRevisada =
+                true;
+
+            if (!esRecarga)
+            {
+                return;
+            }
+
+            string rutaActual =
+                Navigation
+                    .ToBaseRelativePath(
+                        Navigation.Uri)
+                    .Trim()
+                    .Trim('/');
+
+            bool estaEnResumen =
+                string.IsNullOrWhiteSpace(
+                    rutaActual) ||
+                rutaActual.Equals(
+                    "resumen",
+                    StringComparison.OrdinalIgnoreCase);
+
+            if (estaEnResumen)
+            {
+                return;
+            }
+
+            Navigation.NavigateTo(
+                "/",
+                forceLoad: false,
+                replace: true);
+        }
+        catch (JSDisconnectedException)
+        {
+            /*
+             * Puede ocurrir si el circuito anterior se desconecta
+             * mientras se está recargando el navegador.
+             */
+        }
+        catch (JSException ex)
+        {
+            Console.WriteLine(
+                $"No se pudo revisar el tipo de navegación: " +
+                $"{ex.Message}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            /*
+             * Puede ocurrir si el componente todavía está en una
+             * fase donde JavaScript no se encuentra disponible.
+             */
+            Console.WriteLine(
+                $"La interoperabilidad JavaScript aún no está " +
+                $"disponible: {ex.Message}");
+        }
+    }
+}

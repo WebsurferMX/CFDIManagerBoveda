@@ -1,0 +1,47 @@
+.empresa-selector {
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    min-width: min(440px, 100%);
+}
+
+.empresa-selector label {
+    color: #64748b;
+    font-size: .72rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.empresa-selector select {
+    flex: 1 1 340px;
+    min-width: 0;
+    min-height: 38px;
+    padding: .45rem 2rem .45rem .7rem;
+    border: 1px solid #cbd5e1;
+    border-radius: .65rem;
+    background: #fff;
+    color: #0f172a;
+    font-size: .78rem;
+}
+
+@media (max-width: 640px) {
+    .empresa-selector {
+        align-items: stretch;
+        flex-direction: column;
+        gap: .25rem;
+        min-width: 100%;
+    }
+}
+
+/* ===== MODO OSCURO (generado) ===== */
+
+html[data-theme="dark"] .empresa-selector label {
+    color: #b3bbc8;
+}
+
+html[data-theme="dark"] .empresa-selector select {
+    border: 1px solid #34465b;
+    background: #121c2b;
+    color: #e8ecf7;
+}
+/* ===== FIN MODO OSCURO ===== */

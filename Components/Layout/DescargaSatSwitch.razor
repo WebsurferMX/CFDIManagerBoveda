@@ -1,0 +1,121 @@
+@implements IDisposable
+
+@using CFDIParser.Models
+@using CFDIParser.Services
+@using CFDIManager.Web.Services
+@using CFDIManager.Web.Services.Sat
+
+@inject PostgreSqlRepository Repo
+@inject EmpresaContext EmpresaContext
+@inject EstadoDescargaAutomaticaSat DescargaSat
+
+@* Switch de descarga automática del SAT de la empresa activa, junto al selector de empresa. *@
+@if (EmpresaContext.TieneEmpresaActiva)
+{
+    <div class="descarga-sat @(DescargaAutomatica ? "encendida" : "") @(TieneFiel ? "" : "sin-fiel")" title="@TextoEstado">
+        <label class="descarga-auto">
+            <input class="form-check-input" type="checkbox" role="switch"
+                   checked="@DescargaAutomatica" disabled="@(!TieneFiel)" @onchange="Cambiar" />
+            <i class="icono bi bi-cloud-download" aria-hidden="true"></i>
+            <span class="textos">
+                <b>Descarga SAT automática</b>
+                <small>@TextoCorto</small>
+            </span>
+        </label>
+
+        @if (DescargaAutomatica)
+        {
+            <button type="button" class="descarga-ahora" disabled="@DescargaSat.EnCurso" @onclick="DescargaSat.SolicitarAhora"
+                    title="Revisar y pedir al SAT lo pendiente ahora">
+                <i class="icono bi bi-arrow-repeat @(DescargaSat.EnCurso ? "girando" : "")" aria-hidden="true"></i>
+                @(DescargaSat.EnCurso ? "Descargando…" : "Descargar ahora")
+            </button>
+        }
+    </div>
+}
+
+@code {
+    private bool DescargaAutomatica;
+    private bool TieneFiel;
+    private string Error = "";
+
+    private string TextoCorto =>
+        Error != "" ? Error
+        : !TieneFiel ? "Sin e.firma (Empresas → Acceso SAT)"
+        : !DescargaAutomatica ? "Apagada"
+        : DescargaSat.EnCurso ? "Descargando del SAT…"
+        : DescargaSat.PorEmpresa.TryGetValue(EmpresaContext.EmpresaId, out var r)
+            ? $"{r.Fin:dd/MM HH:mm} · {r.Importados} XML · {r.Pendientes} en proceso"
+        : "Encendida; se revisa en el siguiente ciclo";
+
+    /// <summary>Detalle completo en el tooltip.</summary>
+    private string TextoEstado =>
+        DescargaAutomatica && DescargaSat.PorEmpresa.TryGetValue(EmpresaContext.EmpresaId, out var r)
+            ? $"Último ciclo {r.Fin:dd/MM/yyyy HH:mm}: {r.SolicitudesNuevas} solicitudes nuevas, {r.SolicitudesDescargadas} descargadas, " +
+              $"{r.Pendientes} en proceso, {r.Importados} XML importados" +
+              (r.Aviso != "" ? $"\n{r.Aviso}" : "") +
+              (DescargaSat.SiguientePasada is DateTime s ? $"\nSiguiente ciclo: {s:HH:mm}" : "") +
+              "\nTipos y fecha de inicio: Empresas → Acceso SAT."
+            : TextoCorto;
+
+    protected override void OnInitialized()
+    {
+        EmpresaContext.OnChange += EmpresaCambio;
+        DescargaSat.Cambio += EstadoCambio;
+        Cargar();
+    }
+
+    public void Dispose()
+    {
+        EmpresaContext.OnChange -= EmpresaCambio;
+        DescargaSat.Cambio -= EstadoCambio;
+    }
+
+    private void EmpresaCambio() => _ = InvokeAsync(() => { Cargar(); StateHasChanged(); });
+
+    private void EstadoCambio() => _ = InvokeAsync(StateHasChanged);
+
+    private void Cargar()
+    {
+        Error = "";
+        DescargaAutomatica = false;
+        TieneFiel = false;
+
+        if (!EmpresaContext.TieneEmpresaActiva)
+        {
+            return;
+        }
+
+        try
+        {
+            EmpresaSatDto? sat = Repo.ObtenerEmpresaSat(EmpresaContext.EmpresaId);
+            TieneFiel = sat is { TieneEFirma: true };
+            DescargaAutomatica = TieneFiel && sat!.DescargaAutomatica;
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+    }
+
+    private void Cambiar(ChangeEventArgs e)
+    {
+        bool activa = e.Value is true;
+        Error = "";
+
+        try
+        {
+            Repo.CambiarDescargaAutomatica(EmpresaContext.EmpresaId, activa, new DateTime(DateTime.Today.Year, 1, 1));
+            DescargaAutomatica = activa;
+
+            if (activa)
+            {
+                DescargaSat.SolicitarAhora();
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+    }
+}

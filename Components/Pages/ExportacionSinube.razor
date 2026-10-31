@@ -1,0 +1,835 @@
+@page "/exportacion-sinube"
+@implements IDisposable
+
+@using CFDIParser.Models
+@using CFDIParser.Services
+@using CFDIManager.Web.Services
+@using CFDIManager.Web.Services.Sinube
+
+@inject SinubeService Sinube
+@inject PostgreSqlRepository Repo
+@inject EmpresaContext EmpresaContext
+@inject RutaXmlService Rutas
+@inject IJSRuntime JS
+
+<PageTitle>Exportación a SINUBE</PageTitle>
+
+<div class="sinube-page">
+
+    <header class="page-heading">
+        <span class="eyebrow">CFDI MANAGER</span>
+        <h1>Exportación a SINUBE</h1>
+        <p>Envía las facturas XML de clientes y proveedores de la empresa activa a la plataforma SINUBE.</p>
+    </header>
+
+    @if (!EmpresaContext.TieneEmpresaActiva || Config is null)
+    {
+        <section class="message warning-message">
+            <strong>No hay empresa seleccionada.</strong>
+            <span>Selecciona una empresa antes de continuar.</span>
+        </section>
+    }
+    else
+    {
+        <section class="company-card">
+            <div>
+                <span>EMPRESA ACTIVA</span>
+                <strong>@EmpresaContext.Rfc · @EmpresaContext.NombreEmpresa</strong>
+            </div>
+            <div class="company-sinube">
+                <span>SINUBE</span>
+                <strong>@Config.Empresa · @Config.Sucursal · @NombreAmbiente(Config.Ambiente)</strong>
+            </div>
+        </section>
+
+        <nav class="sinube-tabs">
+            <button type="button" class="tab-button @(Tab == "C" ? "active" : "")" @onclick='() => CambiarTab("C")'>
+                <i class="bi bi-file-earmark-arrow-up-fill"></i> Importar facturas de Clientes
+            </button>
+            <button type="button" class="tab-button @(Tab == "P" ? "active" : "")" @onclick='() => CambiarTab("P")'>
+                <i class="bi bi-file-earmark-arrow-down-fill"></i> Importar facturas de Proveedores
+            </button>
+            <button type="button" class="tab-button @(Tab == "S" ? "active" : "")" @onclick='() => CambiarTab("S")'>
+                <i class="bi bi-123"></i> Importar facturas de Clientes sin folio
+            </button>
+            <button type="button" class="tab-button @(Tab == "H" ? "active" : "")" @onclick='() => CambiarTab("H")'>
+                <i class="bi bi-tools"></i> Herramientas
+            </button>
+        </nav>
+
+        @if (FaltaConfiguracion is string falta && Tab != "H")
+        {
+            <section class="message warning-message">
+                <strong>Falta configurar el acceso a SINUBE.</strong>
+                <span>@falta</span>
+                <button type="button" class="link-button" @onclick='() => CambiarTab("H")'>Ir a Herramientas</button>
+            </section>
+        }
+
+        @if (Tab is "C" or "P" or "S")
+        {
+            <section class="panel-card">
+                @if (SinFolio)
+                {
+                    <div class="foliador-row">
+                        <div class="field">
+                            <label>Foliador</label>
+                            <div class="foliador-control">
+                                <select class="form-select" @bind="LlaveFoliador" disabled="@(Enviando || Foliadores.Count == 0)">
+                                    @if (Foliadores.Count == 0)
+                                    {
+                                        <option value="@Config.FoliadorLlave">@(Config.FoliadorNombre != "" ? Config.FoliadorNombre : "Carga los foliadores de SINUBE")</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="">Selecciona un foliador…</option>
+                                        @foreach (SinubeFoliadorDto foliador in Foliadores)
+                                        {
+                                            <option value="@foliador.Llave">@foliador.Nombre</option>
+                                        }
+                                    }
+                                </select>
+                                <button type="button" class="secondary-button" @onclick="CargarFoliadoresAsync" disabled="@(Enviando || CargandoFoliadores || FaltaConfiguracion is not null)">
+                                    <i class="bi @(CargandoFoliadores ? "bi-hourglass-split" : "bi-arrow-repeat")"></i> Cargar foliadores
+                                </button>
+                            </div>
+                            <small class="hint">SINUBE asigna la serie y el folio del foliador elegido a cada factura importada.</small>
+                        </div>
+
+                        <div class="field">
+                            <label>Facturas que ya traen folio</label>
+                            <div class="radio-list">
+                                <label><input type="radio" name="traenFolio" checked="@(!SustituirFolio)" @onchange="() => SustituirFolio = false" disabled="@Enviando" /> Omitirlas (no se importan)</label>
+                                <label><input type="radio" name="traenFolio" checked="@SustituirFolio" @onchange="() => SustituirFolio = true" disabled="@Enviando" /> Sustituir su SERIE/FOLIO por el foliador</label>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <div class="panel-grid">
+                    <div class="field">
+                        <label>Periodo</label>
+                        <select class="form-select" @bind="PeriodoTexto" disabled="@Enviando">
+                            @if (Periodos.Count == 0)
+                            {
+                                <option value="">Sin XML en @(Clientes ? "Emitidos" : "Recibidos")</option>
+                            }
+                            @foreach (DateTime periodo in Periodos)
+                            {
+                                <option value="@periodo.ToString("yyyy-MM")">@periodo.ToString("MMMM yyyy", Cultura)</option>
+                            }
+                        </select>
+                        <small class="hint">@CarpetaActual</small>
+                    </div>
+
+                    @if (Clientes)
+                    {
+                        <div class="field">
+                            <label>Identificación de productos</label>
+                            <div class="radio-list">
+                                <label><input type="radio" name="modo" checked="@(Config.ModoProducto == SinubeModosProducto.NoIdentificacion)" @onchange="() => Config.ModoProducto = SinubeModosProducto.NoIdentificacion" disabled="@Enviando" /> Usar NoIdentificacion del CFDI</label>
+                                <label><input type="radio" name="modo" checked="@(Config.ModoProducto == SinubeModosProducto.OmitirNoIdentificacion)" @onchange="() => Config.ModoProducto = SinubeModosProducto.OmitirNoIdentificacion" disabled="@Enviando" /> Omitir NoIdentificacion y usar un solo código genérico</label>
+                                <label><input type="radio" name="modo" checked="@(Config.ModoProducto == SinubeModosProducto.CodigoSat6)" @onchange="() => Config.ModoProducto = SinubeModosProducto.CodigoSat6" disabled="@Enviando" /> Usar código prod. SAT a 6 posiciones (3.3 / 4.0)</label>
+                                <label><input type="radio" name="modo" checked="@(Config.ModoProducto == SinubeModosProducto.CodigoSatComoViene)" @onchange="() => Config.ModoProducto = SinubeModosProducto.CodigoSatComoViene" disabled="@Enviando" /> Usar código prod. SAT como viene en el CFDI (3.3 / 4.0)</label>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <label>Opciones</label>
+                            <div class="check-list">
+                                @if (!SinFolio)
+                                {
+                                    <label><input type="checkbox" @bind="Config.SerieFolioDeFolio" disabled="@Enviando" /> Obtener serie/folio del atributo Folio cuando vienen concatenados (p. ej. FAC123)</label>
+                                }
+                                <label><input type="checkbox" @bind="Config.AgruparCodigoSat" disabled="@Enviando" /> Agrupar por código SAT en facturas de más de 200 conceptos (no global)</label>
+                                <label><input type="checkbox" @bind="Config.UsarProductoClientes" disabled="@Enviando" /> Sustituir NoIdentificacion por producto del catálogo de clientes</label>
+                                <label><input type="checkbox" @bind="Config.ValidarIeps" disabled="@Enviando" /> Revisar productos con IEPS antes de enviar</label>
+                                @if (Config.ValidarIeps)
+                                {
+                                    <label class="sub-option"><input type="checkbox" @bind="EnviarConIeps" disabled="@Enviando" /> Enviar aunque haya productos sin tasa IEPS en SINUBE</label>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="field">
+                            <label>Tipos de comprobante</label>
+                            <div class="check-list">
+                                <label><input type="checkbox" @bind="IncluirIngreso" disabled="@Enviando" /> Ingreso</label>
+                                <label><input type="checkbox" @bind="IncluirEgreso" disabled="@Enviando" /> Egreso</label>
+                                <label><input type="checkbox" @bind="IncluirPago" disabled="@Enviando" /> Pago</label>
+                            </div>
+                            <small class="hint">Los XML de más de 900,000 caracteres se envían sin conceptos (XML reducido).</small>
+                        </div>
+                    }
+                </div>
+
+                <div class="panel-actions">
+                    <label class="reenviar">
+                        <input type="checkbox" @bind="Reenviar" disabled="@Enviando" /> Reenviar los que SINUBE ya aceptó
+                    </label>
+
+                    @if (Enviando)
+                    {
+                        <button type="button" class="secondary-button" @onclick="Cancelar">
+                            <i class="bi bi-stop-circle"></i> Detener
+                        </button>
+                    }
+
+                    <button type="button" class="primary-button" @onclick="EnviarAsync" disabled="@(!PuedeEnviar)">
+                        @if (Enviando)
+                        {
+                            <i class="bi bi-hourglass-split"></i> <span>Enviando @Procesados de @Total…</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-cloud-arrow-up-fill"></i> <span>Importar a SINUBE</span>
+                        }
+                    </button>
+                </div>
+
+                @if (Total > 0)
+                {
+                    <div class="progress-row">
+                        <div class="progress-track">
+                            <div class="progress-fill" style="width:@(Procesados * 100 / Total)%"></div>
+                        </div>
+                        <span>Archivos procesados: @Procesados de @Total, insertados: @Contar("OK")</span>
+                    </div>
+                }
+            </section>
+
+            @if (!string.IsNullOrWhiteSpace(Error))
+            {
+                <section class="message error-message"><strong>Error</strong><span>@Error</span></section>
+            }
+
+            @if (Resultados.Count > 0)
+            {
+                <section class="summary-grid">
+                    <article class="summary-card ok"><span>Insertados</span><strong>@Contar("OK")</strong></article>
+                    <article class="summary-card exists"><span>Ya existían</span><strong>@Contar("EXISTE")</strong></article>
+                    <article class="summary-card skipped"><span>Omitidos</span><strong>@Contar("OMITIDO")</strong></article>
+                    <article class="summary-card warn"><span>IEPS</span><strong>@Contar("IEPS")</strong></article>
+                    <article class="summary-card error"><span>Errores / inválidos</span><strong>@(Contar("ERROR") + Contar("INVALIDO"))</strong></article>
+                </section>
+
+                <section class="results-card">
+                    <header class="results-heading">
+                        <div>
+                            <strong>Resultado</strong>
+                            <span>@Resultados.Count archivo(s)</span>
+                        </div>
+                        <div class="results-tools">
+                            <label><input type="checkbox" @bind="SoloProblemas" /> Solo errores</label>
+                            <button type="button" class="secondary-button" @onclick="CopiarResultadoAsync">
+                                <i class="bi bi-clipboard"></i> Copiar resultado
+                            </button>
+                        </div>
+                    </header>
+
+                    <div class="table-container">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>Estatus</th>
+                                    <th>Tipo</th>
+                                    <th>Serie</th>
+                                    <th>Folio</th>
+                                    <th>Fecha</th>
+                                    <th>@(Clientes ? "RFC receptor" : "RFC emisor")</th>
+                                    <th>@(Clientes ? "Cliente" : "Emisor")</th>
+                                    <th>Mensaje</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (SinubeEnvioDto r in ResultadosVisibles)
+                                {
+                                    <tr>
+                                        <td><span class="status-badge @ClaseEstatus(r.Estatus)">@r.Estatus</span></td>
+                                        <td>@r.TipoComprobante</td>
+                                        <td>@r.Serie</td>
+                                        <td>@r.Folio</td>
+                                        <td>@r.FechaCfdi?.ToString("dd/MM/yyyy")</td>
+                                        <td class="mono">@r.Rfc</td>
+                                        <td>@r.Nombre</td>
+                                        <td class="message-cell" title="@r.Archivo">@r.Mensaje</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            }
+        }
+        else
+        {
+            <section class="panel-card">
+                <h2><i class="bi bi-key-fill"></i> Acceso a SINUBE</h2>
+                <p class="section-help">Datos generales para firmarse a SINUBE (Parámetros → Opciones de HerramientasSinube).</p>
+
+                <div class="form-grid">
+                    <div class="field">
+                        <label>Empresa</label>
+                        <input class="form-control" @bind="Config.Empresa" placeholder="@EmpresaContext.Rfc" />
+                        <small class="hint">Clave de la empresa en SINUBE; normalmente el RFC. El RFC emisor de los XML de clientes debe coincidir.</small>
+                    </div>
+                    <div class="field">
+                        <label>Sucursal</label>
+                        <input class="form-control" @bind="Config.Sucursal" placeholder="Matriz" />
+                    </div>
+                    <div class="field">
+                        <label>Usuario</label>
+                        <input class="form-control" @bind="Config.Usuario" placeholder="correo@dominio.com" />
+                    </div>
+                    <div class="field">
+                        <label>Contraseña para importaciones SINUBE</label>
+                        <input class="form-control" type="password" @bind="NuevaPassword"
+                               placeholder="@(string.IsNullOrEmpty(Config.Password) ? "Sin capturar" : "•••••••• (guardada; escribe para cambiarla)")" autocomplete="new-password" />
+                    </div>
+                    <div class="field">
+                        <label>Ambiente</label>
+                        <select class="form-select" @bind="Config.Ambiente">
+                            <option value="@SinubeAmbientes.Produccion">Producción (si-nube)</option>
+                            <option value="@SinubeAmbientes.PruebasFacturanube">Pruebas (facturanube)</option>
+                            <option value="@SinubeAmbientes.PruebasSinubeFb">Pruebas (si-nube-fb)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <h2 class="second-title"><i class="bi bi-cloud-download-fill"></i> Descarga de XML del SAT</h2>
+                <p class="section-help">Parámetros de la pestaña "Descarga XMLs del SAT": cómo nombrar los XML al exportarlos.</p>
+
+                <div class="form-grid">
+                    <div class="field">
+                        <label>Ruta de los XML</label>
+                        <input class="form-control" value="@Rutas.CarpetaEmpresa(EmpresaContext.Rfc)" readonly />
+                        <small class="hint">Carpeta de la empresa en CFDI Manager (Emitidos / Recibidos → Año → Mes).</small>
+                    </div>
+                    <div class="field">
+                        <label>Clave CIEC</label>
+                        <div class="ciec-status @(TieneCiec ? "ok" : "missing")">
+                            <i class="bi @(TieneCiec ? "bi-check-circle-fill" : "bi-exclamation-circle-fill")"></i>
+                            @(TieneCiec ? "Capturada en Empresas → Acceso SAT" : "Sin capturar")
+                            <a href="configuracion/empresas">Configurar</a>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>Nombre del XML</label>
+                        <div class="check-list">
+                            <label><input type="checkbox" @bind="Config.IncluirUuid" /> Incluir UUID</label>
+                            <label><input type="checkbox" @bind="Config.IncluirTipo" /> Incluir tipo al final del nombre (INGRESO, EGRESO o TRASLADO)</label>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>Emisor / Receptor</label>
+                        <div class="radio-list inline">
+                            <label><input type="radio" name="persona" checked="@(Config.EmisorReceptor == "RAZON_SOCIAL")" @onchange='() => Config.EmisorReceptor = "RAZON_SOCIAL"' /> Razón social</label>
+                            <label><input type="radio" name="persona" checked="@(Config.EmisorReceptor != "RAZON_SOCIAL")" @onchange='() => Config.EmisorReceptor = "RFC"' /> RFC</label>
+                        </div>
+                    </div>
+                    <div class="field wide">
+                        <label>Criterio para renombrar XML</label>
+                        <div class="radio-list">
+                            <label><input type="radio" name="criterio" checked="@(Config.CriterioNombre == 1)" @onchange="() => Config.CriterioNombre = 1" /> {RFC/Razón Social}-Fecha-serie-folio-UUID</label>
+                            <label><input type="radio" name="criterio" checked="@(Config.CriterioNombre == 2)" @onchange="() => Config.CriterioNombre = 2" /> Fecha-{RFC/Razón Social}-serie-folio-uuid</label>
+                            <label><input type="radio" name="criterio" checked="@(Config.CriterioNombre == 3)" @onchange="() => Config.CriterioNombre = 3" /> Fecha-serie-folio-{RFC/Razón Social}-uuid</label>
+                        </div>
+                        <small class="hint">Ejemplo: <span class="mono">@EjemploNombre</span></small>
+                    </div>
+                </div>
+
+                <div class="panel-actions">
+                    @if (Config.UltimaPrueba is DateTime prueba)
+                    {
+                        <span class="last-test">Última prueba @prueba.ToString("dd/MM/yyyy HH:mm"): @Config.ResultadoPrueba</span>
+                    }
+                    <button type="button" class="secondary-button" @onclick="ProbarAccesoAsync" disabled="@Probando">
+                        <i class="bi @(Probando ? "bi-hourglass-split" : "bi-plug-fill")"></i> Probar acceso
+                    </button>
+                    <button type="button" class="primary-button" @onclick="Guardar">
+                        <i class="bi bi-save-fill"></i> Guardar
+                    </button>
+                </div>
+
+                @if (MensajeHerramientas is not null)
+                {
+                    <div class="message @(MensajeOk ? "success-message" : "error-message")">@MensajeHerramientas</div>
+                }
+            </section>
+
+            <section class="panel-card">
+                <h2><i class="bi bi-file-earmark-zip-fill"></i> Exportar XML renombrados</h2>
+                <p class="section-help">Genera un ZIP con copias de los XML del periodo usando el criterio de nombre anterior. Los archivos originales no se modifican.</p>
+
+                <div class="form-grid">
+                    <div class="field">
+                        <label>Origen</label>
+                        <div class="radio-list inline">
+                            <label><input type="radio" name="origen" checked="@ZipEmitidos" @onchange="() => CambiarOrigenZip(true)" /> Emitidos</label>
+                            <label><input type="radio" name="origen" checked="@(!ZipEmitidos)" @onchange="() => CambiarOrigenZip(false)" /> Recibidos</label>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label>Periodo</label>
+                        <select class="form-select" @bind="ZipPeriodo">
+                            @foreach (DateTime periodo in PeriodosZip)
+                            {
+                                <option value="@periodo.ToString("yyyy-MM")">@periodo.ToString("MMMM yyyy", Cultura)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="panel-actions">
+                    <button type="button" class="primary-button" @onclick="DescargarZipAsync" disabled="@(GenerandoZip || string.IsNullOrEmpty(ZipPeriodo))">
+                        <i class="bi @(GenerandoZip ? "bi-hourglass-split" : "bi-download")"></i> Descargar ZIP
+                    </button>
+                </div>
+            </section>
+
+            <section class="results-card">
+                <header class="results-heading">
+                    <div>
+                        <strong>Historial de envíos a SINUBE</strong>
+                        <span>Últimos @Historial.Count</span>
+                    </div>
+                    <div class="results-tools">
+                        <button type="button" class="secondary-button" @onclick="CargarHistorial">
+                            <i class="bi bi-arrow-clockwise"></i> Actualizar
+                        </button>
+                        <button type="button" class="secondary-button danger" @onclick="BorrarHistorialAsync" disabled="@(Historial.Count == 0)">
+                            <i class="bi bi-trash3"></i> Borrar historial
+                        </button>
+                    </div>
+                </header>
+
+                @if (Historial.Count == 0)
+                {
+                    <div class="empty">Todavía no se ha enviado ningún XML a SINUBE.</div>
+                }
+                else
+                {
+                    <div class="table-container">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>Enviado</th>
+                                    <th>Origen</th>
+                                    <th>Estatus</th>
+                                    <th>Serie-Folio</th>
+                                    <th>RFC</th>
+                                    <th>UUID</th>
+                                    <th>Mensaje</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (SinubeEnvioDto h in Historial)
+                                {
+                                    <tr>
+                                        <td>@h.FechaEnvio.ToString("dd/MM/yyyy HH:mm")</td>
+                                        <td>@(h.Tipo == "C" ? "Cliente" : "Proveedor")</td>
+                                        <td><span class="status-badge @ClaseEstatus(h.Estatus)">@h.Estatus</span></td>
+                                        <td>@h.Serie@(h.Folio != "" ? "-" + h.Folio : "")</td>
+                                        <td class="mono">@h.Rfc</td>
+                                        <td class="mono">@h.Uuid</td>
+                                        <td class="message-cell">@h.Mensaje</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </section>
+        }
+    }
+</div>
+
+@code
+{
+    private static readonly System.Globalization.CultureInfo Cultura = new("es-MX");
+
+    private SinubeConfiguracionDto? Config;
+    private string Tab = "C";
+
+    private List<DateTime> Periodos = [];
+    private string PeriodoTexto = "";
+
+    private bool IncluirIngreso = true;
+    private bool IncluirEgreso = true;
+    private bool IncluirPago = true;
+    private bool Reenviar;
+    private bool EnviarConIeps;
+    private bool SoloProblemas;
+
+    private bool Enviando;
+    private int Procesados;
+    private int Total;
+    private string? Error;
+    private List<SinubeEnvioDto> Resultados = [];
+    private CancellationTokenSource? Cancelacion;
+
+    private string? NuevaPassword;
+    private bool Probando;
+    private string? MensajeHerramientas;
+    private bool MensajeOk;
+    private bool TieneCiec;
+
+    private bool ZipEmitidos = true;
+    private List<DateTime> PeriodosZip = [];
+    private string ZipPeriodo = "";
+    private bool GenerandoZip;
+
+    private List<SinubeEnvioDto> Historial = [];
+
+    private List<SinubeFoliadorDto> Foliadores = [];
+    private string LlaveFoliador = "";
+    private bool SustituirFolio;
+    private bool CargandoFoliadores;
+
+    private bool Clientes => Tab is "C" or "S";
+
+    private bool SinFolio => Tab == "S";
+
+    private string? FaltaConfiguracion =>
+        Config is null ? null : SinubeService.FaltanDatos(Config, requierePassword: Clientes);
+
+    private bool PuedeEnviar =>
+        !Enviando && FaltaConfiguracion is null && PeriodoTexto != ""
+        && (Clientes || IncluirIngreso || IncluirEgreso || IncluirPago)
+        && (!SinFolio || LlaveFoliador != "");
+
+    private string CarpetaActual =>
+        EmpresaContext.EmpresaActiva is EmpresaDto empresa && TryPeriodo(PeriodoTexto, out DateTime periodo)
+            ? Sinube.CarpetaPeriodo(empresa, Clientes, periodo)
+            : "";
+
+    private IEnumerable<SinubeEnvioDto> ResultadosVisibles =>
+        SoloProblemas ? Resultados.Where(r => r.Estatus is "ERROR" or "INVALIDO" or "IEPS") : Resultados;
+
+    private string EjemploNombre =>
+        Config is null
+            ? ""
+            : SinubeService.NombreXml(
+                System.Xml.Linq.XDocument.Parse(
+                    """<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" xmlns:tfd="http://www.sat.gob.mx/TimbreFiscalDigital" Version="4.0" Serie="A" Folio="123" Fecha="2026-10-15T10:30:00" TipoDeComprobante="I"><cfdi:Emisor Rfc="EMP010101AAA" Nombre="EMPRESA SA DE CV"/><cfdi:Receptor Rfc="CLI010101BBB" Nombre="CLIENTE SA DE CV"/><cfdi:Complemento><tfd:TimbreFiscalDigital UUID="0A1B2C3D-0000-4000-8000-000000000001"/></cfdi:Complemento></cfdi:Comprobante>"""),
+                Config,
+                emitido: true) + ".xml";
+
+    protected override void OnInitialized()
+    {
+        EmpresaContext.OnChange += EmpresaCambio;
+        Cargar();
+    }
+
+    private void Cargar()
+    {
+        Resultados = [];
+        Error = null;
+        Total = Procesados = 0;
+        MensajeHerramientas = null;
+        NuevaPassword = null;
+
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa)
+        {
+            Config = null;
+            return;
+        }
+
+        Config = Sinube.ObtenerConfiguracion(empresa);
+        Foliadores = [];
+        LlaveFoliador = Config.FoliadorLlave;
+        TieneCiec = !string.IsNullOrEmpty(Repo.ObtenerEmpresaSat(empresa.EmpresaId)?.SatPassword);
+        CargarPeriodos();
+        CambiarOrigenZip(ZipEmitidos);
+        CargarHistorial();
+    }
+
+    private void CargarPeriodos()
+    {
+        Periodos = EmpresaContext.EmpresaActiva is EmpresaDto empresa ? Sinube.Periodos(empresa, Clientes) : [];
+        PeriodoTexto = Periodos.Count > 0 ? Periodos[0].ToString("yyyy-MM") : "";
+    }
+
+    private void CambiarTab(string tab)
+    {
+        if (Enviando || Tab == tab)
+            return;
+
+        Tab = tab;
+        Resultados = [];
+        Error = null;
+        Total = Procesados = 0;
+
+        if (tab is "C" or "P" or "S")
+            CargarPeriodos();
+        else
+            CargarHistorial();
+    }
+
+    private static bool TryPeriodo(string texto, out DateTime periodo) =>
+        DateTime.TryParseExact(texto + "-01", "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out periodo);
+
+    private async Task EnviarAsync()
+    {
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa || Config is null || !TryPeriodo(PeriodoTexto, out DateTime periodo))
+            return;
+
+        Error = null;
+        Resultados = [];
+        Procesados = 0;
+        Total = Sinube.Archivos(empresa, Clientes, periodo).Count;
+
+        if (Total == 0)
+        {
+            Error = "No hay XML en " + CarpetaActual;
+            return;
+        }
+
+        HashSet<string>? tipos = null;
+
+        if (!Clientes)
+        {
+            tipos = [];
+            if (IncluirIngreso) tipos.Add("I");
+            if (IncluirEgreso) tipos.Add("E");
+            if (IncluirPago) tipos.Add("P");
+        }
+
+        SinubeSinFolioDto? sinFolio = null;
+
+        if (SinFolio)
+        {
+            sinFolio = new SinubeSinFolioDto { LlaveFoliador = LlaveFoliador, SustituirFolio = SustituirFolio };
+
+            if (Foliadores.FirstOrDefault(f => f.Llave == LlaveFoliador) is SinubeFoliadorDto elegido)
+            {
+                Config.FoliadorLlave = elegido.Llave;
+                Config.FoliadorNombre = elegido.Nombre;
+            }
+        }
+
+        // Las opciones de clientes (y el foliador) quedan guardadas para la siguiente vez.
+        if (Clientes)
+            Sinube.GuardarConfiguracion(Config, null);
+
+        Enviando = true;
+        Cancelacion = new CancellationTokenSource();
+        bool clientes = Clientes;
+
+        try
+        {
+            await Task.Run(() => Sinube.EnviarAsync(
+                empresa,
+                Config,
+                clientes,
+                periodo,
+                tipos,
+                Reenviar,
+                EnviarConIeps,
+                (envio, actual, total) => InvokeAsync(() =>
+                {
+                    Resultados.Add(envio);
+                    Procesados = actual;
+                    StateHasChanged();
+                }),
+                Cancelacion.Token,
+                sinFolio));
+        }
+        catch (OperationCanceledException)
+        {
+            Error = $"Proceso detenido. Se procesaron {Procesados} de {Total} archivo(s).";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Enviando = false;
+            Cancelacion?.Dispose();
+            Cancelacion = null;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void Cancelar() => Cancelacion?.Cancel();
+
+    private async Task CargarFoliadoresAsync()
+    {
+        if (Config is null)
+            return;
+
+        CargandoFoliadores = true;
+        Error = null;
+
+        try
+        {
+            Foliadores = await Sinube.ObtenerFoliadoresAsync(Config);
+
+            if (Foliadores.Count == 0)
+                Error = "SINUBE no devolvió foliadores para la sucursal " + Config.Sucursal + ".";
+            else if (Foliadores.All(f => f.Llave != LlaveFoliador))
+                LlaveFoliador = Foliadores.Count == 1 ? Foliadores[0].Llave : "";
+        }
+        catch (Exception ex)
+        {
+            Error = "No se pudieron cargar los foliadores: " + ex.Message;
+        }
+        finally
+        {
+            CargandoFoliadores = false;
+        }
+    }
+
+    private int Contar(string estatus) => Resultados.Count(r => r.Estatus == estatus);
+
+    private static string ClaseEstatus(string estatus) => estatus switch
+    {
+        "OK" => "ok",
+        "EXISTE" => "exists",
+        "OMITIDO" => "skipped",
+        "IEPS" => "warn",
+        _ => "error"
+    };
+
+    private static string NombreAmbiente(string ambiente) => ambiente switch
+    {
+        SinubeAmbientes.PruebasFacturanube => "Pruebas facturanube",
+        SinubeAmbientes.PruebasSinubeFb => "Pruebas si-nube-fb",
+        _ => "Producción"
+    };
+
+    private async Task CopiarResultadoAsync()
+    {
+        var texto = new System.Text.StringBuilder("Estatus\tTipo\tSerie\tFolio\tFecha\tRFC\tNombre\tUUID\tMensaje\n");
+
+        foreach (SinubeEnvioDto r in ResultadosVisibles)
+        {
+            texto.Append($"{r.Estatus}\t{r.TipoComprobante}\t{r.Serie}\t{r.Folio}\t{r.FechaCfdi:dd/MM/yyyy}\t{r.Rfc}\t{r.Nombre}\t{r.Uuid}\t{r.Mensaje.Replace('\n', ' ')}\n");
+        }
+
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", texto.ToString());
+    }
+
+    // ───────────── Herramientas ─────────────
+
+    private void Guardar()
+    {
+        if (Config is null)
+            return;
+
+        try
+        {
+            Sinube.GuardarConfiguracion(Config, NuevaPassword);
+            NuevaPassword = null;
+            Config = Sinube.ObtenerConfiguracion(EmpresaContext.EmpresaActiva!);
+            MensajeOk = true;
+            MensajeHerramientas = "Configuración guardada.";
+        }
+        catch (Exception ex)
+        {
+            MensajeOk = false;
+            MensajeHerramientas = ex.Message;
+        }
+    }
+
+    private async Task ProbarAccesoAsync()
+    {
+        if (Config is null)
+            return;
+
+        Guardar();
+
+        if (!MensajeOk)
+            return;
+
+        Probando = true;
+        MensajeHerramientas = null;
+
+        try
+        {
+            (MensajeOk, MensajeHerramientas) = await Sinube.ProbarAccesoAsync(Config);
+            Config = Sinube.ObtenerConfiguracion(EmpresaContext.EmpresaActiva!);
+        }
+        catch (Exception ex)
+        {
+            MensajeOk = false;
+            MensajeHerramientas = ex.Message;
+        }
+        finally
+        {
+            Probando = false;
+        }
+    }
+
+    private void CambiarOrigenZip(bool emitidos)
+    {
+        ZipEmitidos = emitidos;
+        PeriodosZip = EmpresaContext.EmpresaActiva is EmpresaDto empresa ? Sinube.Periodos(empresa, emitidos) : [];
+        ZipPeriodo = PeriodosZip.Count > 0 ? PeriodosZip[0].ToString("yyyy-MM") : "";
+    }
+
+    private async Task DescargarZipAsync()
+    {
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa || Config is null || !TryPeriodo(ZipPeriodo, out DateTime periodo))
+            return;
+
+        GenerandoZip = true;
+        MensajeHerramientas = null;
+
+        try
+        {
+            SinubeConfiguracionDto config = Config;
+            var (contenido, nombre, _) = await Task.Run(() => Sinube.GenerarZipRenombrado(empresa, config, ZipEmitidos, periodo));
+
+            await JS.InvokeVoidAsync("descargarArchivoBase64", nombre, "application/zip", Convert.ToBase64String(contenido));
+        }
+        catch (Exception ex)
+        {
+            MensajeOk = false;
+            MensajeHerramientas = ex.Message;
+        }
+        finally
+        {
+            GenerandoZip = false;
+        }
+    }
+
+    private void CargarHistorial()
+    {
+        Historial = EmpresaContext.TieneEmpresaActiva ? Repo.ObtenerHistorialSinube(EmpresaContext.EmpresaId, 200) : [];
+    }
+
+    private async Task BorrarHistorialAsync()
+    {
+        bool confirmar = await JS.InvokeAsync<bool>(
+            "confirm",
+            "¿Borrar el historial de envíos a SINUBE de esta empresa? Después se podrán volver a enviar todos los XML.");
+
+        if (!confirmar)
+            return;
+
+        Repo.BorrarHistorialSinube(EmpresaContext.EmpresaId, null);
+        CargarHistorial();
+    }
+
+    private void EmpresaCambio()
+    {
+        if (Enviando)
+            Cancelacion?.Cancel();
+
+        _ = InvokeAsync(() =>
+        {
+            Cargar();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        EmpresaContext.OnChange -= EmpresaCambio;
+        Cancelacion?.Cancel();
+    }
+}

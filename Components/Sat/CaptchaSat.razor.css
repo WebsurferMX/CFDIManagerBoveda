@@ -1,0 +1,18 @@
+.captcha-imagen {
+    display: grid;
+    place-items: center;
+    min-width: 200px;
+    min-height: 60px;
+    padding: 4px;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.5rem;
+    background: #fff;
+}
+
+.captcha-imagen img {
+    max-height: 70px;
+}
+
+html[data-theme="dark"] .captcha-imagen {
+    border-color: #34465b;
+}

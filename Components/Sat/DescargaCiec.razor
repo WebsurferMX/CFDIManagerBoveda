@@ -1,0 +1,297 @@
+@implements IDisposable
+
+@using CFDIParser.Models
+@using CFDIParser.Services
+@using CFDIManager.Web.Services
+@using CFDIManager.Web.Services.Sat
+
+@inject EmpresaContext EmpresaContext
+@inject PostgreSqlRepository Repo
+@inject DescargaCiecService Ciec
+
+@* Descarga desde el portal de facturas del SAT con RFC + CIEC (requiere captcha por sesión). *@
+@if (!TieneCiec)
+{
+    <div class="alert alert-warning">
+        <i class="bi bi-key me-1"></i>
+        La empresa no tiene CIEC guardada. Agrégala en <b>Empresas → Acceso SAT → Contraseña SAT (CIEC)</b>.
+    </div>
+}
+else if (!Ciec.SesionActiva(EmpresaContext.EmpresaId))
+{
+    <div class="card p-3 mb-3">
+        <h5 class="mb-1"><i class="bi bi-shield-lock me-1"></i>Iniciar sesión en el SAT</h5>
+        <div class="small text-body-secondary mb-3">
+            Se entra al portal de facturas del SAT con el RFC <b>@EmpresaContext.Rfc</b> y la CIEC guardada.
+            Escribe el texto de la imagen; la sesión dura mientras esta pestaña esté abierta y el SAT no la cierre.
+        </div>
+
+        <CaptchaSat Empresa="EmpresaContext.EmpresaActiva!" OnSesionIniciada="SesionIniciada" />
+    </div>
+}
+else
+{
+    <div class="card p-3 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">Consulta en el portal del SAT</h5>
+            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Sesión SAT activa · @EmpresaContext.Rfc</span>
+        </div>
+
+        <div class="row g-3 align-items-end">
+            <div class="col-md-2">
+                <label class="form-label">Fecha inicial</label>
+                <InputDate class="form-control" @bind-Value="Desde" />
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Fecha final</label>
+                <InputDate class="form-control" @bind-Value="Hasta" />
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Descargar</label>
+                <select class="form-select" @bind="Tipo">
+                    <option value="emitidos">Emitidos</option>
+                    <option value="recibidos">Recibidos</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Estado</label>
+                <select class="form-select" @bind="Estado">
+                    <option value="-1">Todos</option>
+                    <option value="1">Vigentes</option>
+                    <option value="0">Cancelados</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">RFC contraparte</label>
+                <input class="form-control" maxlength="13" placeholder="Opcional" @bind="RfcContraparte" />
+            </div>
+
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" disabled="@Ocupado" @onclick="Buscar">
+                    <i class="bi bi-search me-1"></i>Buscar en el SAT
+                </button>
+            </div>
+
+            <div class="col-12 small text-body-secondary">
+                El portal muestra máximo 500 CFDI por consulta; se consulta día por día y, en días con más, por horas.
+                Para periodos largos o muchos CFDI conviene la descarga con e.firma.
+            </div>
+        </div>
+    </div>
+
+    @if (Mensaje != "")
+    {
+        <div class="alert @(MensajeError ? "alert-danger" : "alert-info") d-flex align-items-center gap-2">
+            @if (Ocupado)
+            {
+                <span class="spinner-border spinner-border-sm"></span>
+            }
+            <span class="flex-grow-1">@Mensaje</span>
+            @if (Ocupado)
+            {
+                <button class="btn btn-sm btn-outline-secondary" @onclick="() => Cancelacion?.Cancel()">Cancelar</button>
+            }
+        </div>
+
+        @if (Ocupado && Avance is (int actual, int total))
+        {
+            <div class="progress mb-3" role="progressbar" aria-valuenow="@actual" aria-valuemin="0" aria-valuemax="@total" style="height: 1.1rem">
+                <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: @(actual * 100 / total)%">
+                    @actual de @total
+                </div>
+            </div>
+        }
+    }
+
+    @foreach (string aviso in Avisos)
+    {
+        <div class="alert alert-warning py-2 small"><i class="bi bi-exclamation-triangle me-1"></i>@aviso</div>
+    }
+
+    @if (Resultados.Count > 0)
+    {
+        <div class="card p-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                <div>
+                    <b>@Resultados.Count CFDI</b> ·
+                    @Resultados.Count(r => !r.YaImportado) sin importar ·
+                    @Resultados.Count(r => r.UrlXml == "") sin XML disponible
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-success" disabled="@(Ocupado || PorDescargar.Count == 0)" @onclick="() => Descargar(PorDescargar)">
+                        <i class="bi bi-cloud-download me-1"></i>Descargar faltantes (@PorDescargar.Count)
+                    </button>
+                    <button class="btn btn-outline-success" disabled="@(Ocupado || ConXml.Count == 0)" @onclick="() => Descargar(ConXml)">
+                        <i class="bi bi-arrow-repeat me-1"></i>Descargar todos
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-responsive" style="max-height: 55vh">
+                <table class="table table-sm table-striped align-middle mb-0">
+                    <thead class="sticky-top">
+                        <tr>
+                            <th>UUID</th>
+                            <th>Emisión</th>
+                            <th>RFC emisor</th>
+                            <th>Nombre emisor</th>
+                            <th>RFC receptor</th>
+                            <th>Nombre receptor</th>
+                            <th>Efecto</th>
+                            <th class="text-end">Total</th>
+                            <th>Estado</th>
+                            <th>En CFDI Manager</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (CfdiPortalSat c in Resultados.Take(1000))
+                        {
+                            <tr>
+                                <td class="font-monospace small">@c.Uuid</td>
+                                <td class="text-nowrap">@c.FechaEmision</td>
+                                <td>@c.RfcEmisor</td>
+                                <td class="text-truncate" style="max-width: 220px" title="@c.NombreEmisor">@c.NombreEmisor</td>
+                                <td>@c.RfcReceptor</td>
+                                <td class="text-truncate" style="max-width: 220px" title="@c.NombreReceptor">@c.NombreReceptor</td>
+                                <td>@c.Efecto</td>
+                                <td class="text-end">@c.Total</td>
+                                <td class="@(c.Estado.Contains("Cancel", StringComparison.OrdinalIgnoreCase) ? "text-danger" : "text-success")">@c.Estado</td>
+                                <td>@(c.YaImportado ? "✅" : "—")</td>
+                                <td>
+                                    @if (c.UrlXml != "")
+                                    {
+                                        <button class="btn btn-sm btn-outline-success" disabled="@Ocupado" title="Descargar e importar este XML"
+                                                @onclick="() => Descargar(new List<CfdiPortalSat> { c })">
+                                            <i class="bi bi-download"></i>
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (Resultados.Count > 1000)
+            {
+                <div class="small text-body-secondary mt-2">Se muestran 1,000 de @Resultados.Count.ToString("N0"); las descargas incluyen todos.</div>
+            }
+        </div>
+    }
+}
+
+@code {
+    private bool TieneCiec;
+
+    private DateTime Desde = DateTime.Today.AddDays(-7);
+    private DateTime Hasta = DateTime.Today;
+    private string Tipo = "emitidos";
+    private string Estado = "-1";
+    private string RfcContraparte = "";
+
+    private List<CfdiPortalSat> Resultados = new();
+    private List<string> Avisos = new();
+
+    private string Mensaje = "";
+
+    // Avance "N de M" que reportan la búsqueda (días) y la descarga (XML), para la barra de progreso.
+    private (int Actual, int Total)? Avance =>
+        System.Text.RegularExpressions.Regex.Match(Mensaje, @"(\d+) de (\d+)") is { Success: true } m
+        && int.Parse(m.Groups[2].Value) > 0
+            ? (int.Parse(m.Groups[1].Value), int.Parse(m.Groups[2].Value))
+            : null;
+    private bool MensajeError;
+    private bool Ocupado;
+    private CancellationTokenSource? Cancelacion;
+
+    private List<CfdiPortalSat> ConXml =>
+        Resultados.Where(r => r.UrlXml != "").ToList();
+
+    private List<CfdiPortalSat> PorDescargar =>
+        ConXml.Where(r => !r.YaImportado).ToList();
+
+    protected override void OnInitialized()
+    {
+        EmpresaContext.OnChange += EmpresaCambio;
+        Cargar();
+    }
+
+    public void Dispose()
+    {
+        EmpresaContext.OnChange -= EmpresaCambio;
+        Cancelacion?.Cancel();
+    }
+
+    private void EmpresaCambio() => _ = InvokeAsync(() => { Cargar(); StateHasChanged(); });
+
+    private void Cargar()
+    {
+        Resultados = new();
+        Avisos = new();
+        Mensaje = "";
+        TieneCiec = EmpresaContext.TieneEmpresaActiva && Repo.ObtenerEmpresaSat(EmpresaContext.EmpresaId)?.TieneCiec == true;
+    }
+
+    private void SesionIniciada()
+    {
+        Mensaje = "Sesión iniciada en el SAT.";
+        MensajeError = false;
+    }
+
+    private async Task Buscar()
+    {
+        Avisos = new();
+
+        await Ejecutar(async ct =>
+        {
+            var progreso = new Progress<string>(t => { Mensaje = t; _ = InvokeAsync(StateHasChanged); });
+
+            Resultados = await Ciec.BuscarAsync(
+                EmpresaContext.EmpresaActiva!, Tipo == "recibidos", Desde, Hasta, Estado, RfcContraparte,
+                progreso, a => Avisos.Add(a), ct);
+
+            Mensaje = $"{Resultados.Count} CFDI en el SAT del {Desde:dd/MM/yyyy} al {Hasta:dd/MM/yyyy}; {PorDescargar.Count} por descargar.";
+        });
+    }
+
+    private Task Descargar(List<CfdiPortalSat> cfdis) => Ejecutar(async ct =>
+    {
+        var progreso = new Progress<string>(t => { Mensaje = t; _ = InvokeAsync(StateHasChanged); });
+
+        ResultadoDescargaCiec r = await Ciec.DescargarAsync(EmpresaContext.EmpresaActiva!, cfdis, progreso, ct);
+        Mensaje = $"Descarga terminada: {r.Resumen}.";
+    });
+
+    private async Task Ejecutar(Func<CancellationToken, Task> accion)
+    {
+        Ocupado = true;
+        Mensaje = "";
+        MensajeError = false;
+        Cancelacion = new CancellationTokenSource();
+
+        try
+        {
+            await accion(Cancelacion.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            Mensaje = "Cancelado.";
+        }
+        catch (Exception ex)
+        {
+            Mensaje = ex.Message;
+            MensajeError = true;
+        }
+        finally
+        {
+            Ocupado = false;
+            Cancelacion.Dispose();
+            Cancelacion = null;
+        }
+    }
+}

@@ -1,0 +1,406 @@
+@page "/utilerias/xmlazulejeras"
+@implements IDisposable
+
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+
+@using CFDIManager.Web.Services
+@using CFDIParser.Models
+
+@inject XmlAzulejerasService Servicio
+@inject EmpresaContext EmpresaContext
+@inject IJSRuntime JS
+
+<PageTitle>Generar XML Azulejeras</PageTitle>
+
+<div class="export-page">
+
+    <header class="page-heading">
+        <div>
+            <span class="eyebrow">CFDI MANAGER</span>
+            <h1>Generar XML Azulejeras</h1>
+            <p>
+                Genera un ZIP con XML modificados para mostrador
+                (RFC XAXX010101000).
+            </p>
+        </div>
+    </header>
+
+    @if (!EmpresaContext.TieneEmpresaActiva)
+    {
+        <section class="message error-message">
+            <strong>No hay empresa seleccionada.</strong>
+            <span>Selecciona una empresa antes de continuar.</span>
+        </section>
+    }
+    else
+    {
+        <section class="company-card">
+            <div>
+                <span class="company-label">EMPRESA ACTIVA</span>
+                <strong>
+                    @EmpresaContext.Rfc · @EmpresaContext.NombreEmpresa
+                </strong>
+            </div>
+        </section>
+@if (EsEmpresaAzulejera())
+{
+    <section class="export-card">
+
+<div class="date-range-card">
+    <div class="date-field">
+        <label>📅 Desde</label>
+        <InputDate class="date-input"
+                   @bind-Value="FechaInicio" />
+    </div>
+
+    <div class="date-arrow">
+        ➜
+    </div>
+
+    <div class="date-field">
+        <label>📅 Hasta</label>
+        <InputDate class="date-input"
+                   @bind-Value="FechaFin" />
+    </div>
+
+</div>
+
+        <div class="export-actions">
+            <button type="button"
+                    class="secondary-button"
+                    @onclick="Restablecer"
+                    disabled="@Generando">
+
+                <i class="bi bi-arrow-counterclockwise"></i>
+                <span>Restablecer</span>
+            </button>
+            <button type="button"
+                    class="primary-button"
+                    @onclick="GenerarZip"
+                    disabled="@(!PuedeGenerar)">
+                @if (Generando)
+                {
+                    <i class="bi bi-hourglass-split"></i>
+                    <span>Generando...</span>
+                }
+                else
+                {
+                    <i class="bi bi-file-earmark-zip-fill"></i>
+                    <span>Generar XML Azulejeras</span>
+                }
+            </button>
+        </div>
+    </section>
+}
+
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <section class="message error-message">
+            <strong>Error</strong>
+            <span>@Error</span>
+        </section>
+    }
+
+    @if (Resultado is not null)
+{
+    <section class="summary-strip">
+
+        <button type="button"
+                class="summary-item invoice">
+            <span class="summary-code">XML</span>
+            <span>
+                <small>Leídos</small>
+                <strong>@Resultado.Leidos.ToString("N0")</strong>
+            </span>
+        </button>
+
+        <button type="button"
+                class="summary-item payroll">
+            <span class="summary-code">OK</span>
+            <span>
+                <small>Modificados</small>
+                <strong>@Resultado.Modificados.ToString("N0")</strong>
+            </span>
+        </button>
+
+        <button type="button"
+                class="summary-item credit-note">
+            <span class="summary-code">=</span>
+            <span>
+                <small>Sin cambio</small>
+                <strong>@Resultado.SinCambios.ToString("N0")</strong>
+            </span>
+        </button>
+
+        <button type="button"
+                class="summary-item transfer">
+            <span class="summary-code">!</span>
+            <span>
+                <small>Errores</small>
+                <strong>@Resultado.Errores.ToString("N0")</strong>
+            </span>
+        </button>
+
+    </section>
+
+    <section class="summary-strip">
+
+        <button type="button"
+                class="summary-item total">
+            <span class="summary-code">$</span>
+            <span>
+                <small>Importe Total</small>
+                <strong>@Moneda(Resultado.ImporteTotal)</strong>
+            </span>
+        </button>
+
+        <button type="button"
+                class="summary-item invoice">
+            <span class="summary-code">$</span>
+            <span>
+                <small>Con Cambio</small>
+                <strong>@Moneda(Resultado.ImporteModificados)</strong>
+            </span>
+        </button>
+
+        <button type="button"
+                class="summary-item credit-note">
+            <span class="summary-code">$</span>
+            <span>
+                <small>Sin Cambio</small>
+                <strong>@Moneda(Resultado.ImporteSinCambios)</strong>
+            </span>
+        </button>
+
+    </section>
+
+    @if (Resultado.Detalles?.Count > 0)
+    {
+        <section class="grid-card">
+
+            <div class="grid-toolbar">
+                <div>
+                    <strong>Detalle de XML procesados</strong>
+                    <span>
+                        @Resultado.Detalles.Count.ToString("N0")
+                        registro(s)
+                    </span>
+                </div>
+            </div>
+
+            <div class="table-container">
+
+                <table class="cfdi-table">
+
+                    <thead>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Tipo</th>
+                            <th>Serie</th>
+                            <th>Nueva Serie</th>
+                            <th>Total</th>
+                            <th>UUID</th>
+                            <th>Resultado</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+
+                        @foreach (var item in Resultado.Detalles)
+                        {
+                            <tr>
+
+                                <td>
+                                    @item.FechaEmision
+                                        .ToString("dd/MM/yyyy")
+                                </td>
+
+                                <td>
+                                    <span class="type-badge invoice">
+                                        @item.TipoCfdi
+                                    </span>
+                                </td>
+
+                                <td>
+                                    @item.SerieOriginal
+                                </td>
+
+                                <td>
+                                    @item.SerieNueva
+                                </td>
+
+                                <td class="amount-cell">
+                                    @Moneda(item.Total)
+                                </td>
+
+                                <td class="uuid-cell">
+                                    @item.UUID
+                                </td>
+
+                                <td>
+                                    @if (item.Resultado == "MODIFICADO")
+                                    {
+                                        <span class="estado-sat estado-vigente">
+                                            Modificado
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="estado-sat estado-pendiente">
+                                            Sin cambio
+                                        </span>
+                                    }
+                                </td>
+
+                            </tr>
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </section>
+    }
+}
+
+</div>
+
+@code
+{
+    private DateTime FechaInicio { get; set; }
+
+    private DateTime FechaFin { get; set; }
+
+    private bool Generando { get; set; }
+
+    private string? Error { get; set; }
+
+    private XmlAzulejerasResultado? Resultado;
+
+    private static readonly HashSet<string> EmpresasAzulejeras =
+    [
+        "AAT040526RQ9",
+        "ABM090330T23",
+        "AZU010730A22",
+        "AMA071204531"
+    ];
+
+    private bool EsEmpresaAzulejera()
+    {
+        return EmpresaContext.EmpresaActiva is not null &&
+            EmpresasAzulejeras.Contains(EmpresaContext.EmpresaActiva.Rfc);
+    }
+
+    private static string Moneda(decimal importe)
+    {
+        return importe.ToString("C2");
+    }
+
+    private bool PuedeGenerar =>
+        EmpresaContext.TieneEmpresaActiva &&
+        EsEmpresaAzulejera() &&
+        FechaFin.Date >= FechaInicio.Date &&
+        !Generando;
+
+    protected override void OnInitialized()
+    {
+        DateTime hoy = DateTime.Today;
+
+        FechaInicio =
+            new DateTime(
+                hoy.Year,
+                hoy.Month,
+                1);
+
+        FechaFin =
+            FechaInicio
+                .AddMonths(1)
+                .AddDays(-1);
+
+        EmpresaContext.OnChange += EmpresaCambio;
+    }
+
+    private async Task GenerarZip()
+    {
+        Error = null;
+        Resultado = null;
+
+        if (EmpresaContext.EmpresaActiva is null)
+        {
+            Error =
+                "Selecciona una empresa.";
+
+            return;
+        }
+
+        Generando = true;
+
+        try
+        {
+            Resultado =
+                await Task.Run(
+                    () => Servicio.GenerarZip(
+                        EmpresaContext.EmpresaActiva,
+                        FechaInicio,
+                        FechaFin));
+
+            string contenidoBase64 =
+                Convert.ToBase64String(
+                    Resultado.Contenido);
+
+            await JS.InvokeVoidAsync(
+                "descargarArchivoBase64",
+                Resultado.NombreArchivo,
+                Resultado.TipoContenido,
+                contenidoBase64);
+        }
+        catch (Exception ex)
+        {
+            Error =
+                ex.Message;
+        }
+        finally
+        {
+            Generando = false;
+
+            await InvokeAsync(
+                StateHasChanged);
+        }
+    }
+
+    private void Restablecer()
+    {
+        DateTime hoy = DateTime.Today;
+
+        FechaInicio =
+            new DateTime(
+                hoy.Year,
+                hoy.Month,
+                1);
+
+        FechaFin =
+            FechaInicio
+                .AddMonths(1)
+                .AddDays(-1);
+
+        Error = null;
+        Resultado = null;
+    }
+
+    private void EmpresaCambio()
+    {
+        _ = InvokeAsync(
+            StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        EmpresaContext.OnChange -= EmpresaCambio;
+    }
+}

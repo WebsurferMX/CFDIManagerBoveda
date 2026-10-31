@@ -1,0 +1,71 @@
+﻿@inherits LayoutComponentBase
+
+@using CFDIManager.Web.Services
+@using CFDIParser.Models
+@using CFDIParser.Services
+
+@inject NavigationManager Navigation
+@inject PostgreSqlRepository Repo
+@inject EmpresaContext EmpresaContext
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <EmpresaSelector />
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+<div id="blazor-error-ui"
+     data-nosnippet>
+    Ocurrió un error inesperado.
+
+    <a href="."
+       class="reload">
+        Recargar
+    </a>
+
+    <span class="dismiss">
+        🗙
+    </span>
+</div>
+
+@code
+{
+    protected override void OnInitialized()
+    {
+        EmpresaContext.OnChange += ContextChanged;
+
+        if (EmpresaContext.TieneEmpresaActiva)
+            return;
+
+        List<EmpresaDto> empresas =
+            Repo.ObtenerEmpresasActivas();
+
+        EmpresaDto? empresa =
+            empresas.FirstOrDefault();
+
+        if (empresa is not null)
+        {
+            EmpresaContext.Seleccionar(empresa);
+        }
+    }
+
+    private void ContextChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        EmpresaContext.OnChange -= ContextChanged;
+    }
+}

@@ -1,0 +1,686 @@
+@using CFDIParser.Models
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Security.Cryptography.X509Certificates;
+@using CFDIParser.Services
+@using CFDIManager.Web.Services.Interfaces
+@using CFDIManager.Web.Models
+@using CFDIManager.Web.Services.Sat
+
+@inject ISatAuthService SatAuthService
+
+
+<div class="card border-0 shadow-sm">
+
+    <div class="card-header bg-body-tertiary">
+        <h5 class="mb-0">
+            <i class="bi bi-shield-lock"></i>
+            Acceso SAT
+        </h5>
+    </div>
+
+    <div class="card-body">
+
+        @* Contraseña SAT (CIEC): descarga por el portal del SAT. Convive con la e.firma. *@
+        <div class="ciec-tarjeta mb-4">
+            <h6 class="mb-3"><i class="bi bi-key-fill me-1"></i>Contraseña SAT (CIEC)</h6>
+
+            <div class="row g-2 mb-2">
+                <div class="col-sm-6">
+                    <div class="ciec-etiqueta">Estado</div>
+                    @if (EliminarCiec)
+                    {
+                        <span class="badge text-bg-danger">Se quitará al guardar</span>
+                    }
+                    else if (CiecNueva != "")
+                    {
+                        <span class="badge text-bg-warning">Nueva · se guarda al guardar</span>
+                    }
+                    else if (CiecGuardada != "")
+                    {
+                        <span class="badge text-bg-success">Configurada</span>
+                    }
+                    else
+                    {
+                        <span class="badge text-bg-secondary">Sin configurar</span>
+                    }
+                </div>
+
+                <div class="col-sm-6">
+                    <div class="ciec-etiqueta">Última prueba</div>
+                    @if (CiecUltimaPrueba is DateTime prueba)
+                    {
+                        <span class="@(CiecResultado == "Correcta" ? "text-success" : "text-danger")">
+                            @prueba.ToString("dd/MM/yyyy HH:mm") · @CiecResultado
+                        </span>
+                    }
+                    else
+                    {
+                        <span>—</span>
+                    }
+                </div>
+            </div>
+
+            @if (CapturandoCiec)
+            {
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <input type="password" class="form-control" style="max-width: 260px" autocomplete="new-password" form="ciec-sin-formulario"
+                           placeholder="Contraseña del SAT (CIEC)" @bind="CiecNueva" @bind:event="oninput" />
+                    <button type="button" class="btn btn-outline-secondary" @onclick="CancelarCiec">Cancelar</button>
+                </div>
+                <small class="d-block text-body-secondary mb-2">
+                    El usuario es el RFC de la empresa (@(string.IsNullOrWhiteSpace(Rfc) ? "captúralo en Generales" : Rfc.ToUpperInvariant())).
+                    La contraseña se guarda cifrada.
+                </small>
+            }
+
+            <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-outline-primary" @onclick="CapturarCiec">
+                    <i class="bi bi-pencil-square me-1"></i>@(CiecGuardada != "" ? "Reemplazar contraseña" : "Agregar contraseña")
+                </button>
+
+                <button type="button" class="btn btn-outline-secondary"
+                        disabled="@((CiecGuardada == "" && CiecNueva == "") || string.IsNullOrWhiteSpace(Rfc) || EliminarCiec)"
+                        @onclick="() => ValidandoCiec = !ValidandoCiec">
+                    <i class="bi bi-arrow-repeat me-1"></i>Validar contraseña
+                </button>
+
+                @if (CiecGuardada != "" && !EliminarCiec)
+                {
+                    <button type="button" class="btn btn-outline-danger" @onclick="() => { EliminarCiec = true; CapturandoCiec = false; CiecNueva = string.Empty; }">
+                        <i class="bi bi-trash me-1"></i>Quitar
+                    </button>
+                }
+            </div>
+
+            @if (ValidandoCiec)
+            {
+                <div class="mt-3">
+                    <small class="d-block text-body-secondary mb-2">
+                        Se inicia sesión en el portal del SAT@(CiecNueva != "" ? " con la contraseña nueva" : ""); escribe el texto de la imagen.
+                    </small>
+                    <CaptchaSat Empresa="EmpresaParaSat" CiecCapturada="@(CiecNueva == "" ? null : CiecNueva)" OnSesionIniciada="CiecValidada" />
+                </div>
+            }
+        </div>
+
+            <div class="mb-4">
+
+                <h6><i class="bi bi-file-earmark-lock me-1"></i>e.firma</h6>
+
+                <div class="row">
+
+                    <div class="col-md-6 mb-3">
+
+                        <label class="form-label">
+                            Archivo CER
+                        </label>
+
+                        <InputFile OnChange="SubirCer"
+                                   class="form-control" />
+
+                        @if (!string.IsNullOrWhiteSpace(NombreCer))
+                        {
+                            <small class="text-success">
+                                @NombreCer
+                            </small>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(InfoCer))
+                        {
+                            <small class="d-block text-body-secondary">
+                                @InfoCer
+                            </small>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(AvisoCer))
+                        {
+                            <small class="d-block text-danger">
+                                @AvisoCer
+                            </small>
+                        }
+
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+
+                        <label class="form-label">
+                            Archivo KEY
+                        </label>
+
+                        <InputFile OnChange="SubirKey"
+                                   class="form-control" />
+
+                        @if (!string.IsNullOrWhiteSpace(NombreKey))
+                        {
+                            <small class="text-success">
+                                @NombreKey
+                            </small>
+                        }
+
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+
+                        <label class="form-label">
+                            Contraseña de Llave
+                        </label>
+
+                        <InputText class="form-control"
+                                   type="password"
+                                   @bind-Value="PasswordKey" />
+
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+
+                        <label class="form-label">
+                            Vencimiento
+                        </label>
+
+                        <InputDate class="form-control"
+                                   @bind-Value="FechaVencimiento" />
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="mb-4">
+
+                <h6>Descarga automática</h6>
+
+                <small class="d-block text-body-secondary mb-2">
+                    La e.firma se guarda en Storage\Certificados de esta empresa para poder descargar
+                    sin volver a cargarla.
+                </small>
+
+                <div class="form-check mb-2">
+                    <InputCheckbox id="descarga-automatica"
+                                   class="form-check-input"
+                                   @bind-Value="DescargaAutomatica" />
+                    <label class="form-check-label" for="descarga-automatica">
+                        Descargar automáticamente del SAT
+                    </label>
+                </div>
+
+                <div class="d-flex flex-wrap gap-3 mb-2">
+                    <div class="form-check">
+                        <InputCheckbox id="descarga-emitidos"
+                                       class="form-check-input"
+                                       @bind-Value="DescargaEmitidos"
+                                       disabled="@(!DescargaAutomatica)" />
+                        <label class="form-check-label" for="descarga-emitidos">Emitidos</label>
+                    </div>
+
+                    <div class="form-check">
+                        <InputCheckbox id="descarga-recibidos"
+                                       class="form-check-input"
+                                       @bind-Value="DescargaRecibidos"
+                                       disabled="@(!DescargaAutomatica)" />
+                        <label class="form-check-label" for="descarga-recibidos">Recibidos</label>
+                    </div>
+
+                    <div class="form-check">
+                        <InputCheckbox id="descarga-metadatos"
+                                       class="form-check-input"
+                                       @bind-Value="DescargaMetadatos"
+                                       disabled="@(!DescargaAutomatica)" />
+                        <label class="form-check-label" for="descarga-metadatos">Metadatos (estado SAT)</label>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <label class="form-label" for="descarga-desde">Descargar desde</label>
+
+                    <InputDate id="descarga-desde"
+                               class="form-control"
+                               @bind-Value="DescargaDesde"
+                               disabled="@(!DescargaAutomatica)" />
+
+                    <small class="text-body-secondary">
+                        La primera vez se pide mes por mes desde esa fecha; después, cada ciclo
+                        pide lo nuevo hasta ayer. Los XML se guardan en RFC\Emitidos|Recibidos\Año\Mes.
+                    </small>
+                </div>
+
+            </div>
+
+        <div>
+
+            <h6>Funcionalidades</h6>
+
+            <div class="row">
+
+                <div class="col-md-3">
+                    <InputCheckbox @bind-Value="UsaValidacionSat" />
+                    <label class="ms-2">Validación SAT</label>
+                </div>
+
+                <div class="col-md-3">
+                    <InputCheckbox @bind-Value="UsaDescargaSat" />
+                    <label class="ms-2">Descarga SAT</label>
+                </div>
+
+                <div class="col-md-3">
+                    <InputCheckbox @bind-Value="UsaEfos" />
+                    <label class="ms-2">EFOS</label>
+                </div>
+
+                <div class="col-md-3">
+                    <InputCheckbox @bind-Value="UsaXmlAzulejeras" />
+                    <label class="ms-2">XML Azulejeras</label>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+
+@code {
+
+private SatAuthResult? EstadoSat;    
+
+[Parameter]
+public long EmpresaId { get; set; }
+
+/// <summary>RFC capturado en Generales; la e.firma debe ser de este RFC.</summary>
+[Parameter]
+public string Rfc { get; set; } = "";
+
+private EmpresaSatDto ConfigSat = new();
+
+// Contenido de los archivos subidos; se escribe a Storage hasta guardar.
+private byte[]? CerSubido;
+private byte[]? KeySubido;
+
+private string? NombreCer;
+private string? NombreKey;
+
+private string? InfoCer;
+private string? AvisoCer;
+
+private long? EmpresaCargada;
+private string? RutaCerGuardada;
+private string? RutaKeyGuardada;
+private string PasswordKeyGuardada = string.Empty;
+
+// CIEC tal como está en la base (cifrada con "dp:" o, si es anterior, en claro) y la recién capturada.
+private string CiecGuardada = string.Empty;
+private string CiecNueva = string.Empty;
+private bool CapturandoCiec;
+private bool ValidandoCiec;
+private bool EliminarCiec;
+private DateTime? CiecUltimaPrueba;
+private string? CiecResultado;
+
+[Inject]
+private CiecProtector Protector { get; set; } = default!;
+
+private EmpresaDto EmpresaParaSat => new() { EmpresaId = EmpresaId, Rfc = Rfc.Trim().ToUpperInvariant() };
+
+private void CapturarCiec()
+{
+    CapturandoCiec = true;
+    EliminarCiec = false;
+    ValidandoCiec = false;
+}
+
+private void CancelarCiec()
+{
+    CapturandoCiec = false;
+    CiecNueva = string.Empty;
+    ValidandoCiec = false;
+}
+
+/// <summary>Después de guardar: la CIEC capturada pasa a ser la guardada.</summary>
+public void ConfirmarGuardado(EmpresaSatDto guardado)
+{
+    CiecGuardada = guardado.SatPassword ?? string.Empty;
+    CiecNueva = string.Empty;
+    CapturandoCiec = false;
+    EliminarCiec = false;
+    StateHasChanged();
+}
+
+private void CiecValidada()
+{
+    ValidandoCiec = false;
+    CiecUltimaPrueba = DateTime.Now;
+    CiecResultado = "Correcta";
+}
+
+private string PasswordKey = string.Empty;
+
+private DateTime? FechaVencimiento;
+
+private bool UsaValidacionSat = true;
+private bool UsaDescargaSat = true;
+private bool UsaEfos = true;
+private bool UsaXmlAzulejeras = false;
+
+private bool DescargaAutomatica;
+private bool DescargaEmitidos = true;
+private bool DescargaRecibidos = true;
+private bool DescargaMetadatos;
+private DateTime? DescargaDesde = new DateTime(DateTime.Today.Year, 1, 1);
+
+private const long TamanoMaximoArchivo = 1024 * 1024;
+
+private async Task SubirCer(InputFileChangeEventArgs e)
+{
+    CerSubido = null;
+    NombreCer = e.File.Name;
+    InfoCer = null;
+    AvisoCer = null;
+
+    try
+    {
+        CerSubido = await LeerArchivo(e.File);
+
+        using var certificado = X509CertificateLoader.LoadCertificate(CerSubido);
+
+        FechaVencimiento = certificado.NotAfter;
+
+        InfoCer =
+            $"{certificado.GetNameInfo(X509NameType.SimpleName, false)} · " +
+            $"RFC {FielSat.LeerRfc(certificado)} · vence {certificado.NotAfter:dd/MM/yyyy}";
+
+        AvisoCer = RevisarCertificado(certificado, Rfc);
+    }
+    catch (Exception)
+    {
+        CerSubido = null;
+        AvisoCer = "El archivo no es un certificado .cer válido.";
+    }
+
+    StateHasChanged();
+}
+
+private async Task SubirKey(InputFileChangeEventArgs e)
+{
+    KeySubido = await LeerArchivo(e.File);
+    NombreKey = e.File.Name;
+}
+
+private static async Task<byte[]> LeerArchivo(IBrowserFile archivo)
+{
+    using var ms = new MemoryStream();
+
+    await archivo.OpenReadStream(TamanoMaximoArchivo)
+        .CopyToAsync(ms);
+
+    return ms.ToArray();
+}
+
+/// <summary>Problema del certificado respecto a la empresa, o null si es aceptable.</summary>
+private static string? RevisarCertificado(X509Certificate2 certificado, string? rfc)
+{
+    string rfcCertificado = FielSat.LeerRfc(certificado);
+    string rfcEmpresa = (rfc ?? "").Trim().ToUpperInvariant();
+
+    if (rfcEmpresa != "" && rfcCertificado != rfcEmpresa)
+        return $"El certificado es del RFC {rfcCertificado}, no de la empresa ({rfcEmpresa}).";
+
+    if (!FielSat.EsCertificadoFiel(certificado))
+        return "El certificado es un sello digital (CSD), no una e.firma.";
+
+    if (certificado.NotAfter < DateTime.Now)
+        return $"El certificado venció el {certificado.NotAfter:dd/MM/yyyy}.";
+
+    return null;
+}
+
+/// <summary>
+/// Comprueba que la e.firma pertenezca a la empresa: el RFC del .cer, que sea e.firma y no CSD,
+/// la vigencia, la contraseña y que la .key corresponda al .cer. Solo revisa cuando se
+/// subió un archivo o cambió la contraseña. Lanza InvalidOperationException si algo falla.
+/// </summary>
+public void ValidarFiel(string rfcEmpresa)
+{
+    if (DescargaAutomatica)
+    {
+        if ((CerSubido is null && LeerGuardado(RutaCerGuardada) is null) ||
+            (KeySubido is null && LeerGuardado(RutaKeyGuardada) is null))
+            throw new InvalidOperationException("La descarga automática del SAT requiere la e.firma (.cer, .key y contraseña).");
+
+        if (!DescargaEmitidos && !DescargaRecibidos && !DescargaMetadatos)
+            throw new InvalidOperationException("Elige qué descargar automáticamente: Emitidos, Recibidos o Metadatos.");
+
+        if (DescargaDesde is null || DescargaDesde.Value.Date >= DateTime.Today)
+            throw new InvalidOperationException("\"Descargar desde\" debe ser una fecha anterior a hoy.");
+    }
+
+    bool hayCambios =
+        CerSubido is not null ||
+        KeySubido is not null ||
+        PasswordKey != PasswordKeyGuardada;
+
+    if (!hayCambios)
+        return;
+
+    byte[]? cer = CerSubido ?? LeerGuardado(RutaCerGuardada);
+    byte[]? key = KeySubido ?? LeerGuardado(RutaKeyGuardada);
+
+    if (cer is null && key is null && string.IsNullOrEmpty(PasswordKey))
+        return;
+
+    if (cer is null)
+        throw new InvalidOperationException("Falta el archivo .cer de la e.firma.");
+
+    if (key is null)
+        throw new InvalidOperationException("Falta el archivo .key de la e.firma.");
+
+    if (string.IsNullOrEmpty(PasswordKey))
+        throw new InvalidOperationException("Captura la contraseña de la llave de la e.firma.");
+
+    using FielSat fiel = FielSat.Abrir(cer, key, PasswordKey);
+
+    string? problema = RevisarCertificado(fiel.Certificado, rfcEmpresa);
+
+    if (problema is not null)
+        throw new InvalidOperationException($"e.firma no válida: {problema}");
+
+    FechaVencimiento = fiel.VigenteHasta;
+}
+
+private static byte[]? LeerGuardado(string? ruta) =>
+    !string.IsNullOrWhiteSpace(ruta) && File.Exists(ruta)
+        ? File.ReadAllBytes(ruta)
+        : null;
+
+private static string Carpeta(long empresaId) =>
+    Path.Combine(
+        "Storage",
+        "Certificados",
+        empresaId.ToString());
+
+public EmpresaSatDto ObtenerModelo(long empresaId)
+{
+    string rutaCer = Path.Combine(Carpeta(empresaId), "certificado.cer");
+    string rutaKey = Path.Combine(Carpeta(empresaId), "llave.key");
+
+    // Sin archivos no hay e.firma: rutas nulas para no marcarla como cargada.
+    ConfigSat.RutaCer = File.Exists(rutaCer) ? rutaCer : null;
+    ConfigSat.RutaKey = File.Exists(rutaKey) ? rutaKey : null;
+
+    // Cifrar no toca lo ya cifrado y cifra una CIEC guardada en claro por versiones anteriores.
+    string? ciec =
+        EliminarCiec ? null
+        : CiecNueva != "" ? Protector.Cifrar(CiecNueva)
+        : CiecGuardada != "" ? Protector.Cifrar(CiecGuardada)
+        : null;
+
+    return new EmpresaSatDto
+    {
+        EmpresaId = empresaId,
+        // Ya no se elige uno: queda como referencia del acceso principal.
+        TipoAccesoSat = ConfigSat.RutaCer is null && ciec is not null ? "CIEC" : "EFIRMA",
+
+        SatUsuario = ciec is null ? null : Rfc.Trim().ToUpperInvariant(),
+        SatPassword = ciec,
+
+        PasswordKey = PasswordKey,
+
+        FechaVencimiento = FechaVencimiento,
+
+        RutaCer = ConfigSat.RutaCer,
+        RutaKey = ConfigSat.RutaKey,
+
+        UsaValidacionSat = UsaValidacionSat,
+        UsaDescargaSat = UsaDescargaSat,
+        UsaEfos = UsaEfos,
+        UsaXmlAzulejeras = UsaXmlAzulejeras,
+
+        DescargaAutomatica = DescargaAutomatica,
+        DescargaEmitidos = DescargaEmitidos,
+        DescargaRecibidos = DescargaRecibidos,
+        DescargaMetadatos = DescargaMetadatos,
+        DescargaDesde = DescargaDesde
+    };
+}
+
+
+[Inject]
+private PostgreSqlRepository Repo { get; set; } = default!;
+
+protected override void OnParametersSet()
+{
+    // Solo al cambiar de empresa: así no se pierde lo capturado ni se arrastran
+    // los archivos subidos de otra empresa.
+    if (EmpresaCargada == EmpresaId)
+        return;
+
+    EmpresaCargada = EmpresaId;
+
+    try
+    {
+        CargarConfiguracion();
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine(ex.ToString());
+    }
+}
+
+private void CargarConfiguracion()
+{
+    CerSubido = null;
+    KeySubido = null;
+    NombreCer = null;
+    NombreKey = null;
+    InfoCer = null;
+    AvisoCer = null;
+    RutaCerGuardada = null;
+    RutaKeyGuardada = null;
+    PasswordKeyGuardada = string.Empty;
+
+    CiecGuardada = string.Empty;
+    CiecNueva = string.Empty;
+    CapturandoCiec = false;
+    ValidandoCiec = false;
+    EliminarCiec = false;
+    CiecUltimaPrueba = null;
+    CiecResultado = null;
+    PasswordKey = string.Empty;
+    FechaVencimiento = null;
+    UsaValidacionSat = true;
+    UsaDescargaSat = true;
+    UsaEfos = true;
+    UsaXmlAzulejeras = false;
+    DescargaAutomatica = false;
+    DescargaEmitidos = true;
+    DescargaRecibidos = true;
+    DescargaMetadatos = false;
+    DescargaDesde = new DateTime(DateTime.Today.Year, 1, 1);
+
+    if (EmpresaId <= 0)
+        return;
+
+    var sat = Repo.ObtenerEmpresaSat(EmpresaId);
+
+    if (sat == null)
+        return;
+
+    CiecGuardada = sat.SatPassword ?? "";
+    CiecUltimaPrueba = sat.CiecUltimaPrueba;
+    CiecResultado = sat.CiecResultado;
+
+    PasswordKey = sat.PasswordKey ?? "";
+    PasswordKeyGuardada = PasswordKey;
+
+    FechaVencimiento = sat.FechaVencimiento;
+
+    UsaValidacionSat = sat.UsaValidacionSat;
+    UsaDescargaSat = sat.UsaDescargaSat;
+    UsaEfos = sat.UsaEfos;
+    UsaXmlAzulejeras = sat.UsaXmlAzulejeras;
+
+    DescargaAutomatica = sat.DescargaAutomatica;
+    DescargaEmitidos = sat.DescargaEmitidos;
+    DescargaRecibidos = sat.DescargaRecibidos;
+    DescargaMetadatos = sat.DescargaMetadatos;
+    DescargaDesde = sat.DescargaDesde ?? DescargaDesde;
+
+    RutaCerGuardada = sat.RutaCer;
+    RutaKeyGuardada = sat.RutaKey;
+
+    NombreCer = Path.GetFileName(sat.RutaCer);
+    NombreKey = Path.GetFileName(sat.RutaKey);
+
+    byte[]? cer = LeerGuardado(sat.RutaCer);
+
+    if (cer is null)
+        return;
+
+    try
+    {
+        using var certificado = X509CertificateLoader.LoadCertificate(cer);
+
+        InfoCer =
+            $"{certificado.GetNameInfo(X509NameType.SimpleName, false)} · " +
+            $"RFC {FielSat.LeerRfc(certificado)} · vence {certificado.NotAfter:dd/MM/yyyy}";
+
+        AvisoCer = RevisarCertificado(certificado, Rfc);
+    }
+    catch (Exception)
+    {
+        AvisoCer = "El certificado guardado no se puede leer.";
+    }
+}
+
+
+public async Task GuardarArchivosAsync(long empresaId)
+{
+    if (CerSubido is null && KeySubido is null)
+        return;
+
+    string carpeta = Carpeta(empresaId);
+
+    Directory.CreateDirectory(carpeta);
+
+    if (CerSubido is not null)
+        await File.WriteAllBytesAsync(Path.Combine(carpeta, "certificado.cer"), CerSubido);
+
+    if (KeySubido is not null)
+        await File.WriteAllBytesAsync(Path.Combine(carpeta, "llave.key"), KeySubido);
+
+    CerSubido = null;
+    KeySubido = null;
+    RutaCerGuardada = Path.Combine(carpeta, "certificado.cer");
+    RutaKeyGuardada = Path.Combine(carpeta, "llave.key");
+    PasswordKeyGuardada = PasswordKey;
+    EmpresaCargada = empresaId;
+}
+        private async Task ValidarConfiguracionSat()
+        {
+            EstadoSat =
+                await SatAuthService.ValidarAsync(EmpresaId);
+        }
+
+}

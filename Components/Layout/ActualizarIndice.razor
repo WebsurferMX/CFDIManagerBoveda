@@ -1,0 +1,49 @@
+@implements IDisposable
+
+@using CFDIManager.Web.Services
+@using CFDIManager.Web.Services.Storage
+
+@inject EmpresaContext EmpresaContext
+@inject EstadoSincronizacionStorage Sincronizacion
+
+@* Como "Actualizar índice" de MiBovedaCFDI: vuelve a leer la carpeta de XML y registra lo nuevo en la base. *@
+@if (EmpresaContext.TieneEmpresaActiva)
+{
+    <div class="actualizar-indice" title="@TextoEstado">
+        <span class="conteo">@TextoCorto</span>
+
+        <button type="button" class="boton" disabled="@Sincronizacion.EnCurso" @onclick="Sincronizacion.SolicitarAhora">
+            <i class="icono bi bi-arrow-clockwise @(Sincronizacion.EnCurso ? "girando" : "")" aria-hidden="true"></i>
+            @(Sincronizacion.EnCurso ? "Actualizando…" : "Actualizar índice")
+        </button>
+    </div>
+}
+
+@code {
+    private string TextoCorto =>
+        Sincronizacion.PorEmpresa.TryGetValue(EmpresaContext.EmpresaId, out var r)
+            ? Sincronizacion.EnCurso && r.PorRevisar > 0
+                ? $"{r.Revisados:N0} de {r.PorRevisar:N0} revisados"
+                : $"{r.Archivos:N0} XML indexados"
+            : Sincronizacion.EnCurso ? "Leyendo carpeta…" : "Sin indexar";
+
+    private string TextoEstado =>
+        Sincronizacion.PorEmpresa.TryGetValue(EmpresaContext.EmpresaId, out var r)
+            ? $"Última pasada {r.Fin ?? r.Inicio:dd/MM/yyyy HH:mm}: {r.Resumen}\nCarpeta: {r.Carpeta}" +
+              (Sincronizacion.SiguientePasada is DateTime s ? $"\nSiguiente pasada automática: {s:HH:mm}" : "")
+            : "Lee la carpeta de XML de la empresa y registra en la base los XML nuevos.";
+
+    protected override void OnInitialized()
+    {
+        EmpresaContext.OnChange += Refrescar;
+        Sincronizacion.Cambio += Refrescar;
+    }
+
+    public void Dispose()
+    {
+        EmpresaContext.OnChange -= Refrescar;
+        Sincronizacion.Cambio -= Refrescar;
+    }
+
+    private void Refrescar() => _ = InvokeAsync(StateHasChanged);
+}

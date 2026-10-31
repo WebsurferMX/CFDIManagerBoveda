@@ -1,0 +1,97 @@
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">CFDI Manager</a>
+    </div>
+</div>
+
+<input type="checkbox"
+       title="Menú de navegación"
+       class="navbar-toggler" />
+
+<div class="nav-scrollable"
+     onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-grid-1x2-fill" aria-hidden="true"></span>
+                Resumen
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="cfdi/emitidos">
+                <span class="bi bi-file-earmark-arrow-up-fill" aria-hidden="true"></span>
+                CFDI de ingresos
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="cfdi/recibidos">
+                <span class="bi bi-file-earmark-arrow-down-fill" aria-hidden="true"></span>
+                CFDI de egresos
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="administracion-xml">
+                <span class="bi bi-folder2-open" aria-hidden="true"></span>
+                Administración de XML
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="importaciones">
+                <span class="bi bi-cloud-arrow-up-fill" aria-hidden="true"></span>
+                Importaciones
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="exportaciones">
+                <span class="bi bi-file-earmark-excel-fill" aria-hidden="true"></span>
+                Exportaciones
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="exportacion-sinube">
+                <span class="bi bi-send-fill" aria-hidden="true"></span>
+                Exportación a SINUBE
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link"
+                    href="/efos"
+                    Match="NavLinkMatch.All">
+                <span class="bi bi-shield-exclamation" aria-hidden="true"></span>
+                EFOS / EDOS
+            </NavLink>
+        </div>        
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="/utilerias/xmlazulejeras">
+                <span class="bi bi-file-earmark-zip-fill" aria-hidden="true"></span>
+                XML Azulejeras
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link"
+                    href="sat-descargas">
+                <span class="bi bi-cloud-arrow-down-fill" aria-hidden="true"></span>
+                Descargas SAT
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="configuracion/empresas">
+                <span class="bi bi-building" aria-hidden="true"></span>
+                Empresas
+            </NavLink>
+        </div>
+
+
+
+    </nav>
+</div>

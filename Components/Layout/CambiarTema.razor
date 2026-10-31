@@ -1,0 +1,27 @@
+@inject IJSRuntime JS
+
+@* Botón de tema claro/oscuro; la preferencia se guarda en el navegador (js/theme.js). *@
+<button type="button" class="btn btn-outline-secondary cambiar-tema"
+        title="@(Oscuro ? "Cambiar al modo claro" : "Cambiar al modo oscuro")"
+        aria-label="@(Oscuro ? "Cambiar al modo claro" : "Cambiar al modo oscuro")"
+        @onclick="Cambiar">
+    <i class="bi @(Oscuro ? "bi-sun" : "bi-moon-fill")" aria-hidden="true"></i>
+</button>
+
+@code {
+    private bool Oscuro = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Oscuro = await JS.InvokeAsync<string>("cfdiTheme.current") == "dark";
+            StateHasChanged();
+        }
+    }
+
+    private async Task Cambiar()
+    {
+        Oscuro = await JS.InvokeAsync<string>("cfdiTheme.toggle") == "dark";
+    }
+}

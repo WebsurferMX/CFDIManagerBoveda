@@ -1,0 +1,387 @@
+@page "/cfdi"
+@rendermode InteractiveServer
+
+@using System.Globalization
+@using CFDIParser.Models
+@using CFDIParser.Services
+
+@inject PostgreSqlRepository Repo
+
+<PageTitle>Consulta CFDI</PageTitle>
+
+<div class="cfdi-page">
+    <header class="page-heading">
+        <div>
+            <span class="eyebrow">CFDI MANAGER</span>
+            <h1>Consulta de CFDI</h1>
+            <p>Busca, filtra y revisa los comprobantes almacenados en PostgreSQL.</p>
+        </div>
+
+        <button class="primary-button" @onclick="Consultar" disabled="@Cargando">
+            @(Cargando ? "Consultando..." : "Consultar")
+        </button>
+    </header>
+
+    <section class="filters-card">
+        <div class="filter-field">
+            <label>Clasificación</label>
+            <select @bind="Filtro.Clasificacion">
+                <option value="">Todos</option>
+                <option value="EMITIDO">Emitidos</option>
+                <option value="RECIBIDO">Recibidos</option>
+                <option value="PROPIO">Propios</option>
+                <option value="NO_IDENTIFICADO">No identificados</option>
+            </select>
+        </div>
+
+        <div class="filter-field">
+            <label>Tipo CFDI</label>
+            <select @bind="Filtro.TipoCfdi">
+                <option value="">Todos</option>
+                <option value="I">I · Facturas</option>
+                <option value="N">N · Nómina</option>
+                <option value="E">E · Notas de crédito</option>
+                <option value="T">T · Traslados</option>
+                <option value="P">P · Pagos</option>
+            </select>
+        </div>
+
+        <div class="filter-field">
+            <label>Fecha inicial</label>
+            <InputDate @bind-Value="Filtro.FechaInicio" />
+        </div>
+
+        <div class="filter-field">
+            <label>Fecha final</label>
+            <InputDate @bind-Value="Filtro.FechaFin" />
+        </div>
+
+        <div class="filter-field search-field">
+            <label>Búsqueda</label>
+            <input @bind="Filtro.Busqueda"
+                   @bind:event="oninput"
+                   @onkeydown="ManejarTecla"
+                   placeholder="UUID, RFC, razón social, serie o folio" />
+        </div>
+
+        <div class="filter-actions">
+            <button class="primary-button" @onclick="Consultar" disabled="@Cargando">
+                Consultar
+            </button>
+            <button class="secondary-button" @onclick="LimpiarFiltros" disabled="@Cargando">
+                Limpiar
+            </button>
+        </div>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <section class="message error-message">
+            <strong>No se pudo completar la consulta.</strong>
+            <span>@Error</span>
+        </section>
+    }
+    else if (Cargando)
+    {
+        <section class="message loading-message">
+            Consultando CFDI en PostgreSQL...
+        </section>
+    }
+    else
+    {
+        <section class="summary-strip">
+            <button class="summary-item invoice" @onclick='() => AplicarTipo("I")'>
+                <span class="summary-code">I</span>
+                <span><small>Facturas (@Resumen.CantidadFacturas)</small><strong>@Moneda(Resumen.TotalFacturas)</strong></span>
+            </button>
+
+            <button class="summary-item payroll" @onclick='() => AplicarTipo("N")'>
+                <span class="summary-code">N</span>
+                <span><small>Nómina (@Resumen.CantidadNominas)</small><strong>@Moneda(Resumen.TotalNominas)</strong></span>
+            </button>
+
+            <button class="summary-item credit-note" @onclick='() => AplicarTipo("E")'>
+                <span class="summary-code">E</span>
+                <span><small>Notas de crédito (@Resumen.CantidadNotasCredito)</small><strong>@Moneda(Resumen.TotalNotasCredito)</strong></span>
+            </button>
+
+            <button class="summary-item transfer" @onclick='() => AplicarTipo("T")'>
+                <span class="summary-code">T</span>
+                <span><small>Traslados</small><strong>@Resumen.CantidadTraslados.ToString("N0")</strong></span>
+            </button>
+
+            <button class="summary-item payment" @onclick='() => AplicarTipo("P")'>
+                <span class="summary-code">P</span>
+                <span><small>Pagos</small><strong>@Resumen.CantidadPagos.ToString("N0")</strong></span>
+            </button>
+
+            <button class="summary-item total" @onclick='() => AplicarTipo("")'>
+                <span class="summary-code">Σ</span>
+                <span><small>Total XML</small><strong>@Resumen.TotalCfdi.ToString("N0")</strong></span>
+            </button>
+        </section>
+
+        <section class="grid-card">
+            <div class="grid-toolbar">
+                <div>
+                    <strong>Comprobantes</strong>
+                    <span>
+                        Mostrando @Resultado.RegistroInicial–@Resultado.RegistroFinal de
+                        @Resultado.TotalRegistros.ToString("N0")
+                    </span>
+                </div>
+
+                <div class="page-size">
+                    <label>Filas</label>
+                    <select value="@Filtro.RegistrosPorPagina" @onchange="CambiarTamanoPagina">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="cfdi-table">
+                    <thead>
+                        <tr>
+                            <th><button @onclick='() => Ordenar("fecha_emision")'>Fecha</button></th>
+                            <th>Clasificación</th>
+                            <th><button @onclick='() => Ordenar("tipo_cfdi")'>Tipo</button></th>
+                            <th>Serie / Folio</th>
+                            <th><button @onclick='() => Ordenar("rfc")'>RFC contraparte</button></th>
+                            <th><button @onclick='() => Ordenar("nombre")'>Razón social</button></th>
+                            <th><button @onclick='() => Ordenar("total")'>Total</button></th>
+                            <th>Moneda</th>
+                            <th>UUID</th>
+                            <th class="actions-header">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Resultado.Registros.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="10" class="empty-cell">No se encontraron CFDI con los filtros seleccionados.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (CfdiConsultaDto cfdi in Resultado.Registros)
+                            {
+                                <tr class="@(Seleccionado?.CfdiId == cfdi.CfdiId ? "selected-row" : "")"
+                                    @onclick="() => Seleccionar(cfdi)">
+                                    <td>@cfdi.FechaEmision.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td><span class="classification-badge @ClaseClasificacion(cfdi.Clasificacion)">@cfdi.Clasificacion</span></td>
+                                    <td><span class="type-badge @ClaseTipo(cfdi.TipoCfdi)">@cfdi.TipoCfdi</span></td>
+                                    <td><strong>@cfdi.Serie</strong> @cfdi.Folio</td>
+                                    <td class="mono">@cfdi.RfcContraparte</td>
+                                    <td class="name-cell" title="@cfdi.NombreContraparte">@cfdi.NombreContraparte</td>
+                                    <td class="amount-cell">@Moneda(cfdi.Total)</td>
+                                    <td>@cfdi.Moneda</td>
+                                    <td class="uuid-cell" title="@cfdi.UUID">@AbreviarUuid(cfdi.UUID)</td>
+                                    <td class="actions-cell" @onclick:stopPropagation="true">
+                                        <a class="row-action xml-action"
+                                           href="@ObtenerUrlXml(cfdi.CfdiId)"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           title="Ver XML">XML</a>
+                                        <a class="row-action pdf-action"
+                                           href="@ObtenerUrlPdf(cfdi.CfdiId)"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           title="Generar PDF">PDF</a>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="pagination">
+                <button @onclick="PaginaAnterior" disabled="@(!Resultado.TienePaginaAnterior || Cargando)">Anterior</button>
+                <span>Página @Resultado.PaginaActual de @Math.Max(Resultado.TotalPaginas, 1)</span>
+                <button @onclick="PaginaSiguiente" disabled="@(!Resultado.TienePaginaSiguiente || Cargando)">Siguiente</button>
+            </div>
+        </section>
+
+        @if (Seleccionado is not null)
+        {
+            <section class="detail-card">
+                <div class="detail-heading">
+                    <div>
+                        <span class="type-badge @ClaseTipo(Seleccionado.TipoCfdi)">@Seleccionado.TipoCfdi</span>
+                        <h2>@Seleccionado.NombreContraparte</h2>
+                        <p class="mono">@Seleccionado.UUID</p>
+                    </div>
+                    <button class="close-detail" @onclick="() => Seleccionado = null">×</button>
+                </div>
+
+                <div class="detail-grid">
+                    <div><span>Clasificación</span><strong>@Seleccionado.Clasificacion</strong></div>
+                    <div><span>Fecha</span><strong>@Seleccionado.FechaEmision.ToString("dd/MM/yyyy HH:mm")</strong></div>
+                    <div><span>Serie / Folio</span><strong>@Seleccionado.Serie @Seleccionado.Folio</strong></div>
+                    <div><span>RFC contraparte</span><strong class="mono">@Seleccionado.RfcContraparte</strong></div>
+                    <div><span>Subtotal</span><strong>@Moneda(Seleccionado.Subtotal)</strong></div>
+                    <div><span>Total</span><strong>@Moneda(Seleccionado.Total)</strong></div>
+                    <div class="detail-path"><span>Ruta XML</span><strong>@Seleccionado.RutaXml</strong></div>
+                </div>
+            </section>
+        }
+    }
+</div>
+
+@code {
+    private CfdiFiltroDto Filtro { get; set; } = new()
+    {
+        FechaInicio = new DateTime(2024, 1, 1),
+        FechaFin = DateTime.Today,
+        Pagina = 1,
+        RegistrosPorPagina = 25
+    };
+
+    private ResultadoPaginadoDto<CfdiConsultaDto> Resultado { get; set; } = new();
+    private CfdiResumenConsultaDto Resumen { get; set; } = new();
+    private CfdiConsultaDto? Seleccionado { get; set; }
+    private bool Cargando { get; set; } = true;
+    private string? Error { get; set; }
+
+    protected override void OnInitialized()
+    {
+        CargarDatos();
+    }
+
+    private void Consultar()
+    {
+        Filtro.Pagina = 1;
+        Seleccionado = null;
+        CargarDatos();
+    }
+
+    private void CargarDatos()
+    {
+        Cargando = true;
+        Error = null;
+
+        try
+        {
+            Resultado = Repo.BuscarCfdi(Filtro);
+            Resumen = Repo.ObtenerResumenCfdi(Filtro);
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private void LimpiarFiltros()
+    {
+        Filtro = new CfdiFiltroDto
+        {
+            FechaInicio = new DateTime(2024, 1, 1),
+            FechaFin = DateTime.Today,
+            Pagina = 1,
+            RegistrosPorPagina = 25
+        };
+        Seleccionado = null;
+        CargarDatos();
+    }
+
+    private void AplicarTipo(string tipo)
+    {
+        Filtro.TipoCfdi = tipo;
+        Filtro.Pagina = 1;
+        Seleccionado = null;
+        CargarDatos();
+    }
+
+    private void Seleccionar(CfdiConsultaDto cfdi)
+    {
+        Seleccionado = cfdi;
+    }
+
+    private void PaginaAnterior()
+    {
+        if (!Resultado.TienePaginaAnterior) return;
+        Filtro.Pagina--;
+        Seleccionado = null;
+        CargarDatos();
+    }
+
+    private void PaginaSiguiente()
+    {
+        if (!Resultado.TienePaginaSiguiente) return;
+        Filtro.Pagina++;
+        Seleccionado = null;
+        CargarDatos();
+    }
+
+    private void CambiarTamanoPagina(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out int cantidad))
+        {
+            Filtro.RegistrosPorPagina = cantidad;
+            Filtro.Pagina = 1;
+            CargarDatos();
+        }
+    }
+
+    private void Ordenar(string campo)
+    {
+        if (Filtro.OrdenarPor == campo)
+        {
+            Filtro.OrdenDescendente = !Filtro.OrdenDescendente;
+        }
+        else
+        {
+            Filtro.OrdenarPor = campo;
+            Filtro.OrdenDescendente = true;
+        }
+
+        Filtro.Pagina = 1;
+        CargarDatos();
+    }
+
+    private void ManejarTecla(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter") Consultar();
+    }
+
+    private static string Moneda(decimal valor) =>
+        valor.ToString("C2", CultureInfo.GetCultureInfo("es-MX"));
+
+    private static string AbreviarUuid(string uuid) =>
+        uuid.Length <= 13 ? uuid : $"{uuid[..8]}…{uuid[^4..]}";
+
+    private static string ClaseTipo(string tipo) => tipo switch
+    {
+        "I" => "invoice",
+        "N" => "payroll",
+        "E" => "credit-note",
+        "T" => "transfer",
+        "P" => "payment",
+        _ => "unknown"
+    };
+
+    private static string ClaseClasificacion(string clasificacion) => clasificacion switch
+    {
+        "EMITIDO" => "issued",
+        "RECIBIDO" => "received",
+        "PROPIO" => "own",
+        _ => "unidentified"
+    };
+
+    private static string ObtenerUrlXml(long cfdiId)
+    {
+        return $"/api/cfdi/{cfdiId}/xml";
+    }
+
+    private static string ObtenerUrlPdf(long cfdiId)
+    {
+        return $"/api/cfdi/{cfdiId}/pdf";
+    }
+}

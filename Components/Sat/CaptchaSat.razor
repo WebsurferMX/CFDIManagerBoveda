@@ -1,0 +1,111 @@
+@using CFDIParser.Models
+@using CFDIManager.Web.Services.Sat
+
+@inject DescargaCiecService Ciec
+
+@* Inicio de sesión en el portal del SAT con CIEC: muestra el captcha y lo manda con la contraseña. *@
+<div class="captcha-sat">
+    <div class="d-flex flex-wrap align-items-center gap-3">
+        <div class="captcha-imagen">
+            @if (Imagen != "")
+            {
+                <img src="@Imagen" alt="Captcha del SAT" />
+            }
+            else
+            {
+                <span class="text-body-secondary small">@(Cargando ? "Pidiendo captcha al SAT…" : "Sin captcha")</span>
+            }
+        </div>
+
+        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@Cargando" @onclick="CargarCaptcha" title="Pedir otro captcha">
+            <i class="bi bi-arrow-clockwise"></i>
+        </button>
+
+        <div class="d-flex gap-2 flex-grow-1">
+            @* form apunta a un formulario inexistente: dentro de Empresas, Enter no debe guardar la empresa. *@
+            <input class="form-control" style="max-width: 180px" placeholder="Texto del captcha" maxlength="10" form="captcha-sat-sin-formulario"
+                   autocomplete="off" @bind="Texto" @bind:event="oninput" @onkeydown="Tecla" disabled="@(Cargando || Imagen == "")" />
+
+            <button type="button" class="btn btn-primary text-nowrap" disabled="@(Cargando || Imagen == "" || Texto.Trim() == "")" @onclick="Entrar">
+                <i class="bi bi-box-arrow-in-right me-1"></i>@(Cargando && Imagen != "" ? "Entrando…" : "Iniciar sesión")
+            </button>
+        </div>
+    </div>
+
+    @if (Error != "")
+    {
+        <div class="text-danger small mt-2"><i class="bi bi-exclamation-triangle me-1"></i>@Error</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public EmpresaDto Empresa { get; set; } = default!;
+
+    /// <summary>CIEC recién capturada (aún sin guardar); vacía para usar la guardada.</summary>
+    [Parameter]
+    public string? CiecCapturada { get; set; }
+
+    [Parameter]
+    public EventCallback OnSesionIniciada { get; set; }
+
+    private string Imagen = "";
+    private string Texto = "";
+    private string Error = "";
+    private bool Cargando;
+
+    protected override Task OnInitializedAsync() => CargarCaptcha();
+
+    private async Task CargarCaptcha()
+    {
+        Cargando = true;
+        Imagen = "";
+        Texto = "";
+
+        try
+        {
+            Imagen = await Ciec.ObtenerCaptchaAsync();
+            Error = "";
+        }
+        catch (Exception ex)
+        {
+            Error = $"No se pudo obtener el captcha del SAT: {ex.Message}";
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private async Task Tecla(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && Texto.Trim() != "" && !Cargando)
+            await Entrar();
+    }
+
+    private async Task Entrar()
+    {
+        Cargando = true;
+        Error = "";
+
+        try
+        {
+            await Ciec.IniciarSesionAsync(Empresa, CiecCapturada, Texto);
+            await OnSesionIniciada.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+            Cargando = false;
+
+            // Cada captcha sirve una vez: se pide otro para el siguiente intento.
+            string error = Error;
+            await CargarCaptcha();
+            Error = error;
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+}

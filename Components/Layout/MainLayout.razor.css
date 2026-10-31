@@ -1,0 +1,91 @@
+.page {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    min-height: 100vh;
+}
+
+.sidebar {
+    width: 250px;
+    min-height: 100vh;
+    background: linear-gradient(
+        180deg,
+        #071b52 0%,
+        #052767 70%,
+        #021a4a 100%);
+    flex-shrink: 0;
+}
+
+main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #e6e9ee;
+}
+
+.top-row {
+    background: #f0f2f5;
+    border-bottom: 1px solid #d3d9e1;
+    box-shadow: 0 1px 3px rgb(15 23 42 / 6%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 4rem;
+    padding: 0.75rem 1rem;
+}
+
+.content {
+    flex: 1;
+    padding: 1.5rem;
+    overflow-x: auto;
+}
+
+#blazor-error-ui {
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    .page {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        width: 100%;
+        min-height: auto;
+    }
+
+    .content {
+        padding: 1rem;
+    }
+}
+
+/* ===== MODO OSCURO (generado) ===== */
+
+html[data-theme="dark"] main {
+    background: #09111f;
+}
+
+html[data-theme="dark"] .top-row {
+    background: #121c2b;
+    border-bottom: 1px solid #2e415b;
+}
+
+html[data-theme="dark"] #blazor-error-ui {
+    box-shadow: 0 -1px 2px rgb(0 0 0 / 50%);
+}
+/* ===== FIN MODO OSCURO ===== */

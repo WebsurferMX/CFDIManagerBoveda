@@ -1,0 +1,402 @@
+@using Microsoft.AspNetCore.Components.Forms
+@using CFDIManager.Web.Services.Cif
+
+@using CFDIManager.Web.Services.Sat
+
+@inject ArchivosSatService Archivos
+@inject DescargaArchivosSatService Descarga
+@inject IJSRuntime JS
+
+@* Acuses de declaraciones mensuales y anuales de la empresa, por ejercicio. *@
+<div class="declaraciones">
+
+    @if (EmpresaId <= 0)
+    {
+        <div class="alert alert-info mb-0">Guarda la empresa primero para poder cargar sus declaraciones.</div>
+    }
+    else
+    {
+        <div class="dc-barra">
+            <label>
+                Ejercicio
+                <select class="form-select form-select-sm" @bind="Ejercicio">
+                    @foreach (int anio in Ejercicios)
+                    {
+                        <option value="@anio">@anio</option>
+                    }
+                </select>
+            </label>
+
+            <label>
+                Tipo
+                <select class="form-select form-select-sm" @bind="Tipo">
+                    <option value="MENSUAL">Mensual</option>
+                    <option value="ANUAL">Anual</option>
+                </select>
+            </label>
+
+            @if (Tipo == "MENSUAL")
+            {
+                <label>
+                    Periodo
+                    <select class="form-select form-select-sm" @bind="Periodo">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            int mes = m;
+                            <option value="@mes">@Mx.DateTimeFormat.GetMonthName(mes)</option>
+                        }
+                    </select>
+                </label>
+            }
+
+            <label class="btn btn-outline-primary btn-sm mb-0 text-nowrap @(Cargando ? "disabled" : "")">
+                <i class="bi bi-upload me-1"></i>@(Cargando ? "Leyendo…" : "Cargar acuse (PDF)")
+                <InputFile class="d-none" accept=".pdf,application/pdf" OnChange="Cargar" disabled="@Cargando" />
+            </label>
+
+            @if (TieneCiec)
+            {
+                <button type="button" class="btn btn-sm text-nowrap @(PanelSat ? "btn-primary" : "btn-outline-primary")" @onclick="AlternarPanelSat">
+                    <i class="bi bi-cloud-arrow-down me-1"></i>Descargar del SAT
+                </button>
+            }
+        </div>
+        <small class="dc-ayuda">
+            Si el acuse trae el ejercicio y el periodo, se toman del PDF; si no, los que elegiste aquí.
+            @if (!TieneCiec)
+            {
+                <span>Para descargarlos del SAT, captura la contraseña (CIEC) en Accesos SAT.</span>
+            }
+        </small>
+
+        @if (PanelSat)
+        {
+            <div class="dc-sat">
+                <div class="dc-sat-fila">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn @(PortalSat == "MENSUAL" ? "btn-primary" : "btn-outline-primary")" disabled="@Trabajando" @onclick='() => CambiarPortal("MENSUAL")'>Mensuales</button>
+                        <button type="button" class="btn @(PortalSat == "ANUAL" ? "btn-primary" : "btn-outline-primary")" disabled="@Trabajando" @onclick='() => CambiarPortal("ANUAL")'>Anual</button>
+                    </div>
+                    <span class="dc-sat-ejercicio">Ejercicio <b>@Ejercicio</b></span>
+                </div>
+
+                @if (!Descarga.SesionActiva(EmpresaId, PortalSat))
+                {
+                    <div class="dc-sat-fila">
+                        <div class="dc-captcha">
+                            @if (Captcha != "")
+                            {
+                                <img src="@Captcha" alt="Captcha del SAT" />
+                            }
+                            else
+                            {
+                                <span>@(Trabajando ? "Pidiendo captcha al SAT…" : "Sin captcha")</span>
+                            }
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@Trabajando" title="Pedir otro captcha" @onclick="PedirCaptcha">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                        @* form apunta a un formulario inexistente: dentro de Empresas, Enter no debe guardar la empresa. *@
+                        <input class="form-control form-control-sm dc-captcha-texto" placeholder="Texto del captcha" maxlength="10" autocomplete="off"
+                               form="captcha-declaraciones-sin-formulario"
+                               @bind="TextoCaptcha" @bind:event="oninput" @onkeydown="TeclaCaptcha" disabled="@(Trabajando || Captcha == "")" />
+                        <button type="button" class="btn btn-sm btn-primary text-nowrap" disabled="@(Trabajando || Captcha == "" || TextoCaptcha.Trim() == "")" @onclick="Entrar">
+                            <i class="bi bi-box-arrow-in-right me-1"></i>Entrar y descargar @Ejercicio
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="dc-sat-fila">
+                        <span class="dc-sat-sesion"><i class="bi bi-check-circle-fill"></i> Sesión abierta en el portal del SAT</span>
+                        <button type="button" class="btn btn-sm btn-primary text-nowrap" disabled="@Trabajando" @onclick="DescargarAcuses">
+                            <i class="bi bi-cloud-arrow-down me-1"></i>Descargar acuses @Ejercicio
+                        </button>
+                    </div>
+                }
+
+                @if (Trabajando && MensajeSat != "")
+                {
+                    <div class="dc-sat-progreso"><span class="spinner-border spinner-border-sm me-2"></span>@MensajeSat</div>
+                }
+
+                @if (ErrorSat != "")
+                {
+                    <div class="alert alert-danger py-2 small mb-0"><i class="bi bi-exclamation-triangle me-1"></i>@ErrorSat</div>
+                }
+
+                @if (Resultado is not null)
+                {
+                    <div class="alert @(Resultado.Errores.Count > 0 ? "alert-warning" : "alert-success") py-2 small mb-0">
+                        <i class="bi bi-info-circle me-1"></i>@Resultado.Resumen
+                        @foreach (string e in Resultado.Errores.Take(5))
+                        {
+                            <div>@e</div>
+                        }
+                    </div>
+                }
+
+                <small class="dc-ayuda">
+                    @(PortalSat == "MENSUAL"
+                        ? "Mensuales y provisionales del portal nuevo del SAT (ejercicio 2025 en adelante)."
+                        : "Declaración anual del ejercicio.")
+                    Solo se bajan los acuses que todavía no están guardados.
+                </small>
+            </div>
+        }
+
+        @if (Error != "")
+        {
+            <div class="alert alert-danger py-2 small mt-2 mb-0"><i class="bi bi-exclamation-triangle me-1"></i>@Error</div>
+        }
+
+        <div class="dc-titulo">Declaraciones del ejercicio @Ejercicio</div>
+        <div class="dc-meses">
+            @for (int m = 1; m <= 12; m++)
+            {
+                int mes = m;
+                List<DeclaracionSatDto> delMes = DelEjercicio.Where(d => d.Tipo == "MENSUAL" && d.Periodo == mes).ToList();
+
+                <div class="dc-mes @(delMes.Count > 0 ? "presentada" : FuturoOActual(mes) ? "futuro" : "pendiente")"
+                     title="@(delMes.Count > 0 ? $"{delMes.Count} acuse(s)" : "Sin acuse cargado")">
+                    <span>@Mx.DateTimeFormat.GetAbbreviatedMonthName(mes).TrimEnd('.').ToUpperInvariant()</span>
+                    <i class="bi @(delMes.Count > 0 ? "bi-check-circle-fill" : FuturoOActual(mes) ? "bi-dash-circle" : "bi-exclamation-circle")"></i>
+                </div>
+            }
+            <div class="dc-mes anual @(DelEjercicio.Any(d => d.Tipo == "ANUAL") ? "presentada" : "pendiente")">
+                <span>ANUAL</span>
+                <i class="bi @(DelEjercicio.Any(d => d.Tipo == "ANUAL") ? "bi-check-circle-fill" : "bi-exclamation-circle")"></i>
+            </div>
+        </div>
+
+        @if (DelEjercicio.Count == 0)
+        {
+            <p class="dc-vacio">Todavía no hay acuses guardados para este ejercicio.</p>
+        }
+        else
+        {
+            <table class="dc-tabla">
+                <thead>
+                    <tr>
+                        <th>Periodo</th>
+                        <th>Tipo</th>
+                        <th>Presentación</th>
+                        <th>No. operación</th>
+                        <th class="num">A pagar</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (DeclaracionSatDto d in DelEjercicio)
+                    {
+                        <tr>
+                            <td><b>@(d.Tipo == "ANUAL" ? "Anual" : Mx.DateTimeFormat.GetMonthName(d.Periodo))</b></td>
+                            <td>@(d.TipoDeclaracion != "" ? d.TipoDeclaracion : "—")</td>
+                            <td>@(d.FechaPresentacion?.ToString("dd/MM/yyyy") ?? "—")</td>
+                            <td class="mono">@(d.NumeroOperacion != "" ? d.NumeroOperacion : "—")</td>
+                            <td class="num">@(d.ImporteAPagar is decimal i ? i.ToString("C2", Mx) : "—")</td>
+                            <td class="dc-acciones">
+                                <a href="@($"api/empresa/{EmpresaId}/archivos-sat/declaracion-{d.Id}")" target="_blank" title="Ver PDF"><i class="bi bi-file-earmark-pdf"></i></a>
+                                <button type="button" title="Eliminar" @onclick="() => Eliminar(d)"><i class="bi bi-trash3"></i></button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    }
+</div>
+
+@code {
+    private static readonly System.Globalization.CultureInfo Mx = new("es-MX");
+
+    [Parameter] public long EmpresaId { get; set; }
+    [Parameter] public string Rfc { get; set; } = "";
+
+    /// <summary>Con CIEC guardada se pueden descargar los acuses del portal del SAT.</summary>
+    [Parameter] public bool TieneCiec { get; set; }
+
+    private List<DeclaracionSatDto> Lista = [];
+
+    // Descarga del SAT
+    private bool PanelSat;
+    private string PortalSat = "MENSUAL";
+    private string Captcha = "";
+    private string TextoCaptcha = "";
+    private bool Trabajando;
+    private string MensajeSat = "";
+    private string ErrorSat = "";
+    private ResultadoDescargaDeclaraciones? Resultado;
+    private int Ejercicio = DateTime.Today.Year;
+    private string Tipo = "MENSUAL";
+    private int Periodo = DateTime.Today.AddMonths(-1).Month;
+    private bool Cargando;
+    private string Error = "";
+    private long? EmpresaCargada;
+
+    private IEnumerable<int> Ejercicios =>
+        Enumerable.Range(DateTime.Today.Year - 5, 6).Concat(Lista.Select(d => d.Ejercicio)).Distinct().OrderDescending();
+
+    private List<DeclaracionSatDto> DelEjercicio =>
+        Lista.Where(d => d.Ejercicio == Ejercicio).OrderBy(d => d.Tipo == "ANUAL" ? 13 : d.Periodo).ToList();
+
+    /// <summary>El mes en curso y los siguientes todavía no vencen.</summary>
+    private bool FuturoOActual(int mes) => new DateTime(Ejercicio, mes, 1) >= new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+
+    protected override void OnParametersSet()
+    {
+        if (EmpresaCargada == EmpresaId)
+            return;
+
+        EmpresaCargada = EmpresaId;
+        Error = "";
+        Lista = EmpresaId > 0 ? Archivos.ObtenerDeclaraciones(EmpresaId) : [];
+        PanelSat = false;
+        Resultado = null;
+        ErrorSat = "";
+    }
+
+    // ---------- Descarga del SAT ----------
+
+    private async Task AlternarPanelSat()
+    {
+        PanelSat = !PanelSat;
+
+        if (PanelSat && !Descarga.SesionActiva(EmpresaId, PortalSat) && Captcha == "")
+            await PedirCaptcha();
+    }
+
+    private async Task CambiarPortal(string portal)
+    {
+        if (PortalSat == portal)
+            return;
+
+        PortalSat = portal;
+        Resultado = null;
+        ErrorSat = "";
+
+        // Cada portal tiene su propio inicio de sesión.
+        if (!Descarga.SesionActiva(EmpresaId, PortalSat))
+            await PedirCaptcha();
+    }
+
+    private async Task PedirCaptcha()
+    {
+        Trabajando = true;
+        Captcha = "";
+        TextoCaptcha = "";
+
+        try
+        {
+            Captcha = await Descarga.ObtenerCaptchaAsync(PortalSat);
+        }
+        catch (Exception ex)
+        {
+            ErrorSat = $"No se pudo obtener el captcha del SAT: {ex.Message}";
+        }
+        finally
+        {
+            Trabajando = false;
+        }
+    }
+
+    private async Task TeclaCaptcha(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && TextoCaptcha.Trim() != "" && !Trabajando)
+            await Entrar();
+    }
+
+    private async Task Entrar()
+    {
+        Trabajando = true;
+        ErrorSat = "";
+        Resultado = null;
+        MensajeSat = "Iniciando sesión en el SAT…";
+
+        try
+        {
+            await Descarga.IniciarSesionAsync(EmpresaId, Rfc, TextoCaptcha);
+        }
+        catch (Exception ex)
+        {
+            // Cada captcha sirve una vez: se pide otro para el siguiente intento.
+            ErrorSat = ex.Message;
+            MensajeSat = "";
+            await PedirCaptcha();
+            return;
+        }
+
+        await DescargarAcuses();
+    }
+
+    private async Task DescargarAcuses()
+    {
+        Trabajando = true;
+        ErrorSat = "";
+        Resultado = null;
+
+        var progreso = new Progress<string>(m =>
+        {
+            MensajeSat = m;
+            _ = InvokeAsync(StateHasChanged);
+        });
+
+        try
+        {
+            Resultado = await Descarga.DescargarDeclaracionesAsync(EmpresaId, Rfc, Ejercicio, progreso);
+            Lista = Archivos.ObtenerDeclaraciones(EmpresaId);
+        }
+        catch (SesionSatExpiradaException ex)
+        {
+            ErrorSat = ex.Message;
+            await PedirCaptcha();
+        }
+        catch (Exception ex)
+        {
+            ErrorSat = $"No se pudieron descargar las declaraciones: {ex.Message}";
+        }
+        finally
+        {
+            Trabajando = false;
+            MensajeSat = "";
+        }
+    }
+
+    private async Task Cargar(InputFileChangeEventArgs e)
+    {
+        Cargando = true;
+        Error = "";
+
+        try
+        {
+            await using Stream origen = e.File.OpenReadStream(10 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await origen.CopyToAsync(ms);
+
+            DeclaracionSatDto d = await Task.Run(() =>
+                Archivos.CargarDeclaracion(EmpresaId, Rfc, Tipo, Ejercicio, Periodo, ms.ToArray(), e.File.Name));
+
+            Lista = Archivos.ObtenerDeclaraciones(EmpresaId);
+            Ejercicio = d.Ejercicio;
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private async Task Eliminar(DeclaracionSatDto d)
+    {
+        string periodo = d.Tipo == "ANUAL" ? $"anual {d.Ejercicio}" : $"{Mx.DateTimeFormat.GetMonthName(d.Periodo)} {d.Ejercicio}";
+
+        if (!await JS.InvokeAsync<bool>("confirm", $"¿Eliminar el acuse de la declaración {periodo}?"))
+            return;
+
+        Archivos.EliminarDeclaracion(EmpresaId, d.Id);
+        Lista = Archivos.ObtenerDeclaraciones(EmpresaId);
+    }
+}

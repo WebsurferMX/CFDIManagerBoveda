@@ -1,0 +1,313 @@
+@page "/"
+@page "/resumen"
+@implements IDisposable
+
+@using System.Globalization
+@using CFDIParser.Models
+@using CFDIParser.Services
+@using CFDIManager.Web.Services
+
+@inject PostgreSqlRepository Repo
+@inject EmpresaContext EmpresaContext
+
+<PageTitle>CFDI Manager</PageTitle>
+
+
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div>
+            <div class="brand-label">CFDI MANAGER</div>
+            <h1>Resumen fiscal</h1>
+            <p>
+                CFDI emitidos y recibidos del RFC
+                <strong>@RfcEmpresa</strong>
+            </p>
+        </div>
+
+        <button class="button-primary"
+                @onclick="CargarDashboard"
+                disabled="@Cargando">
+            @(Cargando ? "Actualizando..." : "Actualizar")
+        </button>
+    </header>
+
+    <section class="period-panel">
+        <div class="field">
+            <label>Fecha inicial</label>
+            <InputDate @bind-Value="FechaInicio" class="date-input" />
+        </div>
+
+        <div class="field">
+            <label>Fecha final</label>
+            <InputDate @bind-Value="FechaFin" class="date-input" />
+        </div>
+
+        <button class="button-primary"
+                @onclick="CargarDashboard"
+                disabled="@Cargando">
+            Consultar periodo
+        </button>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <section class="error-box">
+            <strong>No se pudo cargar el Dashboard</strong>
+            <span>@Error</span>
+        </section>
+    }
+    else if (Cargando)
+    {
+        <section class="loading-box">
+            Consultando información en PostgreSQL...
+        </section>
+    }
+    else
+    {
+        <div class="dashboard-groups">
+            <section class="fiscal-group emitted-group">
+                <header class="group-header">
+                    <div>
+                        <span class="group-badge emitted">EMITIDOS</span>
+                        <h2>Facturación y ventas</h2>
+                        <p>CFDI donde el RFC seleccionado es emisor</p>
+                    </div>
+
+                    <div class="group-total">
+                        <span>Total CFDI</span>
+                        <strong>@Datos.CfdiEmitidos.ToString("N0")</strong>
+                    </div>
+                </header>
+
+                <div class="group-content">
+                    <article class="main-kpi emitted-main">
+                        <span>Facturación neta</span>
+                        <strong>@FormatoMoneda(Datos.FacturacionNeta)</strong>
+                        <small>Facturas menos notas de crédito</small>
+                    </article>
+
+                    <div class="mini-kpi-grid">
+                        <article class="mini-kpi invoice">
+                            <div class="type-icon">I</div>
+                            <div class="mini-content">
+                                <span>Facturas emitidas</span>
+                                <strong>@FormatoMoneda(Datos.TotalIngresosEmitidos)</strong>
+                                <small>@Datos.IngresosEmitidos.ToString("N0") comprobantes</small>
+                            </div>
+                        </article>
+
+                        <article class="mini-kpi payroll">
+                            <div class="type-icon">N</div>
+                            <div class="mini-content">
+                                <span>Nómina emitida</span>
+                                <strong>@FormatoMoneda(Datos.TotalNominasEmitidas)</strong>
+                                <small>@Datos.NominasEmitidas.ToString("N0") comprobantes</small>
+                            </div>
+                        </article>
+
+                        <article class="mini-kpi credit-note">
+                            <div class="type-icon">E</div>
+                            <div class="mini-content">
+                                <span>Notas de crédito</span>
+                                <strong>@FormatoMoneda(Datos.TotalEgresosEmitidos)</strong>
+                                <small>@Datos.EgresosEmitidos.ToString("N0") comprobantes</small>
+                            </div>
+                        </article>
+
+                        <article class="mini-kpi transfer">
+                            <div class="type-icon">T</div>
+                            <div class="mini-content">
+                                <span>Traslados emitidos</span>
+                                <strong>@Datos.TrasladosEmitidos.ToString("N0")</strong>
+                                <small>Comprobantes de traslado</small>
+                            </div>
+                        </article>
+
+                        <article class="mini-kpi payment">
+                            <div class="type-icon">P</div>
+                            <div class="mini-content">
+
+                                <span>Pagos emitidos</span>
+                                <strong>@FormatoMoneda(Datos.TotalPagosEmitidos)</strong>
+                                <small>@Datos.PagosEmitidos.ToString("N0")complementos</small>
+                            </div>
+                        </article>
+                    </div>
+                </div>
+            </section>
+
+            <section class="fiscal-group received-group">
+                <header class="group-header">
+                    <div>
+                        <span class="group-badge received">RECIBIDOS</span>
+                        <h2>Compras y gastos</h2>
+                        <p>CFDI donde el RFC seleccionado es receptor</p>
+                    </div>
+
+                    <div class="group-total">
+                        <span>Total CFDI</span>
+                        <strong>@Datos.CfdiRecibidos.ToString("N0")</strong>
+                    </div>
+                </header>
+
+                <div class="group-content">
+                    <article class="main-kpi received-main">
+                        <span>Compras netas</span>
+                        <strong>@FormatoMoneda(Datos.ComprasNetas)</strong>
+                        <small>Facturas recibidas menos notas de crédito</small>
+                    </article>
+
+                    <div class="mini-kpi-grid">
+                        <article class="mini-kpi invoice">
+                            <div class="type-icon">I</div>
+                            <div class="mini-content">
+                                <span>Facturas recibidas</span>
+                                <strong>@FormatoMoneda(Datos.TotalIngresosRecibidos)</strong>
+                                <small>@Datos.IngresosRecibidos.ToString("N0") comprobantes</small>
+                            </div>
+                        </article>
+
+                        <article class="mini-kpi payroll">
+                            <div class="type-icon">N</div>
+                            <div class="mini-content">
+                                <span>Nómina recibida</span>
+                                <strong>@FormatoMoneda(Datos.TotalNominasRecibidas)</strong>
+                                <small>@Datos.NominasRecibidas.ToString("N0") comprobantes</small>
+                            </div>
+                        </article>
+
+                        <article class="mini-kpi credit-note">
+                            <div class="type-icon">E</div>
+                            <div class="mini-content">
+                                <span>Notas de crédito recibidas</span>
+                                <strong>@FormatoMoneda(Datos.TotalEgresosRecibidos)</strong>
+                                <small>@Datos.EgresosRecibidos.ToString("N0") comprobantes</small>
+                            </div>
+                        </article>
+
+                        <article class="mini-kpi transfer">
+                            <div class="type-icon">T</div>
+                            <div class="mini-content">
+                                <span>Traslados recibidos</span>
+                                <strong>@Datos.TrasladosRecibidos.ToString("N0")</strong>
+                                <small>Comprobantes de traslado</small>
+                            </div>
+                        </article>
+
+                        <article class="mini-kpi payment">
+                            <div class="type-icon">P</div>
+                            <div class="mini-content">
+                                <span>Pagos recibidos</span>
+                                <strong> @FormatoMoneda(Datos.TotalPagosRecibidos)
+
+                                </strong>
+
+<small>
+    @Datos.PagosRecibidos.ToString("N0")
+    complementos
+</small>
+                    </div>
+                        </article>
+                    </div>
+                </div>
+            </section>
+        </div>
+    }
+</div>
+
+@code {
+    private DashboardDto Datos { get; set; } =
+        new();
+
+    private DateTime FechaInicio { get; set; } =
+        new DateTime(2026, 1, 1);
+
+    private DateTime FechaFin { get; set; } =
+        DateTime.Today;
+
+    private bool Cargando { get; set; } =
+        true;
+
+    private string? Error { get; set; }
+
+    private string RfcEmpresa =>
+        string.IsNullOrWhiteSpace(
+            EmpresaContext.Rfc)
+                ? "Empresa no seleccionada"
+                : EmpresaContext.Rfc;
+
+    protected override void OnInitialized()
+    {
+        EmpresaContext.OnChange +=
+            CambiarEmpresa;
+
+        CargarDashboard();
+    }
+
+    private void CargarDashboard()
+    {
+        Error = $"EmpresaId={EmpresaContext.EmpresaId} RFC={EmpresaContext.Rfc}";    
+        Cargando = true;
+        Error = null;
+        try
+        {
+            if (!EmpresaContext.TieneEmpresaActiva)
+            {
+                throw new InvalidOperationException(
+                    "Selecciona una empresa o RFC.");
+            }
+
+            if (FechaFin.Date <
+                FechaInicio.Date)
+            {
+                throw new InvalidOperationException(
+                    "La fecha final no puede ser menor " +
+                    "que la fecha inicial.");
+            }
+            
+            Datos =
+                Repo.ObtenerDashboard(
+                    EmpresaContext.EmpresaId,
+                    FechaInicio,
+                    FechaFin);
+        }
+        catch (Exception ex)
+        {
+            Error =
+                ex.Message;
+        }
+        finally
+        {
+            Cargando =
+                false;
+        }
+    }
+
+    private void CambiarEmpresa()
+    {
+        _ = InvokeAsync(
+            () =>
+            {
+                CargarDashboard();
+                StateHasChanged();
+            });
+    }
+
+    public void Dispose()
+    {
+        EmpresaContext.OnChange -=
+            CambiarEmpresa;
+    }
+
+    private static string FormatoMoneda(
+        decimal valor)
+    {
+        CultureInfo cultura =
+            CultureInfo.GetCultureInfo(
+                "es-MX");
+
+        return valor.ToString(
+            "C2",
+            cultura);
+    }
+}

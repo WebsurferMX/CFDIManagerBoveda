@@ -1,0 +1,836 @@
+﻿@page "/configuracion/empresas"
+
+@using System.Text.RegularExpressions
+@using CFDIManager.Web.Services
+@using CFDIParser.Models
+@using CFDIParser.Services
+@using CFDIManager.Web.Components.Empresas
+@using CFDIManager.Web.Services.Sat
+@using System.Security.Cryptography.X509Certificates
+
+@using CFDIManager.Web.Services.Cif
+
+@inject PostgreSqlRepository Repo
+@inject EmpresaContext EmpresaContext
+@inject RutaXmlService Rutas
+@inject ConstanciaFiscalService Constancias
+@inject ArchivosSatService ArchivosSat
+
+
+
+
+<PageTitle>Empresas</PageTitle>
+
+<div class="empresas-page">
+    <header class="page-heading">
+        <div>
+            <span class="eyebrow">CONFIGURACIÓN</span>
+            <h1>Empresas</h1>
+            <p>Registra y administra los RFC disponibles en CFDI Manager.</p>
+        </div>
+
+        <button type="button"
+                class="secondary-button"
+                @onclick="NuevaEmpresa"
+                disabled="@Guardando">
+            Nueva empresa
+        </button>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(MensajeError))
+    {
+        <section class="message error-message">
+            <strong>No se pudo completar la operación.</strong>
+            <span>@MensajeError</span>
+        </section>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(MensajeExito))
+    {
+        <section class="message success-message">
+            <strong>Operación completada.</strong>
+            <span>@MensajeExito</span>
+        </section>
+    }
+
+    @* Pageframe: la lista y el detalle de la empresa son páginas del mismo marco. *@
+    <section class="list-card pageframe">
+        <div class="pf-cabecera">
+            <div>
+                <span class="section-label">CATÁLOGO</span>
+                <h2>Empresas registradas</h2>
+                <p>@ListaEmpresas.Count empresa(s)</p>
+            </div>
+
+            @if (Editando || TabActiva != "Lista")
+            {
+                <div class="identidad">
+                    <div class="pf-empresa">
+                        <span class="section-label">@(Editando ? "EMPRESA SELECCIONADA" : "NUEVA EMPRESA")</span>
+                        <strong>@(Editando ? Modelo.NombreParaMostrar : "Alta de empresa")</strong>
+                    </div>
+                    @if (Editando)
+                    {
+                        <span class="id-badge">ID @Modelo.EmpresaId</span>
+                        @if (Opiniones.TryGetValue(Modelo.EmpresaId, out OpinionCumplimientoDto? opinionSel))
+                        {
+                            <span class="opinion-chip opinion-@ArchivosSatPanel.ClaseSentido(opinionSel.Sentido)">
+                                Opinión SAT: @opinionSel.Sentido
+                                @if (opinionSel.FechaEmision is DateTime emitida)
+                                {
+                                    <small><i class="bi bi-clock"></i> @emitida.ToString("dd MMM yyyy", Mx)</small>
+                                }
+                            </span>
+                        }
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="empresa-tabs">
+            <button type="button"
+                    class="tab-button @(TabActiva == "Lista" ? "active" : "")"
+                    @onclick='() => TabActiva = "Lista"'>
+                <i class="bi bi-list-ul"></i>
+                Empresas
+            </button>
+
+            <button type="button"
+                    class="tab-button @(TabActiva == "General" ? "active" : "")"
+                    @onclick='() => TabActiva = "General"'>
+                <i class="bi bi-building"></i>
+                General
+            </button>
+
+            <button type="button"
+                    class="tab-button @(TabActiva == "Fiscales" ? "active" : "")"
+                    @onclick='() => TabActiva = "Fiscales"'>
+                <i class="bi bi-file-earmark-text"></i>
+                Datos fiscales
+            </button>
+
+            <button type="button"
+                    class="tab-button @(TabActiva == "Sat" ? "active" : "")"
+                    @onclick='() => TabActiva = "Sat"'>
+                <i class="bi bi-shield-lock"></i>
+                Accesos SAT
+            </button>
+
+            <button type="button"
+                    class="tab-button @(TabActiva == "Declaraciones" ? "active" : "")"
+                    @onclick='() => TabActiva = "Declaraciones"'>
+                <i class="bi bi-calendar3"></i>
+                Declaraciones
+            </button>
+        </div>
+
+        @* Página "Empresas": búsqueda y lista. Clic en una fila abre su página General. *@
+        <div hidden="@(TabActiva != "Lista")">
+            <div class="pf-busqueda">
+                <div class="search-box">
+                    <label for="buscar-empresa">Buscar</label>
+                    <input id="buscar-empresa"
+                           @bind="Busqueda"
+                           @bind:event="oninput"
+                           placeholder="RFC o razón social" />
+                </div>
+            </div>
+
+            @if (Cargando)
+            {
+                <div class="empty-state">Cargando empresas...</div>
+            }
+            else if (EmpresasFiltradas.Count == 0)
+            {
+                <div class="empty-state">No se encontraron empresas.</div>
+            }
+            else
+            {
+                <div class="table-container">
+                    <table class="companies-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>RFC</th>
+                                <th>Empresa</th>
+                                <th>Regímenes</th>
+                                <th>Opinión</th>
+                                <th>FIEL</th>
+                                <th>VENCE</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (EmpresaDto empresa in EmpresasFiltradas)
+                            {
+                                <tr class="@(EmpresaContext.EmpresaId == empresa.EmpresaId ? "active-company-row" : "") @(Modelo.EmpresaId == empresa.EmpresaId ? "selected-company-row" : "")"
+                                    title="Clic para ver el detalle de la empresa"
+                                    @onclick="() => EditarEmpresa(empresa)">
+                                    <td>@empresa.EmpresaId</td>
+                                    <td class="rfc-cell">@empresa.Rfc</td>
+                                    <td>
+                                        <strong>@empresa.NombreParaMostrar</strong>
+                                        @if (!string.Equals(empresa.NombreParaMostrar, empresa.RazonSocial, StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            <small>@empresa.RazonSocial</small>
+                                        }
+                                    </td>
+
+                                    <td class="regimenes-cell">
+                                        @if (Regimenes.TryGetValue(empresa.EmpresaId, out List<RegimenCif>? regimenes) && regimenes.Count > 0)
+                                        {
+                                            @foreach (RegimenCif r in regimenes)
+                                            {
+                                                <span class="regimen-tag" title="@r.Nombre">@(r.Clave != "" ? r.Clave : "?")</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="sin-dato" title="Carga la Constancia de Situación Fiscal en Datos fiscales">—</span>
+                                        }
+                                    </td>
+
+                                    <td>
+                                        @if (Opiniones.TryGetValue(empresa.EmpresaId, out OpinionCumplimientoDto? opinion))
+                                        {
+                                            <span class="opinion-chip opinion-@ArchivosSatPanel.ClaseSentido(opinion.Sentido)"
+                                                  title="@(opinion.FechaEmision is DateTime f ? $"Opinión SAT del {f:dd/MM/yyyy}" : "Opinión SAT")">
+                                                @opinion.Sentido
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="sin-dato" title="Carga la opinión de cumplimiento en General">—</span>
+                                        }
+                                    </td>
+
+                                            <td>
+                                                @if (empresa.TieneFiel &&
+                                                     RfcFiel.TryGetValue(empresa.EmpresaId, out string? rfcFiel) &&
+                                                     rfcFiel != empresa.Rfc)
+                                                {
+                                                    <span class="badge bg-warning text-dark"
+                                                          title="La e.firma guardada es del RFC @rfcFiel">
+                                                        ⚠ FIEL DE OTRO RFC
+                                                    </span>
+                                                }
+                                                else if (empresa.TieneFiel)
+                                                {
+                                                    <span class="badge bg-success">
+                                                        ✅ FIEL OK
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-danger">
+                                                        ❌ SIN FIEL
+                                                    </span>
+                                                }
+                                            </td>
+
+                                            <td>
+                                                @if (empresa.FechaVencimientoFiel.HasValue)
+                                                {
+                                                    @empresa.FechaVencimientoFiel.Value.ToString("dd/MM/yyyy")
+                                                }
+                                                else
+                                                {
+                                                    <span>-</span>
+                                                }
+                                            </td>
+
+                                            <td>
+                                                <span class="status-badge @(empresa.Activa ? "active-status" : "inactive-status")">
+                                                    @(empresa.Activa ? "Activa" : "Inactiva")
+                                                </span>
+                                            </td>
+
+                                        <td class="actions-cell" @onclick:stopPropagation="true">
+                                            <button type="button"
+                                                    class="table-action edit-action"
+                                                    @onclick="() => EditarEmpresa(empresa)">
+                                                Editar
+                                            </button>
+
+                                            @if (empresa.TieneFiel)
+                                            {
+                                                <button type="button"
+                                                        class="table-action"
+                                                        style="background:#198754;color:white;"
+                                                        @onclick="() => VerEstadoSat(empresa)">
+                                                    SAT
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button"
+                                                        class="table-action"
+                                                        disabled
+                                                        style="opacity:.5;">
+                                                    SAT
+                                                </button>
+                                            }
+
+                                            <button type="button"
+                                                    class="table-action status-action"
+                                                    @onclick="() => CambiarEstado(empresa)">
+                                                @(empresa.Activa ? "Desactivar" : "Activar")
+                                            </button>
+                                        </td>
+
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        @* Páginas de la empresa; ocultas (no desmontadas) para que Accesos SAT conserve lo capturado. *@
+        <div class="detalle-empresa" hidden="@(TabActiva == "Lista")">
+
+
+
+
+            <EditForm Model="Modelo" OnSubmit="Guardar">
+                @if (TabActiva == "General")
+                    {
+                        <div class="form-grid">
+                            <div class="field rfc-field">
+                                <label for="empresa-rfc">RFC</label>
+                                <input id="empresa-rfc"
+                                    value="@Modelo.Rfc"
+                                    @oninput="ActualizarRfc"
+                                    maxlength="13"
+                                    placeholder="AAA010101AAA"
+                                    autocomplete="off" />
+                                <small>RFC de 12 o 13 caracteres, sin espacios ni guiones.</small>
+                            </div>
+
+                            <div class="field active-field">
+                                <label>Estado</label>
+                                <label class="switch-row">
+                                    <input type="checkbox" @bind="Modelo.Activa" />
+                                    <span class="switch-control"></span>
+                                    <span>@(Modelo.Activa ? "Activa" : "Inactiva")</span>
+                                </label>
+                            </div>
+
+                            <div class="field field-wide">
+                                <label for="empresa-razon">Razón social</label>
+                                <input id="empresa-razon"
+                                    @bind="Modelo.RazonSocial"
+                                    maxlength="250"
+                                    placeholder="Razón social completa" />
+                            </div>
+
+                            <div class="field field-wide">
+                                <label for="empresa-nombre">Nombre corto</label>
+                                <input id="empresa-nombre"
+                                    @bind="Modelo.NombreCorto"
+                                    maxlength="100"
+                                    placeholder="Nombre para mostrar en el selector" />
+                            </div>
+
+                            <div class="field field-wide">
+                                <label for="empresa-ruta">Ruta XML</label>
+                                <input id="empresa-ruta"
+                                    value="@Rutas.CarpetaEmpresa(string.IsNullOrWhiteSpace(Modelo.Rfc) ? "RFC" : Modelo.Rfc)"
+                                    readonly />
+                                <small>Se toma de la ruta XML general (AppSettings:CarpetaXml) más el RFC. Al guardar se crearán las carpetas Emitidos, Recibidos, Propios y NoIdentificados.</small>
+                            </div>
+                        </div>
+
+                        @if (Editando)
+                        {
+                            <ArchivosSatPanel EmpresaId="@Modelo.EmpresaId"
+                                              Rfc="@Modelo.Rfc"
+                                              TieneFiel="@Modelo.TieneFiel"
+                                              FechaVencimientoFiel="@Modelo.FechaVencimientoFiel"
+                                              TieneCiec="@TieneCiec"
+                                              IrATab="tab => TabActiva = tab"
+                                              OpinionCambio="CargarArchivosSat" />
+                        }
+                    }
+
+
+                    @* Siempre montada (solo oculta) para que la referencia no quede apuntando
+                       a una instancia descartada con datos de otra empresa. *@
+                    <div hidden="@(TabActiva != "Sat")">
+                        <AccesoSatTab
+                            @ref="AccesoSat"
+                            EmpresaId="@Modelo.EmpresaId"
+                            Rfc="@Modelo.Rfc" />
+                    </div>
+
+                    @if (TabActiva == "Fiscales")
+                    {
+                        <DatosFiscalesTab EmpresaId="@Modelo.EmpresaId" Rfc="@Modelo.Rfc" />
+                    }
+
+                    @if (TabActiva == "Declaraciones")
+                    {
+                        <DeclaracionesTab EmpresaId="@Modelo.EmpresaId" Rfc="@Modelo.Rfc" TieneCiec="@TieneCiec" />
+                    }
+
+                @* Declaraciones guarda cada acuse al cargarlo; no hay nada que guardar con el formulario. *@
+                <div class="form-actions" hidden="@(TabActiva == "Declaraciones")">
+                    <button type="submit"
+                            class="primary-button"
+                            disabled="@Guardando">
+                        @(Guardando ? "Guardando..." : Editando ? "Guardar cambios" : "Registrar empresa")
+                    </button>
+
+                    <button type="button"
+                            class="secondary-button"
+                            @onclick="CancelarEdicion"
+                            disabled="@Guardando">
+                        Cancelar
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </section>
+
+    @if (MostrarModalSat && EmpresaSatSeleccionada != null)
+    {
+        <div class="modal-backdrop fade show"></div>
+
+        <div class="modal fade show d-block">
+            <div class="modal-dialog">
+                <div class="modal-content">
+
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            Estado SAT
+                        </h5>
+
+                        <button type="button"
+                                class="btn-close"
+                                @onclick="() => MostrarModalSat = false">
+                        </button>
+                    </div>
+
+                    <div class="modal-body">
+
+                        <p>
+                            <strong>Empresa:</strong>
+                            @EmpresaSatSeleccionada.RazonSocial
+                        </p>
+
+                        <p>
+                            <strong>RFC:</strong>
+                            @EmpresaSatSeleccionada.Rfc
+                        </p>
+
+                        <p>
+                            <strong>FIEL:</strong>
+
+                            @if (EmpresaSatSeleccionada.TieneFiel)
+                            {
+                                <span class="text-success">
+                                    ✅ Configurada
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="text-danger">
+                                    ❌ No configurada
+                                </span>
+                            }
+                        </p>
+
+                        <p>
+                            @{
+                                var dias =
+                                    EmpresaSatSeleccionada.FechaVencimientoFiel.HasValue
+                                        ? (EmpresaSatSeleccionada.FechaVencimientoFiel.Value.Date - DateTime.Today).Days
+                                        : -9999;
+                            }
+                            
+                                <p>
+                                    <strong>Estado:</strong>
+
+                                    @if (!EmpresaSatSeleccionada.FechaVencimientoFiel.HasValue)
+                                    {
+                                        <span class="badge bg-secondary">
+                                            Sin fecha
+                                        </span>
+                                    }
+                                    else if (dias < 0)
+                                    {
+                                        <span class="badge bg-danger">
+                                            Vencida
+                                        </span>
+                                    }
+                                    else if (dias <= 60)
+                                    {
+                                        <span class="badge bg-warning text-dark">
+                                            Próxima a vencer
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success">
+                                            Vigente
+                                        </span>
+                                    }
+                                </p>
+                                    FechaVencimientoFiel:
+                                        @EmpresaSatSeleccionada.FechaVencimientoFiel
+                        </p>
+
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    }
+
+</div>
+
+
+@code {
+
+    private void VerEstadoSat(EmpresaDto empresa)
+        {
+            EmpresaSatSeleccionada = empresa;
+            MostrarModalSat = true;
+        }
+
+    private EmpresaDto? EmpresaSatSeleccionada;
+    private bool MostrarModalSat;
+    
+    private AccesoSatTab? AccesoSat;
+    private static readonly Regex PatronRfc = new(
+        "^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private EmpresaDto Modelo { get; set; } = CrearModeloVacio();
+    private List<EmpresaDto> ListaEmpresas { get; set; } = new();
+
+    /// <summary>RFC del certificado guardado de cada empresa con e.firma.</summary>
+    private Dictionary<long, string?> RfcFiel { get; set; } = new();
+
+    private static readonly System.Globalization.CultureInfo Mx = new("es-MX");
+
+    /// <summary>Regímenes de la Constancia de Situación Fiscal de cada empresa (columna Regímenes).</summary>
+    private Dictionary<long, List<RegimenCif>> Regimenes { get; set; } = new();
+
+    /// <summary>Última opinión de cumplimiento SAT cargada de cada empresa (columna Opinión).</summary>
+    private Dictionary<long, OpinionCumplimientoDto> Opiniones { get; set; } = new();
+
+    private bool TieneCiec { get; set; }
+    private bool Cargando { get; set; } = true;
+    private bool Guardando { get; set; }
+    private string Busqueda { get; set; } = "";
+    private string? MensajeError { get; set; }
+    private string? MensajeExito { get; set; }
+
+    private bool Editando => Modelo.EmpresaId > 0;
+
+    private List<EmpresaDto> EmpresasFiltradas =>
+        ListaEmpresas
+            .Where(empresa =>
+                string.IsNullOrWhiteSpace(Busqueda) ||
+                empresa.Rfc.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                empresa.RazonSocial.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                empresa.NombreCorto.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase))
+            .OrderBy(empresa => empresa.EmpresaId)
+            .ToList();
+
+    protected override void OnInitialized()
+    {
+        CargarEmpresas();
+    }
+
+    private void CargarEmpresas()
+    {
+        Cargando = true;
+        MensajeError = null;
+
+        try
+        {
+            ListaEmpresas = Repo.ObtenerEmpresas();
+            RfcFiel = ListaEmpresas
+                .Where(empresa => empresa.TieneFiel)
+                .ToDictionary(empresa => empresa.EmpresaId, LeerRfcFiel);
+            CargarArchivosSat();
+        }
+        catch (Exception ex)
+        {
+            MensajeError = ex.Message;
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    /// <summary>Regímenes (de la CSF) y opinión SAT de cada empresa; un archivo dañado solo deja la celda vacía.</summary>
+    private void CargarArchivosSat()
+    {
+        Regimenes = new();
+        Opiniones = new();
+
+        foreach (EmpresaDto empresa in ListaEmpresas)
+        {
+            try
+            {
+                if (Constancias.Obtener(empresa.EmpresaId) is { } cif)
+                    Regimenes[empresa.EmpresaId] = cif.Regimenes.Where(r => r.FechaFin == "").ToList();
+
+                if (ArchivosSat.ObtenerOpinion(empresa.EmpresaId, "SAT") is { } opinion)
+                    Opiniones[empresa.EmpresaId] = opinion;
+            }
+            catch (Exception ex) when (ex is IOException or System.Text.Json.JsonException)
+            {
+                // Se ignora: la empresa se muestra sin regímenes/opinión.
+            }
+        }
+    }
+
+    private string? LeerRfcFiel(EmpresaDto empresa)
+    {
+        string? rutaCer = Repo.ObtenerEmpresaSat(empresa.EmpresaId)?.RutaCer;
+
+        if (string.IsNullOrWhiteSpace(rutaCer) || !File.Exists(rutaCer))
+            return null;
+
+        try
+        {
+            using var certificado = X509CertificateLoader.LoadCertificateFromFile(rutaCer);
+
+            return FielSat.LeerRfc(certificado);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private void NuevaEmpresa()
+    {
+        LimpiarMensajes();
+
+        Modelo = CrearModeloVacio();
+        TabActiva = "General";
+    }
+
+    private void EditarEmpresa(EmpresaDto empresa)
+    {
+        TabActiva = "General";
+
+        if (Modelo.EmpresaId == empresa.EmpresaId)
+            return;
+
+        LimpiarMensajes();
+
+        Modelo = CopiarEmpresa(empresa);
+        TieneCiec = !string.IsNullOrEmpty(Repo.ObtenerEmpresaSat(empresa.EmpresaId)?.SatPassword);
+    }
+
+    private void CancelarEdicion()
+    {
+        LimpiarMensajes();
+
+        Modelo = CrearModeloVacio();
+        TabActiva = "Lista";
+    }
+
+    private void ActualizarRfc(ChangeEventArgs args)
+    {
+        Modelo.Rfc = NormalizarRfc(args.Value?.ToString());
+        GenerarRuta();
+    }
+
+    /// <summary>La ruta ya no se captura: siempre es la ruta XML general más el RFC.</summary>
+    private void GenerarRuta()
+    {
+        string rfc = NormalizarRfc(Modelo.Rfc);
+        Modelo.Rfc = rfc;
+        Modelo.RutaXml = string.IsNullOrWhiteSpace(rfc)
+            ? ""
+            : Rutas.CarpetaEmpresa(rfc);
+    }
+
+
+    private async Task Guardar()
+   
+    {
+        LimpiarMensajes();
+        Guardando = true;
+
+        try
+        {
+            NormalizarModelo();
+            ValidarModelo();
+
+            long? excluir = Editando ? Modelo.EmpresaId : null;
+
+            if (Repo.ExisteEmpresaPorRfc(Modelo.Rfc, excluir))
+            {
+                throw new InvalidOperationException(
+                    $"El RFC {Modelo.Rfc} ya está registrado en otra empresa.");
+            }
+
+            // Antes de escribir en la base: la e.firma debe ser de este RFC y abrir con su contraseña.
+            AccesoSat?.ValidarFiel(Modelo.Rfc);
+
+                if (Editando)
+                {
+                    Repo.ActualizarEmpresa(Modelo);
+                }
+                else
+                {
+                    Modelo.EmpresaId = Repo.GuardarEmpresa(Modelo);
+                }
+
+                if (AccesoSat is not null)
+                {
+                    await AccesoSat.GuardarArchivosAsync(Modelo.EmpresaId);
+
+                    EmpresaSatDto sat = AccesoSat.ObtenerModelo(Modelo.EmpresaId);
+
+                    Repo.GuardarEmpresaSat(sat);
+                    AccesoSat.ConfirmarGuardado(sat);
+                }
+
+            CrearCarpetas(Modelo.RutaXml);
+
+            EmpresaDto? empresaGuardada = Repo.ObtenerEmpresaPorId(Modelo.EmpresaId);
+
+            if (empresaGuardada is not null)
+            {
+                Modelo = CopiarEmpresa(empresaGuardada);
+
+                if (empresaGuardada.Activa &&
+                    (!EmpresaContext.TieneEmpresaActiva ||
+                     EmpresaContext.EmpresaId == empresaGuardada.EmpresaId))
+                {
+                    EmpresaContext.Seleccionar(empresaGuardada);
+                }
+            }
+
+            CargarEmpresas();
+            MensajeExito = Editando
+                ? "Los cambios de la empresa se guardaron correctamente."
+                : "La empresa se registró correctamente.";
+        }
+        catch (Exception ex)
+        {
+            MensajeError = ex.Message;
+        }
+        finally
+        {
+            Guardando = false;
+        }
+    }
+
+    private void CambiarEstado(EmpresaDto empresa)
+    {
+        LimpiarMensajes();
+
+        try
+        {
+            bool nuevoEstado = !empresa.Activa;
+
+            if (!nuevoEstado && EmpresaContext.EmpresaId == empresa.EmpresaId)
+            {
+                throw new InvalidOperationException(
+                    "No puedes desactivar la empresa que está seleccionada actualmente.");
+            }
+
+            Repo.CambiarEstadoEmpresa(empresa.EmpresaId, nuevoEstado);
+            CargarEmpresas();
+
+            MensajeExito = nuevoEstado
+                ? $"La empresa {empresa.Rfc} fue activada."
+                : $"La empresa {empresa.Rfc} fue desactivada.";
+        }
+        catch (Exception ex)
+        {
+            MensajeError = ex.Message;
+        }
+    }
+
+    private void NormalizarModelo()
+    {
+        Modelo.Rfc = NormalizarRfc(Modelo.Rfc);
+        Modelo.RazonSocial = (Modelo.RazonSocial ?? "").Trim();
+        Modelo.NombreCorto = (Modelo.NombreCorto ?? "").Trim();
+        GenerarRuta();
+    }
+
+    private void ValidarModelo()
+    {
+        if (!PatronRfc.IsMatch(Modelo.Rfc))
+        {
+            throw new InvalidOperationException(
+                "Captura un RFC válido de 12 o 13 caracteres.");
+        }
+
+        if (string.IsNullOrWhiteSpace(Modelo.RazonSocial))
+        {
+            throw new InvalidOperationException(
+                "La razón social es obligatoria.");
+        }
+
+        if (string.IsNullOrWhiteSpace(Modelo.NombreCorto))
+        {
+            Modelo.NombreCorto = Modelo.RazonSocial;
+        }
+
+        if (string.IsNullOrWhiteSpace(Modelo.RutaXml))
+        {
+            throw new InvalidOperationException(
+                "La ruta XML es obligatoria.");
+        }
+    }
+
+    private void CrearCarpetas(string rutaBase)
+    {
+        Directory.CreateDirectory(rutaBase);
+        Directory.CreateDirectory(Path.Combine(rutaBase, "Emitidos"));
+        Directory.CreateDirectory(Path.Combine(rutaBase, "Recibidos"));
+        Directory.CreateDirectory(Path.Combine(rutaBase, "Propios"));
+        Directory.CreateDirectory(Path.Combine(rutaBase, "NoIdentificados"));
+    }
+
+    private void LimpiarMensajes()
+    {
+        MensajeError = null;
+        MensajeExito = null;
+    }
+
+    private static EmpresaDto CrearModeloVacio() =>
+        new()
+        {
+            Activa = true
+        };
+
+    private static EmpresaDto CopiarEmpresa(EmpresaDto empresa) =>
+        new()
+        {
+            EmpresaId = empresa.EmpresaId,
+            Rfc = empresa.Rfc,
+            RazonSocial = empresa.RazonSocial,
+            NombreCorto = empresa.NombreCorto,
+            RutaXml = empresa.RutaXml,
+            Activa = empresa.Activa,
+            TieneFiel = empresa.TieneFiel,
+            FechaVencimientoFiel = empresa.FechaVencimientoFiel
+        };
+
+    private static string NormalizarRfc(string? rfc) =>
+        (rfc ?? "")
+            .Trim()
+            .Replace(" ", "")
+            .Replace("-", "")
+            .ToUpperInvariant();
+
+    /// <summary>Página del marco: Lista, General, Fiscales, Sat o Declaraciones.</summary>
+    private string TabActiva = "Lista";
+
+}

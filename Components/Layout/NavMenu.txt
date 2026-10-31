@@ -1,0 +1,97 @@
+﻿<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">
+            CFDI Manager
+        </a>
+    </div>
+</div>
+
+<input type="checkbox"
+       title="Menú de navegación"
+       class="navbar-toggler" />
+
+<div class="nav-scrollable"
+     onclick="document.querySelector('.navbar-toggler').click()">
+
+    <nav class="flex-column">
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link"
+                     href=""
+                     Match="NavLinkMatch.All">
+                <span class="bi bi-grid-1x2-fill"
+                      aria-hidden="true">
+                </span>
+
+                Resumen
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link"
+                     href="cfdi/emitidos">
+                <span class="bi bi-file-earmark-arrow-up-fill"
+                      aria-hidden="true">
+                </span>
+
+                CFDI emitidos
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link"
+                     href="cfdi/recibidos">
+                <span class="bi bi-file-earmark-arrow-down-fill"
+                      aria-hidden="true">
+                </span>
+
+                CFDI recibidos
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link"
+                     href="importaciones">
+                <span class="bi bi-cloud-arrow-up-fill"
+                      aria-hidden="true">
+                </span>
+
+                Importaciones
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link"
+                     href="exportaciones">
+                <span class="bi bi-file-earmark-excel-fill"
+                      aria-hidden="true">
+                </span>
+
+                Exportaciones
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link"
+                     href="respaldos">
+                <span class="bi bi-database-fill-check"
+                      aria-hidden="true">
+                </span>
+
+                Respaldos
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link"
+                     href="configuracion">
+                <span class="bi bi-gear-fill"
+                      aria-hidden="true">
+                </span>
+
+                Configuración
+            </NavLink>
+        </div>
+
+    </nav>
+</div>

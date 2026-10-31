@@ -1,0 +1,1587 @@
+@using CFDIManager.Web.Components.Layout
+
+@page "/importaciones"
+@rendermode InteractiveServer
+@implements IDisposable
+
+@using Microsoft.AspNetCore.Components.Forms
+@using CFDIParser.Models
+@using CFDIParser.Services
+@using CFDIManager.Web.Services
+
+@inject EmpresaContext EmpresaContext
+@inject ImportacionCfdiService Importacion
+
+<PageTitle>Importación de XML</PageTitle>
+
+<div class="importacion-page">
+    <div class="page-header">
+        <div class="eyebrow">
+            CFDI MANAGER
+        </div>
+
+        <h1>
+            Importación de XML
+        </h1>
+
+        <p>
+            Carga, clasifica e importa comprobantes para la empresa seleccionada.
+        </p>
+    </div>
+
+
+    @if (EmpresaContext.EmpresaActiva is null)
+    {
+        <div class="alerta alerta-advertencia">
+            <strong>No hay una empresa activa.</strong>
+
+            <span>
+                Selecciona una empresa antes de importar archivos XML.
+            </span>
+        </div>
+    }
+    else
+    {
+        <section class="empresa-card">
+            <span class="empresa-label">
+                EMPRESA ACTIVA
+            </span>
+
+            <strong>
+                @EmpresaContext.EmpresaActiva.Rfc ·
+                @EmpresaContext.EmpresaActiva.NombreParaMostrar
+            </strong>
+        </section>
+    }
+
+    <section class="selector-card">
+        <div class="selector-zone">
+            <div class="xml-icon">
+                XML
+            </div>
+
+            <div class="selector-info">
+                <h2>
+                    Seleccionar archivos XML
+                </h2>
+
+                <p>
+                    Puedes seleccionar hasta
+                    @MaximoArchivos archivos por lote.
+                    Los archivos se preparan inmediatamente
+                    para evitar que el navegador pierda la selección.
+                </p>
+            </div>
+
+            <div class="selector-control">
+                <InputFile @key="_inputKey"
+                           OnChange="SeleccionarArchivos"
+                           multiple
+                           accept=".xml,text/xml,application/xml"
+                           disabled="@(_seleccionando || _procesando)" />
+            </div>
+        </div>
+
+        <div class="selector-footer">
+            <div class="seleccion-resumen">
+                <strong>
+                    @CantidadArchivosMostrada
+                </strong>
+
+                <span>
+                    @TextoSeleccionArchivos
+                </span>
+            </div>
+
+            <div class="acciones">
+                <button type="button"
+                        class="btn btn-secundario"
+                        disabled="@(_seleccionando || _procesando)"
+                        @onclick="LimpiarAsync">
+                    Limpiar
+                </button>
+
+                <button type="button"
+                        class="btn btn-principal"
+                        disabled="@NoSePuedeImportar"
+                        @onclick="ClasificarEImportarAsync">
+                    @TextoBotonImportar
+                </button>
+            </div>
+        </div>
+
+        @if (_seleccionando)
+        {
+            <div class="barra-area">
+                <div class="barra-progreso">
+                    <div class="barra-progreso-valor"
+                         style="@($"width: {PorcentajePreparacion:0.##}%")">
+                    </div>
+                </div>
+
+                <span>
+                    Preparando @_archivosPreparados de
+                    @_totalArchivosSeleccionados archivo(s)...
+                </span>
+            </div>
+        }
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(_mensaje))
+    {
+        <div class="@ClaseMensaje">
+            @_mensaje
+        </div>
+    }
+
+    <section class="metricas-grid">
+        <article class="metrica metrica-correctos">
+            <span>
+                Correctos
+            </span>
+
+            <strong>
+                @_correctos
+            </strong>
+        </article>
+
+        <article class="metrica metrica-ingresos">
+            <span>
+                Emitidos
+            </span>
+
+            <strong>
+                @_emitidos
+            </strong>
+        </article>
+
+        <article class="metrica metrica-egresos">
+            <span>
+                Recibidos
+            </span>
+
+            <strong>
+                @_recibidos
+            </strong>
+        </article>
+
+        <article class="metrica metrica-duplicados">
+            <span>
+                Actualizados
+            </span>
+
+            <strong>
+                @_actualizados
+            </strong>
+        </article>
+
+        <article class="metrica metrica-noidentificados">
+            <span>
+                No identificados
+            </span>
+
+            <strong>
+                @_noIdentificados
+            </strong>
+        </article>
+
+        <article class="metrica metrica-errores">
+            <span>
+                Errores
+            </span>
+
+            <strong>
+                @_errores
+            </strong>
+        </article>
+    </section>
+
+    <section class="resultados-card">
+        <header class="resultados-header">
+            <div>
+                <span class="eyebrow">
+                    RESULTADOS
+                </span>
+
+                <h2>
+                    Detalle de importación
+                </h2>
+            </div>
+
+            <span>
+                @_resultados.Count procesado(s)
+            </span>
+        </header>
+
+        @if (_resultados.Count == 0)
+        {
+            <div class="sin-resultados">
+                Todavía no hay resultados de importación.
+            </div>
+        }
+        else
+        {
+            <div class="tabla-wrapper">
+                <table class="resultados-tabla">
+                    <thead>
+                        <tr>
+                            <th>Archivo</th>
+                            <th>UUID</th>
+                            <th>Clasificación</th>
+                            <th>Estatus</th>
+                            <th>Detalle</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        @foreach (ResultadoImportacionVista resultado
+                                  in _resultados)
+                        {
+                            <tr>
+                                <td class="archivo-cell">
+                                    @resultado.Archivo
+                                </td>
+
+                                <td class="uuid-cell">
+                                    @MostrarTexto(resultado.UUID)
+                                </td>
+
+                                <td>
+                                    <span class="@ObtenerClaseClasificacion(
+                                                     resultado.Clasificacion)">
+                                        @MostrarTexto(resultado.Clasificacion)
+                                    </span>
+                                </td>
+
+                                <td>
+                                    <span class="@ObtenerClaseEstatus(
+                                                     resultado.Estatus)">
+                                        @resultado.Estatus
+                                    </span>
+                                </td>
+
+                                <td class="detalle-cell">
+                                    @resultado.Detalle
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</div>
+
+<style>
+    .importacion-page {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 28px 32px 40px;
+        color: #e5edf8;
+    }
+
+    .page-header h1 {
+        margin: 6px 0 4px;
+        font-size: 2.35rem;
+        font-weight: 500;
+        letter-spacing: -0.03em;
+    }
+
+    .page-header p {
+        margin: 0;
+        color: #7890b2;
+    }
+
+    .eyebrow {
+        color: #09a8ce;
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+    }
+
+    .empresa-card,
+    .selector-card,
+    .resultados-card {
+        background: #ffffff;
+        color: #172033;
+        border: 1px solid #dbe3ee;
+        border-radius: 16px;
+        overflow: hidden;
+    }
+
+    .empresa-card {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        padding: 15px 17px;
+    }
+
+    .empresa-label {
+        color: #52709a;
+        font-size: 0.72rem;
+    }
+
+    .selector-card {
+        padding: 16px;
+    }
+
+    .selector-zone {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        min-height: 108px;
+        padding: 16px 20px;
+        border: 2px dashed #91a5c2;
+        border-radius: 15px;
+        background: #f9fbfe;
+    }
+
+    .xml-icon {
+        display: grid;
+        place-items: center;
+        flex: 0 0 56px;
+        height: 56px;
+        border-radius: 13px;
+        background: #cff6fa;
+        color: #007b92;
+        font-size: 0.82rem;
+        font-weight: 900;
+    }
+
+    .selector-info {
+        flex: 1;
+    }
+
+    .selector-info h2 {
+        margin: 0 0 5px;
+        color: #243c64;
+        font-size: 1.8rem;
+        font-weight: 500;
+    }
+
+    .selector-info p {
+        margin: 0;
+        color: #56739a;
+    }
+
+    .selector-control {
+        flex: 0 0 auto;
+        max-width: 340px;
+    }
+
+    .selector-control input {
+        max-width: 320px;
+    }
+
+    .selector-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding-top: 16px;
+    }
+
+    .seleccion-resumen {
+        display: flex;
+        flex-direction: column;
+        color: #3f587c;
+        font-size: 0.78rem;
+    }
+
+    .seleccion-resumen strong {
+        color: #009dbc;
+        font-size: 1rem;
+    }
+
+    .acciones {
+        display: flex;
+        gap: 10px;
+    }
+
+    .btn {
+        min-height: 44px;
+        padding: 0 16px;
+        border-radius: 11px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+    .btn:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+    }
+
+    .btn-secundario {
+        border: 1px solid #cbd6e6;
+        background: #ffffff;
+        color: #172033;
+    }
+
+    .btn-principal {
+        border: 1px solid #0799b8;
+        background: #0799b8;
+        color: #ffffff;
+    }
+
+    .barra-area {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 14px;
+        color: #4f6789;
+        font-size: 0.8rem;
+    }
+
+    .barra-progreso {
+        flex: 1;
+        height: 8px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #e3ebf6;
+    }
+
+    .barra-progreso-valor {
+        height: 100%;
+        background: #089bb9;
+        transition: width 0.2s ease;
+    }
+
+    .metricas-grid {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(130px, 1fr));
+        gap: 10px;
+    }
+
+    .metrica {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        min-height: 82px;
+        justify-content: center;
+        border-radius: 13px;
+        border: 1px solid transparent;
+    }
+
+    .metrica span {
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+
+    .metrica strong {
+        font-size: 1.25rem;
+    }
+
+    .metrica-correctos {
+        color: #006b2d;
+        background: #d8fbe5;
+        border-color: #7ce4a3;
+    }
+
+    .metrica-ingresos {
+        color: #074bd8;
+        background: #dceaff;
+        border-color: #9fc2f9;
+    }
+
+    .metrica-egresos {
+        color: #c54800;
+        background: #fff0d9;
+        border-color: #f4bc78;
+    }
+
+    .metrica-duplicados {
+        color: #6822e8;
+        background: #ece6ff;
+        border-color: #bba9f6;
+    }
+
+    .metrica-noidentificados {
+        color: #304866;
+        background: #f1f5f9;
+        border-color: #cbd5e1;
+    }
+
+    .metrica-errores {
+        color: #c81414;
+        background: #ffe2e2;
+        border-color: #f6aaaa;
+    }
+
+    .resultados-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 20px 17px;
+        border-bottom: 1px solid #dbe3ee;
+    }
+
+    .resultados-header h2 {
+        margin: 6px 0 0;
+        color: #213a61;
+        font-size: 1.75rem;
+        font-weight: 500;
+    }
+
+    .resultados-header > span {
+        color: #4e6687;
+        font-size: 0.78rem;
+    }
+
+    .sin-resultados {
+        padding: 40px 20px;
+        color: #70819b;
+        text-align: center;
+    }
+
+    .tabla-wrapper {
+        overflow: auto;
+        max-height: 610px;
+    }
+
+    .resultados-tabla {
+        width: 100%;
+        min-width: 1100px;
+        border-collapse: collapse;
+    }
+
+    .resultados-tabla th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        padding: 12px;
+        background: #f5f8fc;
+        color: #314967;
+        border-bottom: 1px solid #dbe3ee;
+        text-align: left;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+    }
+
+    .resultados-tabla td {
+        padding: 13px 12px;
+        border-bottom: 1px solid #e5ebf3;
+        color: #526985;
+        font-size: 0.78rem;
+        vertical-align: top;
+    }
+
+    .archivo-cell {
+        max-width: 280px;
+        word-break: break-word;
+    }
+
+    .uuid-cell {
+        min-width: 270px;
+        font-family: Consolas, monospace;
+    }
+
+    .detalle-cell {
+        min-width: 320px;
+        max-width: 720px;
+        word-break: break-word;
+    }
+
+    .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 24px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: 0.7rem;
+        font-weight: 800;
+    }
+
+    .badge-emitido {
+        color: #0752ce;
+        background: #e1ecff;
+    }
+
+    .badge-recibido {
+        color: #bd4500;
+        background: #ffead2;
+    }
+
+    .badge-noidentificado {
+        color: #475569;
+        background: #e8edf3;
+    }
+
+    .estatus-correcto {
+        color: #057232;
+        background: #d9fbe7;
+    }
+
+    .estatus-actualizado {
+        color: #5a22c9;
+        background: #ece6ff;
+    }
+
+    .estatus-error {
+        color: #be1717;
+        background: #ffe0e0;
+    }
+
+    .estatus-omitido {
+        color: #4b5f78;
+        background: #e9eef5;
+    }
+
+    .alerta {
+        padding: 13px 15px;
+        border-radius: 11px;
+    }
+
+    .alerta span {
+        margin-left: 6px;
+    }
+
+    .alerta-info {
+        color: #075985;
+        background: #e0f2fe;
+        border: 1px solid #7dd3fc;
+    }
+
+    .alerta-exito {
+        color: #086534;
+        background: #dcfce7;
+        border: 1px solid #86efac;
+    }
+
+    .alerta-error {
+        color: #991b1b;
+        background: #fee2e2;
+        border: 1px solid #fca5a5;
+    }
+
+    .alerta-advertencia {
+        color: #854d0e;
+        background: #fef9c3;
+        border: 1px solid #fde047;
+    }
+
+    @@media (max-width: 1100px) {
+        .metricas-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+
+    @@media (max-width: 720px) {
+        .importacion-page {
+            padding: 20px 14px 32px;
+        }
+
+        .selector-zone {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+
+        .selector-footer {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .acciones {
+            width: 100%;
+        }
+
+        .acciones .btn {
+            flex: 1;
+        }
+
+        .metricas-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    /* ===== MODO OSCURO (generado) ===== */
+
+    html[data-theme="dark"] .page-header p {
+        color: #a4b4cb;
+    }
+
+    html[data-theme="dark"] .eyebrow {
+        color: #92e3f6;
+    }
+
+    html[data-theme="dark"] .empresa-card,
+    html[data-theme="dark"] .selector-card,
+    html[data-theme="dark"] .resultados-card {
+        background: #121c2b;
+        color: #e3e8f2;
+        border: 1px solid #293d57;
+    }
+
+    html[data-theme="dark"] .empresa-label {
+        color: #aabbd2;
+    }
+
+    html[data-theme="dark"] .selector-zone {
+        border: 2px dashed #435979;
+        background: #101d30;
+    }
+
+    html[data-theme="dark"] .xml-icon {
+        background: #153c40;
+        color: #b5eef9;
+    }
+
+    html[data-theme="dark"] .selector-info h2 {
+        color: #c8d5eb;
+    }
+
+    html[data-theme="dark"] .selector-info p {
+        color: #aabad0;
+    }
+
+    html[data-theme="dark"] .seleccion-resumen {
+        color: #bbc9dc;
+    }
+
+    html[data-theme="dark"] .seleccion-resumen strong {
+        color: #9fe9f7;
+    }
+
+    html[data-theme="dark"] .btn-secundario {
+        border: 1px solid #2e425f;
+        background: #121c2b;
+        color: #e3e8f2;
+    }
+
+    html[data-theme="dark"] .barra-area {
+        color: #b4c1d4;
+    }
+
+    html[data-theme="dark"] .barra-progreso {
+        background: #13243a;
+    }
+
+    html[data-theme="dark"] .metrica-correctos {
+        color: #c9fbde;
+        background: #143c23;
+        border-color: #328350;
+    }
+
+    html[data-theme="dark"] .metrica-ingresos {
+        color: #8eaff6;
+        background: #13233a;
+        border-color: #2a456f;
+    }
+
+    html[data-theme="dark"] .metrica-egresos {
+        color: #f7bc9b;
+        background: #3b2b14;
+        border-color: #7f5b30;
+    }
+
+    html[data-theme="dark"] .metrica-duplicados {
+        color: #a77ef2;
+        background: #1b1236;
+        border-color: #39296c;
+    }
+
+    html[data-theme="dark"] .metrica-noidentificados {
+        color: #c7d4e5;
+        background: #152331;
+        border-color: #34465b;
+    }
+
+    html[data-theme="dark"] .metrica-errores {
+        color: #f49191;
+        background: #381313;
+        border-color: #6c2929;
+    }
+
+    html[data-theme="dark"] .resultados-header {
+        border-bottom: 1px solid #293d57;
+    }
+
+    html[data-theme="dark"] .resultados-header h2 {
+        color: #cad7ed;
+    }
+
+    html[data-theme="dark"] .resultados-header > span {
+        color: #b5c2d4;
+    }
+
+    html[data-theme="dark"] .sin-resultados {
+        color: #abb5c4;
+    }
+
+    html[data-theme="dark"] .resultados-tabla th {
+        background: #111f32;
+        color: #c6d4e4;
+        border-bottom: 1px solid #293d57;
+    }
+
+    html[data-theme="dark"] .resultados-tabla td {
+        border-bottom: 1px solid #263953;
+        color: #b6c3d2;
+    }
+
+    html[data-theme="dark"] .badge-emitido {
+        color: #93b8f6;
+        background: #132038;
+    }
+
+    html[data-theme="dark"] .badge-recibido {
+        color: #f7bf9f;
+        background: #3d2a14;
+    }
+
+    html[data-theme="dark"] .badge-noidentificado {
+        color: #c5cdd8;
+        background: #162337;
+    }
+
+    html[data-theme="dark"] .estatus-correcto {
+        color: #c2fad9;
+        background: #143c25;
+    }
+
+    html[data-theme="dark"] .estatus-actualizado {
+        color: #af90ec;
+        background: #1b1236;
+    }
+
+    html[data-theme="dark"] .estatus-error {
+        color: #f29696;
+        background: #381313;
+    }
+
+    html[data-theme="dark"] .estatus-omitido {
+        color: #bdc8d6;
+        background: #182334;
+    }
+
+    html[data-theme="dark"] .alerta-info {
+        color: #b8e2f9;
+        background: #132a39;
+        border: 1px solid #2e627a;
+    }
+
+    html[data-theme="dark"] .alerta-exito {
+        color: #c8fbe0;
+        background: #143b21;
+        border: 1px solid #2f7c4b;
+    }
+
+    html[data-theme="dark"] .alerta-error {
+        color: #f0abab;
+        background: #381313;
+        border: 1px solid #6c2929;
+    }
+
+    html[data-theme="dark"] .alerta-advertencia {
+        color: #f7d9b6;
+        background: #423f16;
+        border: 1px solid #8d7f36;
+    }
+    /* ===== FIN MODO OSCURO ===== */
+</style>
+
+@code {
+    private const int MaximoArchivos =
+        500;
+
+    private const long TamanoMaximoXml =
+        20L * 1024L * 1024L;
+
+    private readonly List<ArchivoXmlTemporal> _archivos =
+        new();
+
+    private readonly List<ResultadoImportacionVista> _resultados =
+        new();
+
+    private bool _seleccionando;
+
+    private bool _procesando;
+
+    private int _inputKey;
+
+    private int _archivosPreparados;
+
+    private int _totalArchivosSeleccionados;
+
+    private int _correctos;
+
+    private int _emitidos;
+
+    private int _recibidos;
+
+    private int _actualizados;
+
+    private int _noIdentificados;
+
+    private int _errores;
+
+    private string _mensaje =
+        "";
+
+    private TipoMensaje _tipoMensaje =
+        TipoMensaje.Info;
+
+    private double _porcentajeSeleccion =>
+        _totalArchivosSeleccionados == 0
+            ? 0
+            : (double)_archivosPreparados /
+              _totalArchivosSeleccionados;
+
+    private bool NoSePuedeImportar =>
+        _seleccionando ||
+        _procesando ||
+        _archivos.Count == 0 ||
+        EmpresaContext.EmpresaActiva is null;
+
+    private string TextoBotonImportar =>
+        _procesando
+            ? $"Importando {_resultados.Count} de {_archivos.Count}..."
+            : "Clasificar e importar";
+
+    private string ClaseMensaje =>
+        _tipoMensaje switch
+        {
+            TipoMensaje.Exito =>
+                "alerta alerta-exito",
+
+            TipoMensaje.Error =>
+                "alerta alerta-error",
+
+            TipoMensaje.Advertencia =>
+                "alerta alerta-advertencia",
+
+            _ =>
+                "alerta alerta-info"
+        };
+
+protected override void OnInitialized()
+{
+    EmpresaContext.OnChange += EmpresaActivaCambio;
+}
+    private void EmpresaActivaCambio()
+    {
+        _ = InvokeAsync(
+            StateHasChanged);
+    }
+
+
+    private async Task SeleccionarArchivos(
+    InputFileChangeEventArgs e)
+{
+    if (_procesando)
+    {
+        return;
+    }
+
+    _seleccionando =
+        true;
+
+    _mensaje =
+        "";
+
+    _tipoMensaje =
+        TipoMensaje.Info;
+
+    _archivosPreparados =
+        0;
+
+    _totalArchivosSeleccionados =
+        0;
+
+    await EliminarTemporalesAsync();
+
+    _archivos.Clear();
+
+    try
+    {
+        IReadOnlyList<IBrowserFile> archivos =
+            e.GetMultipleFiles(
+                MaximoArchivos);
+
+        _totalArchivosSeleccionados =
+            archivos.Count;
+
+        _mensaje =
+            $"Preparando {_totalArchivosSeleccionados} " +
+            "archivo(s) XML...";
+
+        await InvokeAsync(
+            StateHasChanged);
+
+        foreach (IBrowserFile archivo in archivos)
+        {
+            try
+            {
+                if (!archivo.Name.EndsWith(
+                        ".xml",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    RegistrarResultado(
+                        archivo.Name,
+                        "",
+                        "",
+                        "OMITIDO",
+                        "El archivo seleccionado no tiene extensión XML.");
+
+                    continue;
+                }
+
+                ArchivoXmlTemporal temporal =
+                    await CopiarATemporalAsync(
+                        archivo);
+
+                _archivos.Add(
+                    temporal);
+            }
+            catch (Exception ex)
+            {
+                _errores++;
+
+                RegistrarResultado(
+                    archivo.Name,
+                    "",
+                    "",
+                    "ERROR",
+                    "No se pudo preparar el archivo: " +
+                    ex.Message);
+            }
+            finally
+            {
+                _archivosPreparados++;
+
+                /*
+                 * Se actualiza la pantalla cada archivo.
+                 * Para lotes grandes, Task.Yield permite que
+                 * Blazor procese el renderizado pendiente.
+                 */
+
+                if (_archivosPreparados % 10 == 0 ||
+                    _archivosPreparados ==
+                        _totalArchivosSeleccionados)
+                {
+                    await InvokeAsync(
+                        StateHasChanged);
+
+                    await Task.Yield();
+                }
+                            }
+                        }
+
+        if (_archivos.Count == 0)
+        {
+            _mensaje =
+                "No se pudo preparar ningún archivo XML.";
+
+            _tipoMensaje =
+                TipoMensaje.Advertencia;
+        }
+        else
+        {
+            _mensaje =
+                $"{_archivos.Count} archivo(s) XML " +
+                "listo(s) para clasificar e importar.";
+
+            _tipoMensaje =
+                _errores == 0
+                    ? TipoMensaje.Exito
+                    : TipoMensaje.Advertencia;
+        }
+    }
+    catch (InvalidOperationException ex)
+    {
+        _mensaje =
+            "No fue posible obtener la selección de archivos. " +
+            ex.Message;
+
+        _tipoMensaje =
+            TipoMensaje.Error;
+    }
+    catch (Exception ex)
+    {
+        _mensaje =
+            "No se pudieron preparar los archivos: " +
+            ex.Message;
+
+        _tipoMensaje =
+            TipoMensaje.Error;
+    }
+    finally
+    {
+        _seleccionando =
+            false;
+
+        await InvokeAsync(
+            StateHasChanged);
+    }
+}
+
+   private async Task<ArchivoXmlTemporal> CopiarATemporalAsync(
+        IBrowserFile archivo)
+    {
+        string nombreSeguro =
+            Path.GetFileName(
+                archivo.Name);
+
+        string carpetaTemporal =
+            Path.Combine(
+                Path.GetTempPath(),
+                "CFDIManager",
+                "Importaciones",
+                Guid.NewGuid().ToString("N"));
+
+        Directory.CreateDirectory(
+            carpetaTemporal);
+
+        string rutaTemporal =
+            Path.Combine(
+                carpetaTemporal,
+                nombreSeguro);
+
+        await using Stream origen =
+            archivo.OpenReadStream(
+                TamanoMaximoXml);
+
+        await using var destino =
+            new FileStream(
+                rutaTemporal,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 81920,
+                useAsync: true);
+
+        await origen.CopyToAsync(
+            destino);
+
+        return new ArchivoXmlTemporal
+        {
+            Nombre =
+                nombreSeguro,
+
+            RutaTemporal =
+                rutaTemporal,
+
+            Tamano =
+                archivo.Size
+        };
+    }
+
+    private async Task ClasificarEImportarAsync()
+    {
+        EmpresaDto? empresa =
+            EmpresaContext.EmpresaActiva;
+
+        if (empresa is null)
+        {
+            _mensaje =
+                "Selecciona una empresa antes de importar.";
+
+            _tipoMensaje =
+                TipoMensaje.Advertencia;
+
+            return;
+        }
+
+        if (_archivos.Count == 0)
+        {
+            _mensaje =
+                "Selecciona al menos un archivo XML.";
+
+            _tipoMensaje =
+                TipoMensaje.Advertencia;
+
+            return;
+        }
+
+        _procesando =
+            true;
+
+        ReiniciarContadoresImportacion();
+
+        try
+        {
+            List<ArchivoXmlTemporal> archivosAProcesar =
+                _archivos.ToList();
+
+            foreach (ArchivoXmlTemporal archivo
+                     in archivosAProcesar)
+            {
+                await ProcesarArchivoAsync(
+                    empresa,
+                    archivo);
+
+                await InvokeAsync(
+                    StateHasChanged);
+            }
+
+            _mensaje =
+                $"Proceso terminado. " +
+                $"{_correctos} correcto(s), " +
+                $"{_actualizados} actualizado(s), " +
+                $"{_errores} error(es).";
+
+            _tipoMensaje =
+                _errores == 0
+                    ? TipoMensaje.Exito
+                    : TipoMensaje.Advertencia;
+        }
+        catch (Exception ex)
+        {
+            _mensaje =
+                $"La importación no pudo finalizar: {ex.Message}";
+
+            _tipoMensaje =
+                TipoMensaje.Error;
+        }
+        finally
+        {
+            _procesando =
+                false;
+
+            await EliminarTemporalesAsync();
+
+            _archivos.Clear();
+
+            _inputKey++;
+
+            await InvokeAsync(
+                StateHasChanged);
+        }
+    }
+
+    private Task ProcesarArchivoAsync(
+        EmpresaDto empresa,
+        ArchivoXmlTemporal archivo)
+    {
+        ResultadoImportacionCfdi resultado =
+            Importacion.Importar(
+                empresa,
+                archivo.RutaTemporal,
+                archivo.Nombre);
+
+        switch (resultado.Estatus)
+        {
+            case "OMITIDO":
+                _noIdentificados++;
+
+                RegistrarResultado(
+                    archivo.Nombre,
+                    resultado.Uuid,
+                    "NO IDENTIFICADO",
+                    "OMITIDO",
+                    resultado.Detalle);
+                break;
+
+            case "ERROR":
+                _errores++;
+
+                RegistrarResultado(
+                    archivo.Nombre,
+                    resultado.Uuid,
+                    "",
+                    "ERROR",
+                    resultado.Detalle);
+                break;
+
+            default:
+                _correctos++;
+
+                if (resultado.Clasificacion == "EMITIDO")
+                {
+                    _emitidos++;
+                }
+                else
+                {
+                    _recibidos++;
+                }
+
+                if (resultado.YaExistia)
+                {
+                    _actualizados++;
+                }
+
+                RegistrarResultado(
+                    archivo.Nombre,
+                    resultado.Uuid,
+                    resultado.Clasificacion,
+                    resultado.Estatus,
+                    resultado.Detalle);
+                break;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void RegistrarResultado(
+        string archivo,
+        string? uuid,
+        string? clasificacion,
+        string estatus,
+        string detalle)
+    {
+        _resultados.Add(
+            new ResultadoImportacionVista
+            {
+                Archivo =
+                    archivo,
+
+                UUID =
+                    uuid ?? "",
+
+                Clasificacion =
+                    clasificacion ?? "",
+
+                Estatus =
+                    estatus,
+
+                Detalle =
+                    detalle
+            });
+    }
+
+    private void ReiniciarContadoresImportacion()
+    {
+        _resultados.Clear();
+
+        _correctos =
+            0;
+
+        _emitidos =
+            0;
+
+        _recibidos =
+            0;
+
+        _actualizados =
+            0;
+
+        _noIdentificados =
+            0;
+
+        _errores =
+            0;
+    }
+
+    private async Task LimpiarAsync()
+    {
+        if (_procesando)
+        {
+            return;
+        }
+
+        await EliminarTemporalesAsync();
+
+        _archivos.Clear();
+
+        _resultados.Clear();
+
+        _mensaje =
+            "";
+
+        _inputKey++;
+
+        _archivosPreparados =
+            0;
+
+        _totalArchivosSeleccionados =
+            0;
+
+        _correctos =
+            0;
+
+        _emitidos =
+            0;
+
+        _recibidos =
+            0;
+
+        _actualizados =
+            0;
+
+        _noIdentificados =
+            0;
+
+        _errores =
+            0;
+    }
+
+    private Task EliminarTemporalesAsync()
+    {
+        foreach (ArchivoXmlTemporal archivo
+                 in _archivos)
+        {
+            try
+            {
+                if (File.Exists(
+                        archivo.RutaTemporal))
+                {
+                    File.Delete(
+                        archivo.RutaTemporal);
+                }
+
+                string? carpeta =
+                    Path.GetDirectoryName(
+                        archivo.RutaTemporal);
+
+                if (!string.IsNullOrWhiteSpace(carpeta) &&
+                    Directory.Exists(carpeta))
+                {
+                    Directory.Delete(
+                        carpeta,
+                        recursive: true);
+                }
+            }
+            catch
+            {
+                // La limpieza no debe detener el proceso.
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static string MostrarTexto(
+        string? valor)
+    {
+        return string.IsNullOrWhiteSpace(valor)
+            ? "—"
+            : valor;
+    }
+
+    private static string ObtenerClaseClasificacion(
+        string? clasificacion)
+    {
+        return clasificacion switch
+        {
+            "EMITIDO" =>
+                "badge badge-emitido",
+
+            "RECIBIDO" =>
+                "badge badge-recibido",
+
+            _ =>
+                "badge badge-noidentificado"
+        };
+    }
+
+    private static string ObtenerClaseEstatus(
+        string estatus)
+    {
+        return estatus switch
+        {
+            "CORRECTO" =>
+                "badge estatus-correcto",
+
+            "ACTUALIZADO" =>
+                "badge estatus-actualizado",
+
+            "OMITIDO" =>
+                "badge estatus-omitido",
+
+            _ =>
+                "badge estatus-error"
+        };
+    }
+
+    public void Dispose()
+    {
+        EmpresaContext.OnChange -=
+            EmpresaActivaCambio;
+
+        foreach (ArchivoXmlTemporal archivo
+                 in _archivos)
+        {
+            try
+            {
+                if (File.Exists(
+                        archivo.RutaTemporal))
+                {
+                    File.Delete(
+                        archivo.RutaTemporal);
+                }
+            }
+            catch
+            {
+                // No se lanza una excepción durante Dispose.
+            }
+        }
+    }
+
+    private sealed class ArchivoXmlTemporal
+    {
+        public string Nombre { get; init; } =
+            "";
+
+        public string RutaTemporal { get; init; } =
+            "";
+
+        public long Tamano { get; init; }
+    }
+
+    private sealed class ResultadoImportacionVista
+    {
+        public string Archivo { get; init; } =
+            "";
+
+        public string UUID { get; init; } =
+            "";
+
+        public string Clasificacion { get; init; } =
+            "";
+
+        public string Estatus { get; init; } =
+            "";
+
+        public string Detalle { get; init; } =
+            "";
+    }
+
+    private enum TipoMensaje
+    {
+        Info,
+        Exito,
+        Advertencia,
+        Error
+    }
+
+private int CantidadArchivosMostrada =>
+    _seleccionando
+        ? _totalArchivosSeleccionados
+        : _archivos.Count;
+
+private string TextoSeleccionArchivos
+{
+    get
+    {
+        if (_seleccionando)
+        {
+            return
+                $"{_archivosPreparados} preparado(s) de " +
+                $"{_totalArchivosSeleccionados} seleccionado(s)";
+        }
+
+        return "archivo(s) listo(s) para importar";
+    }
+}
+
+private double PorcentajePreparacion
+{
+    get
+    {
+        if (_totalArchivosSeleccionados <= 0)
+        {
+            return 0;
+        }
+
+        return
+            (double)_archivosPreparados /
+            _totalArchivosSeleccionados *
+            100d;
+    }
+}
+
+}
+
+

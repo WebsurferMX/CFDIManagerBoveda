@@ -1,0 +1,18 @@
+namespace CFDIManager.Web.Services;
+
+public sealed class XmlAzulejeraDetalleDto
+{
+    public DateTime FechaEmision { get; set; }
+
+    public string TipoCfdi { get; set; } = "";
+
+    public string UUID { get; set; } = "";
+
+    public string SerieOriginal { get; set; } = "";
+
+    public string SerieNueva { get; set; } = "";
+
+    public decimal Total { get; set; }
+
+    public string Resultado { get; set; } = "";
+}

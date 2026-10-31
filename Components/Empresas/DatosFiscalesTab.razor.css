@@ -1,0 +1,106 @@
+.cif-carga {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid #dde2e8;
+    border-radius: 0.65rem;
+    background: #f8fafc;
+}
+
+.cif-identificacion {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.25rem 1rem;
+    margin: 1rem 0;
+    font-size: 0.85rem;
+}
+
+.cif-identificacion dt { color: #64748b; font-weight: 600; }
+.cif-identificacion dd { margin: 0; }
+
+.cif-seccion {
+    margin-bottom: 0.75rem;
+    border: 1px solid #dde2e8;
+    border-radius: 0.65rem;
+    background: #f8fafc;
+    overflow: hidden;
+}
+
+.cif-cabecera {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.7rem 1rem;
+    border: 0;
+    border-bottom: 1px solid #dde2e8;
+    background: none;
+    color: inherit;
+    font-size: 0.85rem;
+    text-align: left;
+}
+
+.cif-cabecera b { flex: 1; }
+
+.cif-cuenta {
+    display: inline-grid;
+    place-items: center;
+    min-width: 1.6rem;
+    height: 1.6rem;
+    padding: 0 0.4rem;
+    border-radius: 1rem;
+    background: #dbe4f0;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.cif-cuerpo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.75rem;
+}
+
+.cif-elemento {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.7rem 0.9rem;
+    border: 1px solid #dde2e8;
+    border-radius: 0.5rem;
+    background: #fff;
+    font-size: 0.85rem;
+}
+
+.cif-obligacion {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+}
+
+.cif-clave {
+    min-width: 2.6rem;
+    font-weight: 700;
+}
+
+/* ===== MODO OSCURO ===== */
+
+html[data-theme="dark"] .cif-carga,
+html[data-theme="dark"] .cif-seccion {
+    border-color: #34465b;
+    background: #14212e;
+}
+
+html[data-theme="dark"] .cif-cabecera { border-bottom-color: #34465b; }
+
+html[data-theme="dark"] .cif-elemento {
+    border-color: #34465b;
+    background: #121c2b;
+}
+
+html[data-theme="dark"] .cif-cuenta { background: #233650; }
+
+html[data-theme="dark"] .cif-identificacion dt { color: #b3bbc8; }
