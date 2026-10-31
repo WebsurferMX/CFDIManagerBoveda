@@ -113,32 +113,12 @@
                     <div class="card-body p-2">
                         @if (Activa is { } sel)
                         {
-                            <div class="resumen-cuerpo">
-                                <div class="resumen-datos">
-                                    <div class="d-flex align-items-center gap-2 mb-2">
-                                        <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">@NombreTipo(sel.TipoCfdi) @sel.Version</span>
-                                        <span class="fw-bold fs-6 ms-auto font-monospace">$@sel.Total.ToString("N2") <small class="text-body-secondary fw-normal">@sel.Moneda</small></span>
-                                    </div>
-                                    <dl>
-                                        <dt>Emisor</dt><dd><span class="font-monospace">@sel.RfcEmisor</span> · @sel.NombreEmisor</dd>
-                                        <dt>Receptor</dt><dd><span class="font-monospace">@sel.RfcReceptor</span> · @sel.NombreReceptor</dd>
-                                        <dt>UUID</dt><dd class="font-monospace small">@sel.Uuid</dd>
-                                        @if (Relacionados.Count > 0)
-                                        {
-                                            <dt>Relacionados</dt><dd class="small">@string.Join(", ", Relacionados.Select(r => $"{r.UUID} ({r.TipoRelacion})"))</dd>
-                                        }
-                                        <dt>Archivo</dt><dd class="small text-body-secondary">@sel.RutaXml</dd>
-                                    </dl>
-                                </div>
-
-                                @* El XML y su representación impresa lado a lado. *@
-                                <div class="vista-previa">
-                                    <pre class="vista-xml" title="Doble clic para abrir el XML" @ondblclick="AbrirXml">@XmlVista</pre>
-                                    @* El iframe no avisa del doble clic a la página: una capa encima lo recibe. *@
-                                    <div class="vista-pdf-marco" title="Doble clic para abrir el PDF" @ondblclick="GenerarPdf">
-                                        <iframe class="vista-pdf" src="@($"{UrlCfdi(sel.CfdiId, "pdf")}#toolbar=0&navpanes=0&view=FitH")" title="Representación impresa" tabindex="-1"></iframe>
-                                        <div class="vista-pdf-capa"></div>
-                                    </div>
+                            @* El XML y su representación impresa lado a lado, a todo el ancho. *@
+                            <div class="vista-previa">
+                                <pre class="vista-xml" title="Doble clic para abrir el XML" @ondblclick="AbrirXml">@XmlVista</pre>
+                                @* Imagen de la primera página generada desde el XML: no depende del visor de PDF del navegador. *@
+                                <div class="vista-pdf-marco" title="Doble clic para abrir el PDF" @ondblclick="GenerarPdf">
+                                    <img class="vista-pdf" src="@UrlCfdi(sel.CfdiId, "vista")" alt="Representación impresa" loading="lazy" />
                                 </div>
                             </div>
                         }
@@ -298,7 +278,7 @@
 
             @if (MostrarDetalles)
             {
-                <div class="detalles">
+                <div class="detalles @(Relacionados.Count > 0 ? "con-relacionados" : "")">
                     <div class="card shadow-sm detalle-tablas">
                         <div class="card-header bg-body-tertiary py-0 px-2">
                             <ul class="nav nav-tabs card-header-tabs">
@@ -380,6 +360,47 @@
                             }
                         </div>
                     </div>
+
+                    @* Solo cuando el comprobante seleccionado relaciona otros CFDI o algún CFDI lo relaciona a él. *@
+                    @if (Relacionados.Count > 0)
+                    {
+                        <div class="card shadow-sm relacionados">
+                            <div class="card-header bg-body-tertiary py-1 px-2">
+                                <i class="bi bi-link-45deg me-1"></i>Relacionados
+                                <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis ms-1">@Relacionados.Count</span>
+                            </div>
+                            <ul class="list-group list-group-flush">
+                                @foreach (var grupo in Relacionados.GroupBy(r => r.RelacionaAEste))
+                                {
+                                    <li class="list-group-item grupo">@(grupo.Key ? "Lo relacionan" : "Este CFDI relaciona")</li>
+                                    @foreach (CfdiRelacionadoDto r in grupo)
+                                    {
+                                        <li class="list-group-item @(r.RelacionaAEste && r.TipoRelacion == "04" ? "sustituido" : "")">
+                                            <span class="tipo-relacion" title="Tipo de relación @r.TipoRelacion · @NombreTipoRelacion(r.TipoRelacion)">
+                                                @r.TipoRelacion · @(r.RelacionaAEste ? NombreRelacionInversa(r.TipoRelacion) : NombreTipoRelacion(r.TipoRelacion))
+                                            </span>
+                                            @if (r.EnBase)
+                                            {
+                                                <span class="datos">
+                                                    @r.TipoCfdi · @(string.IsNullOrEmpty(r.Serie) ? "" : r.Serie + " ")@r.Folio
+                                                    · @r.FechaEmision?.ToString("dd/MM/yyyy") · $@r.Total.ToString("N2")
+                                                    @if (r.EstadoSat.StartsWith("Cancel", StringComparison.OrdinalIgnoreCase))
+                                                    {
+                                                        <span class="badge bg-danger-subtle text-danger-emphasis ms-1">Cancelado</span>
+                                                    }
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="datos text-body-secondary">No está en la bóveda</span>
+                                            }
+                                            <span class="font-monospace uuid" title="@r.UUID">@r.UUID</span>
+                                        </li>
+                                    }
+                                }
+                            </ul>
+                        </div>
+                    }
 
                     <div class="card shadow-sm totales">
                         @if (Totales is { } t)
@@ -836,6 +857,32 @@
     };
 
     private static string NombreImpuesto(string i) => i switch { "001" => "ISR", "002" => "IVA", "003" => "IEPS", _ => i };
+
+    // Catálogo c_TipoRelacion del SAT.
+    private static string NombreTipoRelacion(string t) => t switch
+    {
+        "01" => "Nota de crédito",
+        "02" => "Nota de débito",
+        "03" => "Devolución de mercancía",
+        "04" => "Sustitución de CFDI previos",
+        "05" => "Traslados de mercancías facturados",
+        "06" => "Factura por traslados previos",
+        "07" => "Aplicación de anticipo",
+        "08" => "Pagos en parcialidades",
+        "09" => "Pagos diferidos",
+        _ => "Relación"
+    };
+
+    // La misma relación vista desde el CFDI relacionado.
+    private static string NombreRelacionInversa(string t) => t switch
+    {
+        "01" => "Nota de crédito aplicada",
+        "02" => "Nota de débito aplicada",
+        "03" => "Devolución aplicada",
+        "04" => "Sustituido por",
+        "07" => "Anticipo aplicado en",
+        _ => NombreTipoRelacion(t)
+    };
 
     // ---------- ciclo de vida ----------
     protected override async Task OnInitializedAsync()

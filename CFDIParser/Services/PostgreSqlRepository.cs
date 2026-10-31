@@ -2368,9 +2368,9 @@ public List<EmpresaDto> ObtenerEmpresas()
             e.activa,
 
             CASE
-                WHEN s.ruta_cer IS NOT NULL
-                AND s.ruta_key IS NOT NULL
-                AND s.password_key IS NOT NULL
+                WHEN NULLIF(TRIM(s.ruta_cer), '') IS NOT NULL
+                AND NULLIF(TRIM(s.ruta_key), '') IS NOT NULL
+                AND NULLIF(s.password_key, '') IS NOT NULL
                 THEN TRUE
                 ELSE FALSE
             END AS tiene_fiel,

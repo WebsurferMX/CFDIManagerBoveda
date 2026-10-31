@@ -1,8 +1,9 @@
 .ciec-tarjeta {
     padding: 1rem;
-    border: 1px solid #dde2e8;
+    border: 1px solid #b9c8e3;
+    border-left: 4px solid #052767;
     border-radius: 0.65rem;
-    background: #f8fafc;
+    background: #e6edf8;
 }
 
 .ciec-etiqueta {

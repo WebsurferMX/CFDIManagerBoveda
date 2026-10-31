@@ -70,6 +70,11 @@ public class AdministracionXmlService
         return _pdf.Generar(_parser.Parse(RutaExistente(Obtener(empresa, cfdiId))));
     }
 
+    public byte[] GenerarVistaPdf(EmpresaDto empresa, long cfdiId)
+    {
+        return _pdf.GenerarImagen(_parser.Parse(RutaExistente(Obtener(empresa, cfdiId))));
+    }
+
     public void Localizar(EmpresaDto empresa, long cfdiId)
     {
         string ruta = RutaExistente(Obtener(empresa, cfdiId));

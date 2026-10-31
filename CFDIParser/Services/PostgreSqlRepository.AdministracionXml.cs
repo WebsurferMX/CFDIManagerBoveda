@@ -499,11 +499,29 @@ public partial class PostgreSqlRepository
         using var conn = new NpgsqlConnection(_connectionString);
         conn.Open();
 
+        // Las dos direcciones: los que este CFDI relaciona y los que lo relacionan a él
+        // (la factura que lo sustituye, la nota de crédito que se le aplica...).
+        // Los UUID vienen en mayúsculas o minúsculas según el emisor.
         using var cmd = new NpgsqlCommand(@"
-            SELECT r.tipo_relacion, r.uuid_relacionado
+            SELECT FALSE AS relaciona_a_este, r.tipo_relacion, r.uuid_relacionado AS uuid,
+                   o.cfdi_id IS NOT NULL AS en_base,
+                   o.tipo_cfdi, o.serie, o.folio, o.fecha_emision, o.total, o.estado_sat
             FROM cfdi_relacionados r
             INNER JOIN cfdi c ON c.cfdi_id = r.cfdi_id
-            WHERE c.empresa_id = @empresa_id AND r.cfdi_id = @cfdi_id;", conn);
+            LEFT JOIN cfdi o ON o.empresa_id = c.empresa_id AND UPPER(o.uuid) = UPPER(r.uuid_relacionado)
+            WHERE c.empresa_id = @empresa_id AND r.cfdi_id = @cfdi_id
+
+            UNION ALL
+
+            SELECT TRUE, r.tipo_relacion, o.uuid,
+                   TRUE,
+                   o.tipo_cfdi, o.serie, o.folio, o.fecha_emision, o.total, o.estado_sat
+            FROM cfdi c
+            INNER JOIN cfdi_relacionados r ON UPPER(r.uuid_relacionado) = UPPER(c.uuid)
+            INNER JOIN cfdi o ON o.cfdi_id = r.cfdi_id AND o.empresa_id = c.empresa_id
+            WHERE c.empresa_id = @empresa_id AND c.cfdi_id = @cfdi_id
+
+            ORDER BY 1, 8;", conn);
 
         cmd.Parameters.AddWithValue("@empresa_id", empresaId);
         cmd.Parameters.AddWithValue("@cfdi_id", cfdiId);
@@ -516,8 +534,16 @@ public partial class PostgreSqlRepository
         {
             lista.Add(new CfdiRelacionadoDto
             {
+                RelacionaAEste = dr.GetBoolean(0),
                 TipoRelacion = Texto(dr, "tipo_relacion"),
-                UUID = Texto(dr, "uuid_relacionado")
+                UUID = Texto(dr, "uuid").ToUpperInvariant(),
+                EnBase = dr.GetBoolean(3),
+                TipoCfdi = Texto(dr, "tipo_cfdi"),
+                Serie = Texto(dr, "serie"),
+                Folio = Texto(dr, "folio"),
+                FechaEmision = dr["fecha_emision"] is DateTime f ? f : null,
+                Total = Decimal(dr, "total"),
+                EstadoSat = Texto(dr, "estado_sat")
             });
         }
 

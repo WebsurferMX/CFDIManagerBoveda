@@ -394,6 +394,12 @@ api.MapGet(
             descargar == true ? $"{cfdi.Uuid}.pdf" : null);
     });
 
+// Primera página del PDF como imagen, para la vista previa de Administración de XML.
+api.MapGet(
+    "/empresa/{empresaId:long}/cfdi/{cfdiId:long}/vista",
+    (long empresaId, long cfdiId, AdministracionXmlService admin) =>
+        Results.File(admin.GenerarVistaPdf(new EmpresaDto { EmpresaId = empresaId }, cfdiId), "image/png"));
+
 // PDF de los archivos SAT de una empresa: cif, opinion-sat, opinion-imss o declaracion-{id}.
 api.MapGet(
     "/empresa/{empresaId:long}/archivos-sat/{clave}",

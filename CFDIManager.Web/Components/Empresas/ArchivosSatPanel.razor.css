@@ -43,7 +43,7 @@
 .as-tarjeta,
 .as-opinion {
     padding: 0.7rem 0.85rem;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #dbe3f0;
     border-radius: 0.65rem;
     background: #fff;
 }
@@ -65,9 +65,10 @@
 
 .as-contenedor {
     padding: 0.85rem 1rem;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #b9c8e3;
+    border-left: 4px solid #052767;
     border-radius: 0.8rem;
-    background: #f8fafc;
+    background: #e6edf8;
 }
 
 .as-botones {

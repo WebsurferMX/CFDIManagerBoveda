@@ -5,9 +5,10 @@
     justify-content: space-between;
     gap: 0.75rem;
     padding: 0.85rem 1rem;
-    border: 1px solid #dde2e8;
+    border: 1px solid #b9c8e3;
+    border-left: 4px solid #052767;
     border-radius: 0.65rem;
-    background: #f8fafc;
+    background: #e6edf8;
 }
 
 .cif-identificacion {
@@ -23,9 +24,10 @@
 
 .cif-seccion {
     margin-bottom: 0.75rem;
-    border: 1px solid #dde2e8;
+    border: 1px solid #b9c8e3;
+    border-left: 4px solid #052767;
     border-radius: 0.65rem;
-    background: #f8fafc;
+    background: #e6edf8;
     overflow: hidden;
 }
 

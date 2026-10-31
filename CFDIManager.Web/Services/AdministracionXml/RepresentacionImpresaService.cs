@@ -43,7 +43,20 @@ public class RepresentacionImpresaService
         _logos = logos;
     }
 
-    public byte[] Generar(CfdiDto c)
+    public byte[] Generar(CfdiDto c) => Crear(c).GeneratePdf();
+
+    /// <summary>
+    /// Primera página como PNG para la vista previa: se ve aunque el navegador esté
+    /// configurado para descargar los PDF en lugar de mostrarlos.
+    /// </summary>
+    public byte[] GenerarImagen(CfdiDto c) =>
+        Crear(c).GenerateImages(new ImageGenerationSettings
+        {
+            ImageFormat = ImageFormat.Png,
+            RasterDpi = 160
+        }).First();
+
+    private IDocument Crear(CfdiDto c)
     {
         byte[]? logo = _logos.Leer(c.RFCEmisor);
         byte[] qr = GenerarQr(UrlVerificacion(c));
@@ -73,7 +86,7 @@ public class RepresentacionImpresaService
                     t.TotalPages().FontColor(Gris);
                 });
             });
-        }).GeneratePdf();
+        });
     }
 
     /// <summary>URL del QR según el Anexo 20 (3.3 y 4.0); en 3.2 se usa la expresión impresa anterior.</summary>

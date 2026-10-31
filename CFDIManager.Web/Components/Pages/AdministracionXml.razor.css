@@ -106,30 +106,11 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
 
 .resumen .card-body { height: 100%; min-height: 0; }
 
-.resumen-cuerpo {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: .8rem;
-    height: 100%;
-    min-height: 0;
-}
-
-.resumen-datos { min-width: 0; overflow: auto; }
-
-.resumen dl {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 3px 10px;
-    margin: 0;
-}
-
-.resumen dt { color: var(--bs-secondary-color); font-weight: 600; }
-.resumen dd { margin: 0; overflow-wrap: anywhere; }
-
 .vista-previa {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: .5rem;
+    height: 100%;
     min-width: 0;
     min-height: 0;
 }
@@ -148,29 +129,33 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
     padding: .4rem .5rem;
     background: var(--bs-tertiary-bg);
     color: var(--bs-body-color);
-    font-size: .66rem;
-    line-height: 1.35;
+    font-size: .72rem;
+    line-height: 1.4;
     white-space: pre;
     overflow: auto;
     cursor: pointer;
 }
 
-.vista-pdf { display: block; background: #fff; }
-
+/* La hoja ocupa el ancho del marco y se recorre con scroll vertical. */
 .vista-pdf-marco {
-    position: relative;
     min-width: 0;
     min-height: 0;
+    overflow-y: auto;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    background: #fff;
     cursor: pointer;
 }
 
-.vista-pdf-capa {
-    position: absolute;
-    inset: 0;
-    border-radius: var(--bs-border-radius);
+.vista-pdf-marco .vista-pdf {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 0;
+    border-radius: 0;
 }
 
-.vista-pdf-marco:hover .vista-pdf-capa { box-shadow: inset 0 0 0 2px var(--bs-primary); }
+.vista-pdf-marco:hover { box-shadow: inset 0 0 0 2px var(--bs-primary); }
 
 /* ---------- búsqueda y progreso ---------- */
 
@@ -339,6 +324,44 @@ td.sel { width: 30px; }
     min-height: 0;
 }
 
+.detalles.con-relacionados { grid-template-columns: minmax(0, 1fr) 320px 360px; }
+
+.relacionados {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.relacionados .card-header { font-size: .78rem; font-weight: 600; }
+.relacionados .list-group { overflow: auto; }
+
+.relacionados .list-group-item {
+    display: flex;
+    flex-direction: column;
+    gap: .1rem;
+    padding: .4rem .7rem;
+}
+
+.relacionados .tipo-relacion { color: var(--bs-secondary-color); font-size: .72rem; font-weight: 600; }
+.relacionados .datos { font-size: .76rem; font-variant-numeric: tabular-nums; }
+
+.relacionados .list-group-item.grupo {
+    padding: .2rem .7rem;
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+    font-size: .66rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+/* Este CFDI fue sustituido: lo que importa es cuál lo reemplaza. */
+.relacionados .sustituido { border-left: 3px solid var(--bs-warning); background: var(--bs-warning-bg-subtle); }
+.relacionados .sustituido .tipo-relacion { color: var(--bs-warning-text-emphasis); }
+.relacionados .uuid { font-size: .74rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: all; }
+
 .detalle-tablas {
     display: flex;
     flex-direction: column;
@@ -499,14 +522,16 @@ td.sel { width: 30px; }
     .encabezado { flex-direction: column; }
     .rejilla-card { min-height: 420px; }
     .herramientas { margin-top: 0; }
-    .detalles { grid-template-columns: 1fr; height: auto; }
+    .detalles,
+    .detalles.con-relacionados { grid-template-columns: 1fr; height: auto; }
     .aviso { right: 16px; }
 }
 
 /* El morado no tiene variables propias en Bootstrap 5.3: tonos para el modo oscuro. */
 html[data-theme="dark"] .tono-morado { --tono: #8b3fd1; --tono-fondo: #241640; --tono-texto: #d2b0f2; --tono-borde: #3f2470; }
 html[data-theme="dark"] .tono-ambar { --tono: #c2700f; }
-html[data-theme="dark"] .vista-pdf { background: var(--bs-body-bg); }
+/* La hoja impresa se queda blanca también en modo oscuro. */
+html[data-theme="dark"] .vista-pdf-marco { border-color: #34465b; }
 
 /* Día con XML en el mes pero sin coincidencias en la pestaña o búsqueda actual. */
 .list-group-item.sin-coincidencias:not(.active) { opacity: .45; }

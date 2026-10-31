@@ -686,6 +686,33 @@ html[data-theme="dark"] .pageframe .tab-button.active { border-bottom-color: #4d
     border-bottom: 1px solid #e2e8f0;
 }
 
+/* Tinte azul tenue derivado del azul del menú (#052767): solo para distinguir los marcos. */
+.list-card.pageframe {
+    border-color: #b9c8e3;
+    border-top: 4px solid #052767;
+    background: #eef3fb;
+}
+
+.pf-cabecera,
+.pageframe .empresa-tabs {
+    background: #d9e3f3;
+}
+
+.pageframe .empresa-tabs { border-bottom-color: #b9c8e3; }
+.pageframe .tab-button { color: #334a70; }
+.pageframe .tab-button.active { border-bottom-color: #052767; background: #eef3fb; color: #052767; }
+.pf-busqueda { border-bottom-color: #c9d6eb; }
+.companies-table th { background: #e2eaf6; color: #2c4166; }
+.companies-table tbody tr:not(.selected-company-row):not(.active-company-row) td { background: #fff; }
+.companies-table th,
+.companies-table td { border-bottom-color: #dbe3f0; }
+
+html[data-theme="dark"] .list-card.pageframe { border-top-color: #3b6fd8; }
+html[data-theme="dark"] .pf-cabecera,
+html[data-theme="dark"] .pageframe .empresa-tabs { background: #0a1a3d; }
+html[data-theme="dark"] .pageframe .tab-button { color: #b3bbc8; }
+html[data-theme="dark"] .pageframe .tab-button.active { border-bottom-color: #4d8bf5; background: #121c2b; color: #e8ecf7; }
+html[data-theme="dark"] .companies-table tbody tr:not(.selected-company-row):not(.active-company-row) td { background: transparent; }
 html[data-theme="dark"] .pf-cabecera p { color: #b3bbc8; }
 html[data-theme="dark"] .pf-empresa strong { color: #e8ecf7; }
 html[data-theme="dark"] .pf-busqueda { border-bottom-color: #2a3b52; }
