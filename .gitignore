@@ -30,3 +30,6 @@ node_modules/
 
 # Documentos fiscales de las empresas
 /Documentacion/Opinion de Cumplimiento/
+
+# Reportes de herramientas/Diagnostico-Equipo.ps1 (uno por equipo)
+herramientas/Diagnostico-*.txt
