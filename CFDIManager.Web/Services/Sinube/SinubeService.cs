@@ -297,6 +297,10 @@ public class SinubeService
     /// Con <paramref name="sinFolio"/> las facturas de clientes se importan con el foliador elegido
     /// (comparten historial con las de clientes para no duplicarlas en SINUBE).
     /// </summary>
+    /// <summary>UUID ya enviados desde la app (aceptados o que SINUBE dijo que ya existían).</summary>
+    public HashSet<string> UuidsEnviados(EmpresaDto empresa, bool clientes) =>
+        _repo.ObtenerUuidsEnviadosSinube(empresa.EmpresaId, clientes ? "C" : "P");
+
     public Task EnviarAsync(
         EmpresaDto empresa,
         SinubeConfiguracionDto configuracion,
@@ -325,7 +329,8 @@ public class SinubeService
         bool enviarConAdvertenciaIeps,
         Func<SinubeEnvioDto, int, int, Task> progreso,
         CancellationToken cancelacion,
-        SinubeSinFolioDto? sinFolio = null)
+        SinubeSinFolioDto? sinFolio = null,
+        IReadOnlySet<string>? yaEnSinube = null)
     {
         string? falta = FaltanDatos(configuracion, requierePassword: clientes);
 
@@ -375,6 +380,16 @@ public class SinubeService
                 {
                     envio.Estatus = "OMITIDO";
                     envio.Mensaje = "Ya se había enviado a SINUBE.";
+                    await progreso(envio, i + 1, archivos.Count);
+                    continue;
+                }
+
+                // Consultado antes en SINUBE (p. ej. XML Azulejeras): se registra como existente sin mandarlo.
+                if (yaEnSinube?.Contains(envio.Uuid) == true)
+                {
+                    envio.Estatus = "EXISTE";
+                    envio.Mensaje = "Ya está en SINUBE (consultado antes de subir).";
+                    _repo.RegistrarEnvioSinube(envio);
                     await progreso(envio, i + 1, archivos.Count);
                     continue;
                 }

@@ -31,6 +31,15 @@ public sealed class XmlAzulejerasResultado
 
     /// <summary>XML modificados guardados en <see cref="Carpeta"/>.</summary>
     public List<string> Archivos { get; set; } = new();
+
+    /// <summary>
+    /// XML con algún concepto sin NoIdentificacion (p. ej. anticipos): SINUBE los rechaza si identifica los
+    /// productos por NoIdentificacion ("El noIdentificacion es requerido").
+    /// </summary>
+    public int SinNoIdentificacion => ArchivosSinNoIdentificacion.Count;
+
+    /// <summary>Los de <see cref="Archivos"/> que tienen algún concepto sin NoIdentificacion.</summary>
+    public HashSet<string> ArchivosSinNoIdentificacion { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>Una serie de los emitidos del periodo (botón Analizar de XML Azulejeras).</summary>

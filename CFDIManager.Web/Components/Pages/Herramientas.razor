@@ -26,7 +26,6 @@
     <header>
         <span class="eyebrow">CONFIGURACIÓN</span>
         <h1 class="h2 mb-1">Herramientas</h1>
-        <p class="text-body-secondary mb-0">Ajustes generales de CFDI Manager. Solo los ve el Administrador.</p>
     </header>
 
     @if (!string.IsNullOrEmpty(Error))
@@ -56,11 +55,6 @@
                 </div>
 
                 <div class="card-body">
-                    <p class="text-body-secondary small">
-                        Aplica a todos los usuarios: Resumen, CFDI de ingresos y egresos, Administración de XML,
-                        Exportaciones, Descargas SAT, Conciliación SINUBE y XML Azulejeras. Cada quien puede cambiar
-                        las fechas en su pantalla; esto solo define con qué mes abren.
-                    </p>
 
                     <div class="form-check mb-2">
                         <input class="form-check-input" type="radio" name="modo" id="automatico"
@@ -74,7 +68,7 @@
                         <input class="form-check-input" type="radio" name="modo" id="fijo"
                                checked="@(!Automatico)" @onchange="() => Automatico = false" />
                         <label class="form-check-label" for="fijo">
-                            <strong>Mes fijo:</strong> para terminar un mes cuando ya empezó el siguiente
+                            <strong>Mes fijo</strong>
                         </label>
                     </div>
 
@@ -130,12 +124,6 @@
                 </div>
 
                 <div class="card-body">
-                    <p class="text-body-secondary small">
-                        Ventana diaria (@string.Join(" y ", Horarios)), meses pendientes desde "Descargar desde" y cierre de mes.
-                        El interruptor general la detiene para todas aunque la empresa la tenga encendida; las casillas
-                        la encienden o apagan por empresa (igual que el switch de Administración de XML).
-                        Las descargas que lances a mano en Descargas SAT no se ven afectadas.
-                    </p>
 
                     @if (DescargaPausada)
                     {
@@ -227,12 +215,6 @@
                 </div>
 
                 <div class="card-body">
-                    <p class="text-body-secondary small">
-                        Aquí viven los XML de la bóveda, las e.firmas, logos, constancias y descargas del SAT. Puede estar
-                        fuera de la carpeta de la app (por ejemplo <span class="font-monospace">D:\CFDIManagerDatos</span>) para que
-                        publicar una versión nueva nunca la toque y respaldarla sea más fácil. Es una carpeta de este equipo
-                        (el servidor): quien entra remoto recibe sus archivos por descarga.
-                    </p>
 
                     <dl class="row small mb-3">
                         <dt class="col-sm-3">En uso</dt>
@@ -268,7 +250,7 @@
                     <div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" id="copiarDatos" @bind="CopiarDatos" disabled="@CopiandoStorage" />
                         <label class="form-check-label small" for="copiarDatos">
-                            Copiar los datos actuales a la nueva carpeta (recomendado; la carpeta actual no se borra)
+                            Copiar los datos actuales a la nueva carpeta
                         </label>
                     </div>
 
@@ -297,12 +279,6 @@
                 </div>
 
                 <div class="card-body">
-                    <p class="text-body-secondary small">
-                        De lunes a viernes a la hora indicada se genera un ZIP con la base de datos y Storage en la carpeta elegida.
-                        Dentro de OneDrive (por ejemplo <span class="font-monospace">OneDrive\Respaldos CFDI Manager</span>) se sube
-                        solo a la nube. <b>Diarios</b> conserva los últimos que indiques; el del último día hábil del mes se guarda
-                        además en <b>Mensuales</b>, que no se borran. La clave maestra no va en el respaldo: guárdala aparte.
-                    </p>
 
                     <div class="input-group mb-2">
                         <span class="input-group-text"><i class="bi bi-cloud-arrow-up"></i></span>
@@ -386,12 +362,6 @@
                 </div>
 
                 <div class="card-body">
-                    <p class="text-body-secondary small">
-                        Una empresa a la vez, por el volumen. Vuelve a leer todos los XML de su carpeta y rehace sus datos en la base (conceptos,
-                        impuestos, relacionados, emisor/receptor y ruta del archivo). Importa los XML que falten y retira los
-                        CFDI cuyo XML ya no está en su carpeta. <strong>Conserva</strong> el Estado SAT, las fechas de validación
-                        y lo verificado. Corre en segundo plano: puedes salir de esta pantalla.
-                    </p>
 
                     <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
                         <div>

@@ -235,6 +235,11 @@ public sealed class XmlAzulejerasService
                 string archivo = Path.Combine(carpeta, $"{(cfdi.UUID != "" ? cfdi.UUID : cfdi.CfdiId.ToString())}.xml");
                 xml.Save(archivo, SaveOptions.DisableFormatting);
 
+                // Anticipos y otros conceptos sin NoIdentificacion: se suben a SINUBE con otro modo de producto.
+                if (comprobante.Descendants().Any(x => x.Name.LocalName == "Concepto" &&
+                                                       string.IsNullOrWhiteSpace((string?)x.Attribute("NoIdentificacion"))))
+                    resultado.ArchivosSinNoIdentificacion.Add(archivo);
+
                 resultado.Archivos.Add(archivo);
                 resultado.Modificados++;
                 resultado.ImporteModificados += cfdi.Total;

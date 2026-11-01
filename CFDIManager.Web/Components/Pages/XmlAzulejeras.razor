@@ -12,22 +12,19 @@
 
 @inject XmlAzulejerasService Servicio
 @inject SinubeService Sinube
+@inject SinubeDatosService DatosSinube
 @inject EmpresaContext EmpresaContext
 @inject IJSRuntime JS
 @inject PeriodoTrabajoService Periodo
 
-<PageTitle>Generar XML Azulejeras</PageTitle>
+<PageTitle>XML Azulejeras (Clientes)</PageTitle>
 
 <div class="export-page">
 
     <header class="page-heading">
         <div>
             <span class="eyebrow">CFDI MANAGER</span>
-            <h1>Generar XML Azulejeras</h1>
-            <p>
-                Analiza los emitidos del periodo, genera los XML de mostrador (público general XAXX010101000) con la serie y el
-                cliente de cada sucursal, y súbelos a SINUBE.
-            </p>
+            <h1>XML Azulejeras (Clientes)</h1>
         </div>
     </header>
 
@@ -53,7 +50,7 @@
         {
             <section class="message error-message">
                 <strong>Sin equivalencias.</strong>
-                <span>Esta empresa no tiene series de mostrador configuradas para XML Azulejeras.</span>
+                <span>Esta empresa no tiene series de mostrador configuradas para XML Azulejeras (Clientes).</span>
             </section>
         }
         else
@@ -200,142 +197,210 @@
                     </tfoot>
                 </table>
             </div>
-
-            <div class="card-footer small text-body-secondary">
-                Solo se modifican los comprobantes a público general (XAXX010101000) de las series marcadas, ingresos y
-                egresos; la nómina nunca se modifica ni se sube a SINUBE. El resto del periodo no se toca.
-            </div>
         </div>
     }
 
     @if (Resultado is not null)
     {
-        <section class="summary-strip">
-            <button type="button" class="summary-item invoice">
-                <span class="summary-code">XML</span>
-                <span><small>Leídos</small><strong>@Resultado.Leidos.ToString("N0")</strong></span>
-            </button>
-            <button type="button" class="summary-item payroll">
-                <span class="summary-code">OK</span>
-                <span><small>Modificados</small><strong>@Resultado.Modificados.ToString("N0")</strong></span>
-            </button>
-            <button type="button" class="summary-item credit-note">
-                <span class="summary-code">=</span>
-                <span><small>Sin cambio</small><strong>@Resultado.SinCambios.ToString("N0")</strong></span>
-            </button>
-            <button type="button" class="summary-item transfer">
-                <span class="summary-code">!</span>
-                <span><small>Errores</small><strong>@Resultado.Errores.ToString("N0")</strong></span>
-            </button>
-        </section>
-
-        <section class="summary-strip">
-            <button type="button" class="summary-item total">
-                <span class="summary-code">$</span>
-                <span><small>Importe total</small><strong>@Moneda(Resultado.ImporteTotal)</strong></span>
-            </button>
-            <button type="button" class="summary-item invoice">
-                <span class="summary-code">$</span>
-                <span><small>Con cambio</small><strong>@Moneda(Resultado.ImporteModificados)</strong></span>
-            </button>
-            <button type="button" class="summary-item credit-note">
-                <span class="summary-code">$</span>
-                <span><small>Sin cambio</small><strong>@Moneda(Resultado.ImporteSinCambios)</strong></span>
-            </button>
-        </section>
+        <div class="row g-2 mb-3">
+            @Tarjeta("Leídos", Resultado.Leidos.ToString("N0"), "bi-files", "secondary")
+            @Tarjeta("Modificados", Resultado.Modificados.ToString("N0"), "bi-pencil-square", "primary")
+            @Tarjeta("Sin cambio", Resultado.SinCambios.ToString("N0"), "bi-dash-circle", "secondary")
+            @Tarjeta("Errores", Resultado.Errores.ToString("N0"), "bi-exclamation-triangle", Resultado.Errores > 0 ? "danger" : "secondary")
+            @Tarjeta("Importe total", Moneda(Resultado.ImporteTotal), "bi-cash-stack", "secondary", ancho: "col-md-4")
+            @Tarjeta("Con cambio", Moneda(Resultado.ImporteModificados), "bi-cash-coin", "primary", ancho: "col-md-4")
+            @Tarjeta("Sin cambio", Moneda(Resultado.ImporteSinCambios), "bi-cash", "secondary", ancho: "col-md-4")
+        </div>
 
         @if (Resultado.Archivos.Count > 0)
         {
-            <section class="grid-card">
-                <div class="grid-toolbar">
-                    <div>
-                        <strong>Importación a SINUBE</strong>
-                        <span>@Resultado.Archivos.Count.ToString("N0") XML modificados listos para subir</span>
-                    </div>
+            <div class="card shadow-sm mb-3">
+                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
+                    <div class="fw-semibold"><i class="bi bi-cloud-arrow-up me-1"></i>Importación a SINUBE</div>
+                    <span class="badge rounded-pill text-bg-secondary">@Resultado.Archivos.Count.ToString("N0") XML generados</span>
                 </div>
 
-                <div class="p-3">
+                <div class="card-body">
                     @if (FaltaSinube is not null)
                     {
                         <div class="alert alert-warning small mb-0">
                             @FaltaSinube Configúralo en <a href="exportacion-sinube" class="alert-link">Importación a SINUBE</a>.
                         </div>
                     }
-                    else
+                    else if (ConfigSinube is not null)
                     {
-                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <div class="card mb-3">
+                            <div class="card-header py-2 small fw-semibold">
+                                <i class="bi bi-sliders me-1"></i>Parámetros · facturas de clientes
+                                <span class="text-body-secondary fw-normal ms-2">
+                                    @ConfigSinube.Empresa · @ConfigSinube.Sucursal · @ConfigSinube.Ambiente
+                                </span>
+                            </div>
+                            <div class="card-body small row g-3">
+                                <div class="col-lg-6">
+                                    <div class="fw-semibold mb-1">Identificación de productos</div>
+                                    @foreach ((string modo, string texto) in ModosProducto)
+                                    {
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="modoProducto" id="modo-@modo"
+                                                   checked="@(ConfigSinube.ModoProducto == modo)" disabled="@Subiendo"
+                                                   @onchange="() => CambiarModo(modo)" />
+                                            <label class="form-check-label" for="modo-@modo">@texto</label>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="col-lg-6">
+                                    <div class="fw-semibold mb-1">Opciones</div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="serieFolio" @bind="ConfigSinube.SerieFolioDeFolio" disabled="@Subiendo" />
+                                        <label class="form-check-label" for="serieFolio">Obtener serie/folio del atributo Folio cuando vienen concatenados</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="agrupar" @bind="ConfigSinube.AgruparCodigoSat" disabled="@Subiendo" />
+                                        <label class="form-check-label" for="agrupar">Agrupar por código SAT en facturas de más de 200 conceptos</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="productoClientes" @bind="ConfigSinube.UsarProductoClientes" disabled="@Subiendo" />
+                                        <label class="form-check-label" for="productoClientes">Sustituir NoIdentificacion por producto del catálogo de clientes</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="ieps" @bind="ConfigSinube.ValidarIeps" disabled="@Subiendo" />
+                                        <label class="form-check-label" for="ieps">Revisar productos con IEPS antes de enviar</label>
+                                    </div>
+                                    @if (ConfigSinube.ValidarIeps)
+                                    {
+                                        <div class="form-check ms-4">
+                                            <input class="form-check-input" type="checkbox" id="conIeps" @bind="EnviarConIeps" disabled="@Subiendo" />
+                                            <label class="form-check-label" for="conIeps">Enviar aunque haya productos sin tasa IEPS en SINUBE</label>
+                                        </div>
+                                    }
+                                    @if (Resultado.SinNoIdentificacion > 0 && ConfigSinube.ModoProducto != SinubeModosProducto.OmitirNoIdentificacion)
+                                    {
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="anticipos" @bind="AnticiposConCodigoGenerico" disabled="@Subiendo" />
+                                            <label class="form-check-label" for="anticipos">
+                                                Anticipos sin NoIdentificacion (@Resultado.SinNoIdentificacion.ToString("N0")) con código genérico
+                                            </label>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                            <button type="button" class="btn btn-outline-primary" @onclick="RevisarSinube" disabled="@Ocupado">
+                                @if (Revisando)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span><span>Revisando…</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-search me-1"></i><span>Revisar en SINUBE</span>
+                                }
+                            </button>
+
                             @if (Subiendo)
                             {
-                                <button type="button" class="secondary-button" @onclick="() => CancelacionSinube?.Cancel()">
-                                    <i class="bi bi-stop-circle"></i><span>Detener</span>
+                                <button type="button" class="btn btn-outline-danger" @onclick="() => CancelacionSinube?.Cancel()">
+                                    <i class="bi bi-stop-circle me-1"></i>Detener
                                 </button>
-                                <span class="small">Subiendo @Procesados.ToString("N0") de @Resultado.Archivos.Count.ToString("N0")…</span>
                             }
                             else
                             {
-                                <button type="button" class="primary-button" @onclick="SubirASinube" disabled="@Ocupado">
-                                    <i class="bi bi-cloud-arrow-up-fill"></i>
-                                    <span>Subir @Resultado.Archivos.Count.ToString("N0") XML a SINUBE</span>
+                                <button type="button" class="btn btn-primary" @onclick="SubirASinube"
+                                        disabled="@(Ocupado || Revision is null || Revision.PorSubir.Count == 0)">
+                                    <i class="bi bi-cloud-arrow-up-fill me-1"></i>
+                                    Subir @((Revision?.PorSubir.Count ?? 0).ToString("N0")) a SINUBE
                                 </button>
-                                <span class="small text-body-secondary">
-                                    Mismo proceso que Importación a SINUBE: los UUID que ya se subieron antes se descartan.
-                                </span>
                             }
                         </div>
-                    }
 
-                    @if (Envios.Count > 0)
-                    {
-                        <div class="d-flex flex-wrap gap-3 mt-3 small">
-                            <span class="badge text-bg-success fs-6">Subidos: @Contar("OK").ToString("N0")</span>
-                            <span class="badge text-bg-info fs-6">Ya existían en SINUBE: @Contar("EXISTE").ToString("N0")</span>
-                            <span class="badge text-bg-warning fs-6">Descartados: @Descartados.ToString("N0")</span>
-                            <span class="text-body-secondary align-self-center">
-                                @string.Join(" · ", new[] { "OMITIDO", "IEPS", "INVALIDO", "ERROR" }
-                                    .Where(e => Contar(e) > 0).Select(e => $"{TextoEstatus(e)}: {Contar(e):N0}"))
-                            </span>
-                        </div>
+                        @if (Subiendo)
+                        {
+                            int porcentaje = Revision is { PorSubir.Count: > 0 } r ? Procesados * 100 / r.PorSubir.Count : 0;
 
-                        <div class="table-container mt-2">
-                            <table class="cfdi-table">
-                                <thead>
-                                    <tr><th>Serie-Folio</th><th>UUID</th><th>Estatus</th><th>Mensaje</th></tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (SinubeEnvioDto envio in Envios.AsEnumerable().Reverse().Take(500))
-                                    {
-                                        <tr>
-                                            <td class="text-nowrap">@envio.Serie @envio.Folio</td>
-                                            <td class="uuid-cell">@envio.Uuid</td>
-                                            <td>
-                                                <span class="badge @ClaseEstatus(envio.Estatus)">@TextoEstatus(envio.Estatus)</span>
-                                            </td>
-                                            <td class="small">@envio.Mensaje</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
-                        </div>
+                            <div class="progress mb-3" role="progressbar" aria-valuenow="@porcentaje" aria-valuemin="0" aria-valuemax="100" style="height: 1.25rem">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: @porcentaje%">
+                                    @Procesados.ToString("N0") / @Revision!.PorSubir.Count.ToString("N0")
+                                </div>
+                            </div>
+                        }
+
+                        @if (Revision is not null && Envios.Count == 0)
+                        {
+                            <div class="row g-2">
+                                @Tarjeta("Generados", Resultado.Archivos.Count.ToString("N0"), "bi-files", "secondary")
+                                @Tarjeta("Ya en SINUBE", Revision.EnSinube.ToString("N0"), "bi-cloud-check", "info")
+                                @Tarjeta("Enviados antes", Revision.EnviadosAntes.ToString("N0"), "bi-clock-history", "secondary")
+                                @Tarjeta("Por subir", Revision.PorSubir.Count.ToString("N0"), "bi-cloud-arrow-up", "primary",
+                                    detalle: AnticiposPorSubir.Count > 0 ? $"{AnticiposPorSubir.Count:N0} anticipos con código genérico" : null)
+                            </div>
+                        }
                     }
                 </div>
-            </section>
+            </div>
+
+            @if (Envios.Count > 0)
+            {
+                <div class="card shadow-sm mb-3">
+                    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
+                        <div class="fw-semibold"><i class="bi bi-journal-text me-1"></i>Bitácora de SINUBE</div>
+                        <div class="btn-group btn-group-sm" role="group">
+                            @foreach ((string clave, string texto) in FiltrosBitacora)
+                            {
+                                <button type="button" class="btn @(FiltroBitacora == clave ? "btn-primary" : "btn-outline-secondary")"
+                                        @onclick="() => FiltroBitacora = clave">
+                                    @texto <span class="badge text-bg-light ms-1">@ContarFiltro(clave).ToString("N0")</span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="card-body pb-0">
+                        <div class="row g-2 mb-3">
+                            @Tarjeta("Subidos", Contar("OK").ToString("N0"), "bi-check-circle", "success")
+                            @Tarjeta("Ya existían", Contar("EXISTE").ToString("N0"), "bi-cloud-check", "info")
+                            @Tarjeta("Descartados", Descartados.ToString("N0"), "bi-x-circle", Descartados > 0 ? "warning" : "secondary",
+                                detalle: string.Join(" · ", new[] { "OMITIDO", "IEPS", "INVALIDO", "ERROR" }.Where(e => Contar(e) > 0).Select(e => $"{TextoEstatus(e)}: {Contar(e):N0}")))
+                            @Tarjeta("Procesados", Envios.Count.ToString("N0"), "bi-list-check", "secondary")
+                        </div>
+                    </div>
+
+                    <div class="table-responsive" style="max-height: 480px">
+                        <table class="table table-sm table-striped table-hover align-middle mb-0">
+                            <thead class="table-light sticky-top">
+                                <tr><th class="text-end">#</th><th>Serie-Folio</th><th>UUID</th><th>Estatus</th><th>Mensaje</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach ((SinubeEnvioDto envio, int numero) in EnviosFiltrados)
+                                {
+                                    <tr>
+                                        <td class="text-end text-body-secondary small">@numero</td>
+                                        <td class="text-nowrap fw-semibold">@envio.Serie @envio.Folio</td>
+                                        <td class="font-monospace small">@envio.Uuid</td>
+                                        <td><span class="badge @ClaseEstatus(envio.Estatus)">@TextoEstatus(envio.Estatus)</span></td>
+                                        <td class="small">@envio.Mensaje</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
         }
 
         @if (Resultado.Detalles.Count > 0)
         {
-            <section class="grid-card">
-                <div class="grid-toolbar">
-                    <div>
-                        <strong>Detalle de XML modificados</strong>
-                        <span>@Resultado.Detalles.Count.ToString("N0") registro(s)</span>
-                    </div>
+            <div class="card shadow-sm mb-3">
+                <div class="card-header d-flex align-items-center justify-content-between py-2">
+                    <div class="fw-semibold"><i class="bi bi-list-ul me-1"></i>XML modificados</div>
+                    <span class="badge rounded-pill text-bg-secondary">@Resultado.Detalles.Count.ToString("N0")</span>
                 </div>
-
-                <div class="table-container">
-                    <table class="cfdi-table">
-                        <thead>
+                <div class="table-responsive" style="max-height: 480px">
+                    <table class="table table-sm table-striped table-hover align-middle mb-0">
+                        <thead class="table-light sticky-top">
                             <tr>
-                                <th>Fecha</th><th>Tipo</th><th>Serie</th><th>Nueva serie</th><th>Cliente</th><th>Total</th><th>UUID</th><th>Resultado</th>
+                                <th>Fecha</th><th>Tipo</th><th>Serie</th><th>Nueva serie</th><th>Cliente</th><th class="text-end">Total</th><th>UUID</th><th>Resultado</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -343,20 +408,20 @@
                             {
                                 <tr>
                                     <td>@item.FechaEmision.ToString("dd/MM/yyyy")</td>
-                                    <td><span class="type-badge invoice">@item.TipoCfdi</span></td>
+                                    <td><span class="badge text-bg-light border">@NombreTipo(item.TipoCfdi)</span></td>
                                     <td>@item.SerieOriginal</td>
-                                    <td>@item.SerieNueva</td>
+                                    <td><span class="badge text-bg-primary">@item.SerieNueva</span></td>
                                     <td class="small">@item.NombreNuevo</td>
-                                    <td class="amount-cell">@Moneda(item.Total)</td>
-                                    <td class="uuid-cell">@item.UUID</td>
+                                    <td class="text-end">@Moneda(item.Total)</td>
+                                    <td class="font-monospace small">@item.UUID</td>
                                     <td>
                                         @if (item.Resultado == "MODIFICADO")
                                         {
-                                            <span class="estado-sat estado-vigente">Modificado</span>
+                                            <span class="badge text-bg-success">Modificado</span>
                                         }
                                         else
                                         {
-                                            <span class="estado-sat estado-cancelado" title="@item.Resultado">Error</span>
+                                            <span class="badge text-bg-danger" title="@item.Resultado">Error</span>
                                         }
                                     </td>
                                 </tr>
@@ -364,7 +429,7 @@
                         </tbody>
                     </table>
                 </div>
-            </section>
+            </div>
         }
     }
 
@@ -379,7 +444,7 @@
     private bool Analizando;
     private bool Generando;
     private bool Subiendo;
-    private bool Ocupado => Analizando || Generando || Subiendo;
+    private bool Ocupado => Analizando || Generando || Subiendo || Revisando;
 
     private string? Error { get; set; }
 
@@ -392,6 +457,17 @@
     private int Procesados;
     private CancellationTokenSource? CancelacionSinube;
     private string? FaltaSinube;
+    private SinubeConfiguracionDto? ConfigSinube;
+    private bool EnviarConIeps;
+    private bool AnticiposConCodigoGenerico = true;
+
+    private static readonly (string Modo, string Texto)[] ModosProducto =
+    [
+        (SinubeModosProducto.NoIdentificacion, "Usar NoIdentificacion del CFDI"),
+        (SinubeModosProducto.OmitirNoIdentificacion, "Omitir NoIdentificacion y usar un solo código genérico"),
+        (SinubeModosProducto.CodigoSat6, "Usar código prod. SAT a 6 posiciones (3.3 / 4.0)"),
+        (SinubeModosProducto.CodigoSatComoViene, "Usar código prod. SAT como viene en el CFDI (3.3 / 4.0)")
+    ];
 
     private static readonly string[] OrdenTipos = ["I", "E", "P", "T", "N"];
 
@@ -438,6 +514,7 @@
         Error = null;
         Resultado = null;
         Envios = [];
+        Revision = null;
         Analizando = true;
 
         try
@@ -482,6 +559,7 @@
         Error = null;
         Resultado = null;
         Envios = [];
+        Revision = null;
         Generando = true;
 
         try
@@ -489,7 +567,8 @@
             var series = SeriesElegidas.ToHashSet(StringComparer.OrdinalIgnoreCase);
             Resultado = await Task.Run(() => Servicio.GenerarZip(empresa, FechaInicio, FechaFin, series));
 
-            FaltaSinube = SinubeService.FaltanDatos(Sinube.ObtenerConfiguracion(empresa), requierePassword: true);
+            ConfigSinube = Sinube.ObtenerConfiguracion(empresa);
+            FaltaSinube = SinubeService.FaltanDatos(ConfigSinube, requierePassword: true);
 
             if (Resultado.Archivos.Count > 0)
             {
@@ -514,7 +593,10 @@
     /// <summary>Sube los XML modificados con el proceso de Importación a SINUBE (facturas de clientes).</summary>
     private async Task SubirASinube()
     {
-        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa || Resultado is null)
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa || Resultado is null || ConfigSinube is null)
+            return;
+
+        if (Revision is null || Revision.PorSubir.Count == 0)
             return;
 
         Error = null;
@@ -525,28 +607,60 @@
 
         try
         {
-            SinubeConfiguracionDto configuracion = Sinube.ObtenerConfiguracion(empresa);
-            List<string> archivos = Resultado.Archivos.ToList();
+            // Los parámetros elegidos aquí quedan guardados, igual que en Importación a SINUBE.
+            SinubeConfiguracionDto configuracion = ConfigSinube;
+            Sinube.GuardarConfiguracion(configuracion, null);
+            List<string> archivos = Revision.PorSubir;
+            HashSet<string> yaEnSinube = Revision.YaEnSinube;
+            List<string> anticipos = AnticiposPorSubir;
 
-            await Task.Run(() => Sinube.EnviarArchivosAsync(
-                empresa,
-                configuracion,
-                clientes: true,
-                archivos,
-                tiposComprobante: null,
-                reenviar: false,
-                enviarConAdvertenciaIeps: false,
-                (envio, actual, total) => InvokeAsync(() =>
-                {
-                    Envios.Add(envio);
-                    Procesados = actual;
-                    StateHasChanged();
-                }),
-                CancelacionSinube.Token));
+            var tandas = new List<(List<string> Archivos, SinubeConfiguracionDto Configuracion)>
+            {
+                (archivos.Except(anticipos).ToList(), configuracion)
+            };
+
+            if (anticipos.Count > 0)
+            {
+                // Copia solo para esta tanda: no cambia el parámetro guardado.
+                SinubeConfiguracionDto generico = System.Text.Json.JsonSerializer.Deserialize<SinubeConfiguracionDto>(
+                    System.Text.Json.JsonSerializer.Serialize(configuracion))!;
+                generico.ModoProducto = SinubeModosProducto.OmitirNoIdentificacion;
+                tandas.Add((anticipos, generico));
+            }
+
+            int previos = 0;
+
+            foreach ((List<string> tanda, SinubeConfiguracionDto config) in tandas.Where(t => t.Archivos.Count > 0))
+            {
+                int desplazamiento = previos;
+
+                await Task.Run(() => Sinube.EnviarArchivosAsync(
+                    empresa,
+                    config,
+                    clientes: true,
+                    tanda,
+                    tiposComprobante: null,
+                    reenviar: false,
+                    enviarConAdvertenciaIeps: EnviarConIeps,
+                    (envio, actual, total) => InvokeAsync(() =>
+                    {
+                        if (config != configuracion && envio.Estatus == "OK")
+                            envio.Mensaje = $"{envio.Mensaje} (anticipo: código genérico)".Trim();
+
+                        Envios.Add(envio);
+                        Procesados = desplazamiento + actual;
+                        StateHasChanged();
+                    }),
+                    CancelacionSinube.Token,
+                    sinFolio: null,
+                    yaEnSinube));
+
+                previos += tanda.Count;
+            }
         }
         catch (OperationCanceledException)
         {
-            Error = $"Proceso detenido. Se procesaron {Procesados:N0} de {Resultado.Archivos.Count:N0} XML.";
+            Error = $"Proceso detenido. Se procesaron {Procesados:N0} de {Revision.PorSubir.Count:N0} XML.";
         }
         catch (Exception ex)
         {
@@ -560,6 +674,117 @@
             await InvokeAsync(StateHasChanged);
         }
     }
+
+    /// <summary>Lo que ya tiene SINUBE (consulta por mes) y lo ya enviado desde la app; el resto queda por subir.</summary>
+    private sealed class RevisionSinube
+    {
+        public HashSet<string> YaEnSinube { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+        public int EnSinube { get; init; }
+        public int EnviadosAntes { get; init; }
+        public List<string> PorSubir { get; init; } = [];
+    }
+
+    private RevisionSinube? Revision;
+    private bool Revisando;
+
+    private List<string> AnticiposPorSubir =>
+        Revision is not null && Resultado is not null && ConfigSinube is not null &&
+        AnticiposConCodigoGenerico && ConfigSinube.ModoProducto != SinubeModosProducto.OmitirNoIdentificacion
+            ? Revision.PorSubir.Where(Resultado.ArchivosSinNoIdentificacion.Contains).ToList()
+            : [];
+
+    private void CambiarModo(string modo)
+    {
+        if (ConfigSinube is not null)
+            ConfigSinube.ModoProducto = modo;
+    }
+
+    private async Task RevisarSinube()
+    {
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa || Resultado is null || ConfigSinube is null)
+            return;
+
+        Error = null;
+        Envios = [];
+        Revision = null;
+        Revisando = true;
+
+        try
+        {
+            var meses = new List<DateTime>();
+            for (var m = new DateTime(FechaInicio.Year, FechaInicio.Month, 1); m <= FechaFin; m = m.AddMonths(1))
+                meses.Add(m);
+
+            HashSet<string> enSinube = await DatosSinube.UuidsFacturasClientesAsync(ConfigSinube, meses);
+            HashSet<string> enviados = Sinube.UuidsEnviados(empresa, clientes: true);
+
+            string Uuid(string archivo) => Path.GetFileNameWithoutExtension(archivo);
+
+            Revision = new RevisionSinube
+            {
+                YaEnSinube = enSinube,
+                EnSinube = Resultado.Archivos.Count(a => enSinube.Contains(Uuid(a))),
+                EnviadosAntes = Resultado.Archivos.Count(a => !enSinube.Contains(Uuid(a)) && enviados.Contains(Uuid(a))),
+                PorSubir = Resultado.Archivos.Where(a => !enSinube.Contains(Uuid(a)) && !enviados.Contains(Uuid(a))).ToList()
+            };
+        }
+        catch (Exception ex)
+        {
+            Error = $"No se pudo consultar SINUBE: {ex.Message}";
+        }
+        finally
+        {
+            Revisando = false;
+        }
+    }
+
+    // ---------- presentación ----------
+
+    private string FiltroBitacora = "todos";
+
+    private static readonly (string Clave, string Texto)[] FiltrosBitacora =
+        [("todos", "Todos"), ("OK", "Subidos"), ("EXISTE", "Ya existían"), ("descartados", "Descartados")];
+
+    private bool PasaFiltro(SinubeEnvioDto e) => FiltroBitacora switch
+    {
+        "todos" => true,
+        "descartados" => e.Estatus is not ("OK" or "EXISTE"),
+        _ => e.Estatus == FiltroBitacora
+    };
+
+    private int ContarFiltro(string clave) => clave switch
+    {
+        "todos" => Envios.Count,
+        "descartados" => Descartados,
+        _ => Contar(clave)
+    };
+
+    private IEnumerable<(SinubeEnvioDto Envio, int Numero)> EnviosFiltrados =>
+        Envios.Select((e, i) => (e, i + 1)).Where(x => PasaFiltro(x.e)).Reverse().Take(1000);
+
+    /// <summary>Tarjeta de total con Bootstrap.</summary>
+    private static RenderFragment Tarjeta(string titulo, string valor, string icono, string color,
+        string ancho = "col-6 col-md-3", string? detalle = null) => __builder =>
+    {
+        <div class="@ancho">
+            <div class="card h-100 border-@color-subtle shadow-sm">
+                <div class="card-body py-2 d-flex align-items-center gap-3">
+                    <div class="rounded-3 bg-@color-subtle text-@color-emphasis d-flex align-items-center justify-content-center"
+                         style="width: 2.5rem; height: 2.5rem">
+                        <i class="bi @icono fs-5"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="small text-body-secondary">@titulo</div>
+                        <div class="fs-5 fw-semibold text-@color-emphasis">@valor</div>
+                        @if (!string.IsNullOrEmpty(detalle))
+                        {
+                            <div class="small text-body-secondary text-truncate" title="@detalle">@detalle</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    };
 
     private int Contar(string estatus) => Envios.Count(e => e.Estatus == estatus);
 
@@ -595,6 +820,7 @@
         SeriesElegidas.Clear();
         Resultado = null;
         Envios = [];
+        Revision = null;
     }
 
     private void EmpresaCambio()
@@ -605,6 +831,7 @@
             SeriesElegidas.Clear();
             Resultado = null;
             Envios = [];
+        Revision = null;
             StateHasChanged();
         });
     }

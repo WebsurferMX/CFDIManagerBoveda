@@ -33,6 +33,33 @@ public class SinubeDatosService(SinubeService sinube, IHttpClientFactory http)
     ];
 
     /// <summary>
+    /// UUID de las facturas de clientes (DbFactura) que ya están en SINUBE en esos meses (por fecha de factura).
+    /// Una consulta por mes: así no se manda uno por uno lo que SINUBE ya tiene.
+    /// </summary>
+    public async Task<HashSet<string>> UuidsFacturasClientesAsync(
+        SinubeConfiguracionDto configuracion,
+        IEnumerable<DateTime> meses,
+        CancellationToken cancelacion = default)
+    {
+        var uuids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string empresa = configuracion.Empresa.Replace("'", "");
+
+        foreach (int periodo in meses.Select(m => m.Year * 100 + m.Month).Distinct())
+        {
+            List<FilaSinube> filas = await ConsultarAsync(
+                configuracion, $"SELECT uuid FROM DbFactura WHERE empresa = '{empresa}' AND mes = {periodo}", cancelacion);
+
+            foreach (FilaSinube fila in filas)
+            {
+                if (fila.Texto("uuid") is { Length: > 0 } uuid)
+                    uuids.Add(uuid.Trim());
+            }
+        }
+
+        return uuids;
+    }
+
+    /// <summary>
     /// Ejecuta un SELECT y regresa todas las filas (sigue el CURSOR hasta la última página).
     /// La consulta no debe incluir TAMPAG/CURSOR/NOADMINSINUBE: se agregan aquí.
     /// </summary>
