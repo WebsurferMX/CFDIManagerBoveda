@@ -338,8 +338,9 @@ public sealed class ExportacionExcelService
     {
         string[] encabezados =
         {
-            "Verificado ó Asoc.", "Estado SAT", "Tipo", "Fecha Emision",
-            "Fecha Timbrado", "Serie", "Folio", "UUID", "UUID Relacion",
+            // Serie, Folio y UUID primero, como en la rejilla de Administración de XML.
+            "Serie", "Folio", "UUID", "Estado SAT", "Tipo", "Fecha Emision",
+            "Fecha Timbrado", "UUID Relacion",
             "RFC Emisor", "Nombre Emisor", "LugarDeExpedicion", "RFC Receptor",
             "Nombre Receptor", "ResidenciaFiscal", "NumRegIdTrib", "UsoCFDI",
             "SubTotal", "Descuento", "Total IEPS", "IVA 16%", "Retenido IVA",
@@ -376,66 +377,65 @@ public sealed class ExportacionExcelService
         int fila = filaEncabezado + 1;
         foreach (CfdiExportacionDto x in registros)
         {
-            Texto(hoja.Cell(fila, 1), x.EtiquetaVerificadoAsociado);
-            Texto(hoja.Cell(fila, 2), x.EstadoSat);
-            Texto(hoja.Cell(fila, 3), x.Tipo);
-            Fecha(hoja.Cell(fila, 4), x.FechaEmision);
-            Fecha(hoja.Cell(fila, 5), x.FechaTimbrado);
-            Texto(hoja.Cell(fila, 6), x.Serie);
-            Texto(hoja.Cell(fila, 7), x.Folio);
-            Texto(hoja.Cell(fila, 8), x.UUID);
-            Texto(hoja.Cell(fila, 9), x.UUIDRelacion);
-            Texto(hoja.Cell(fila, 10), x.RfcEmisor);
-            Texto(hoja.Cell(fila, 11), x.NombreEmisor);
-            Texto(hoja.Cell(fila, 12), x.LugarExpedicion);
-            Texto(hoja.Cell(fila, 13), x.RfcReceptor);
-            Texto(hoja.Cell(fila, 14), x.NombreReceptor);
-            Texto(hoja.Cell(fila, 15), x.ResidenciaFiscal);
-            Texto(hoja.Cell(fila, 16), x.NumRegIdTrib);
-            Texto(hoja.Cell(fila, 17), x.UsoCfdi);
-            Numero(hoja.Cell(fila, 18), x.SubTotal);
-            Numero(hoja.Cell(fila, 19), x.Descuento);
-            Numero(hoja.Cell(fila, 20), x.TotalIeps);
-            Numero(hoja.Cell(fila, 21), x.Iva16);
-            Numero(hoja.Cell(fila, 22), x.RetenidoIva);
-            Numero(hoja.Cell(fila, 23), x.RetenidoIsr);
-            Numero(hoja.Cell(fila, 24), x.Ish);
-            Numero(hoja.Cell(fila, 25), x.Total);
-            Numero(hoja.Cell(fila, 26), x.TotalOriginal);
-            Numero(hoja.Cell(fila, 27), x.TotalTrasladados);
-            Numero(hoja.Cell(fila, 28), x.TotalRetenidos);
-            Numero(hoja.Cell(fila, 29), x.TotalLocalTrasladado);
-            Numero(hoja.Cell(fila, 30), x.TotalLocalRetenido);
-            Texto(hoja.Cell(fila, 31), x.Complemento);
-            Texto(hoja.Cell(fila, 32), x.Moneda);
-            Numero(hoja.Cell(fila, 33), x.TipoCambio, "0.000000");
-            Texto(hoja.Cell(fila, 34), x.FormaPago);
-            Texto(hoja.Cell(fila, 35), x.MetodoPago);
-            Texto(hoja.Cell(fila, 36), x.NumCtaPago);
-            Texto(hoja.Cell(fila, 37), x.CondicionPago);
-            Texto(hoja.Cell(fila, 38), x.Conceptos);
-            Texto(hoja.Cell(fila, 39), x.Combustible);
-            Numero(hoja.Cell(fila, 40), x.Ieps3);
-            Numero(hoja.Cell(fila, 41), x.Ieps6);
-            Numero(hoja.Cell(fila, 42), x.Ieps7);
-            Numero(hoja.Cell(fila, 43), x.Ieps8);
-            Numero(hoja.Cell(fila, 44), x.Ieps9);
-            Numero(hoja.Cell(fila, 45), x.Ieps265);
-            Numero(hoja.Cell(fila, 46), x.Ieps30);
-            Numero(hoja.Cell(fila, 47), x.Ieps53);
-            Numero(hoja.Cell(fila, 48), x.Ieps160);
-            Texto(hoja.Cell(fila, 49), x.ArchivoXml);
-            Texto(hoja.Cell(fila, 50), x.DireccionEmisor);
-            Texto(hoja.Cell(fila, 51), x.LocalidadEmisor);
-            Texto(hoja.Cell(fila, 52), x.DireccionReceptor);
-            Texto(hoja.Cell(fila, 53), x.LocalidadReceptor);
-            Numero(hoja.Cell(fila, 54), x.Iva8);
-            Numero(hoja.Cell(fila, 55), x.Ieps304);
-            Numero(hoja.Cell(fila, 56), x.IvaRetenido6);
-            Texto(hoja.Cell(fila, 57), x.RegimenFiscalReceptor);
-            Texto(hoja.Cell(fila, 58), x.DomicilioFiscalReceptor);
-            Texto(hoja.Cell(fila, 59), x.TipoRelacion);
-            Numero(hoja.Cell(fila, 60), x.MontoTotalPagos);
+            Texto(hoja.Cell(fila, 1), x.Serie);
+            Texto(hoja.Cell(fila, 2), x.Folio);
+            Texto(hoja.Cell(fila, 3), x.UUID);
+            Texto(hoja.Cell(fila, 4), x.EstadoSat);
+            Texto(hoja.Cell(fila, 5), x.Tipo);
+            Fecha(hoja.Cell(fila, 6), x.FechaEmision);
+            Fecha(hoja.Cell(fila, 7), x.FechaTimbrado);
+            Texto(hoja.Cell(fila, 8), x.UUIDRelacion);
+            Texto(hoja.Cell(fila, 9), x.RfcEmisor);
+            Texto(hoja.Cell(fila, 10), x.NombreEmisor);
+            Texto(hoja.Cell(fila, 11), x.LugarExpedicion);
+            Texto(hoja.Cell(fila, 12), x.RfcReceptor);
+            Texto(hoja.Cell(fila, 13), x.NombreReceptor);
+            Texto(hoja.Cell(fila, 14), x.ResidenciaFiscal);
+            Texto(hoja.Cell(fila, 15), x.NumRegIdTrib);
+            Texto(hoja.Cell(fila, 16), x.UsoCfdi);
+            Numero(hoja.Cell(fila, 17), x.SubTotal);
+            Numero(hoja.Cell(fila, 18), x.Descuento);
+            Numero(hoja.Cell(fila, 19), x.TotalIeps);
+            Numero(hoja.Cell(fila, 20), x.Iva16);
+            Numero(hoja.Cell(fila, 21), x.RetenidoIva);
+            Numero(hoja.Cell(fila, 22), x.RetenidoIsr);
+            Numero(hoja.Cell(fila, 23), x.Ish);
+            Numero(hoja.Cell(fila, 24), x.Total);
+            Numero(hoja.Cell(fila, 25), x.TotalOriginal);
+            Numero(hoja.Cell(fila, 26), x.TotalTrasladados);
+            Numero(hoja.Cell(fila, 27), x.TotalRetenidos);
+            Numero(hoja.Cell(fila, 28), x.TotalLocalTrasladado);
+            Numero(hoja.Cell(fila, 29), x.TotalLocalRetenido);
+            Texto(hoja.Cell(fila, 30), x.Complemento);
+            Texto(hoja.Cell(fila, 31), x.Moneda);
+            Numero(hoja.Cell(fila, 32), x.TipoCambio, "0.000000");
+            Texto(hoja.Cell(fila, 33), x.FormaPago);
+            Texto(hoja.Cell(fila, 34), x.MetodoPago);
+            Texto(hoja.Cell(fila, 35), x.NumCtaPago);
+            Texto(hoja.Cell(fila, 36), x.CondicionPago);
+            Texto(hoja.Cell(fila, 37), x.Conceptos);
+            Texto(hoja.Cell(fila, 38), x.Combustible);
+            Numero(hoja.Cell(fila, 39), x.Ieps3);
+            Numero(hoja.Cell(fila, 40), x.Ieps6);
+            Numero(hoja.Cell(fila, 41), x.Ieps7);
+            Numero(hoja.Cell(fila, 42), x.Ieps8);
+            Numero(hoja.Cell(fila, 43), x.Ieps9);
+            Numero(hoja.Cell(fila, 44), x.Ieps265);
+            Numero(hoja.Cell(fila, 45), x.Ieps30);
+            Numero(hoja.Cell(fila, 46), x.Ieps53);
+            Numero(hoja.Cell(fila, 47), x.Ieps160);
+            Texto(hoja.Cell(fila, 48), x.ArchivoXml);
+            Texto(hoja.Cell(fila, 49), x.DireccionEmisor);
+            Texto(hoja.Cell(fila, 50), x.LocalidadEmisor);
+            Texto(hoja.Cell(fila, 51), x.DireccionReceptor);
+            Texto(hoja.Cell(fila, 52), x.LocalidadReceptor);
+            Numero(hoja.Cell(fila, 53), x.Iva8);
+            Numero(hoja.Cell(fila, 54), x.Ieps304);
+            Numero(hoja.Cell(fila, 55), x.IvaRetenido6);
+            Texto(hoja.Cell(fila, 56), x.RegimenFiscalReceptor);
+            Texto(hoja.Cell(fila, 57), x.DomicilioFiscalReceptor);
+            Texto(hoja.Cell(fila, 58), x.TipoRelacion);
+            Numero(hoja.Cell(fila, 59), x.MontoTotalPagos);
             fila++;
         }
 
@@ -444,17 +444,17 @@ public sealed class ExportacionExcelService
             .CreateTable($"Tabla{nombreHoja}");
 
         hoja.SheetView.FreezeRows(filaEncabezado);
-        hoja.SheetView.FreezeColumns(8);
+        hoja.SheetView.FreezeColumns(3);
         hoja.Columns().AdjustToContents();
 
         for (int columna = 1; columna <= encabezados.Length; columna++)
         {
             double maximo = columna switch
             {
-                8 or 9 => 40,
-                11 or 14 => 42,
-                38 => 70,
-                49 => 65,
+                3 or 8 => 40,
+                10 or 13 => 42,
+                37 => 70,
+                48 => 65,
                 _ => 24
             };
 
@@ -464,7 +464,7 @@ public sealed class ExportacionExcelService
             }
         }
 
-        hoja.Column(38).Style.Alignment.WrapText = true;
+        hoja.Column(37).Style.Alignment.WrapText = true;
         hoja.PageSetup.PageOrientation = XLPageOrientation.Landscape;
         //hoja.PageSetup.FitToPages(1, 0);//
     }
@@ -481,8 +481,8 @@ public sealed class ExportacionExcelService
 
         string[] encabezados =
         {
-            "Clasificación", "Tipo CFDI", "Fecha Emisión", "Fecha Timbrado",
-            "Serie", "Folio", "UUID", "RFC Emisor", "Nombre Emisor",
+            "Serie", "Folio", "UUID", "Clasificación", "Tipo CFDI",
+            "Fecha Emisión", "Fecha Timbrado", "RFC Emisor", "Nombre Emisor",
             "RFC Receptor", "Nombre Receptor", "ClaveProdServ",
             "NoIdentificacion", "Descripción", "Cantidad", "ClaveUnidad",
             "Unidad", "ValorUnitario", "Importe", "Descuento", "ObjetoImp",
@@ -523,13 +523,13 @@ public sealed class ExportacionExcelService
         int fila = filaEncabezados + 1;
         foreach (ConceptoExportacionDto x in conceptos)
         {
-            Texto(hoja.Cell(fila, 1), x.Clasificacion);
-            Texto(hoja.Cell(fila, 2), x.TipoCfdi);
-            Fecha(hoja.Cell(fila, 3), x.FechaEmision);
-            Fecha(hoja.Cell(fila, 4), x.FechaTimbrado);
-            Texto(hoja.Cell(fila, 5), x.Serie);
-            Texto(hoja.Cell(fila, 6), x.Folio);
-            Texto(hoja.Cell(fila, 7), x.UUID);
+            Texto(hoja.Cell(fila, 1), x.Serie);
+            Texto(hoja.Cell(fila, 2), x.Folio);
+            Texto(hoja.Cell(fila, 3), x.UUID);
+            Texto(hoja.Cell(fila, 4), x.Clasificacion);
+            Texto(hoja.Cell(fila, 5), x.TipoCfdi);
+            Fecha(hoja.Cell(fila, 6), x.FechaEmision);
+            Fecha(hoja.Cell(fila, 7), x.FechaTimbrado);
             Texto(hoja.Cell(fila, 8), x.RfcEmisor);
             Texto(hoja.Cell(fila, 9), x.NombreEmisor);
             Texto(hoja.Cell(fila, 10), x.RfcReceptor);
@@ -578,7 +578,7 @@ public sealed class ExportacionExcelService
         tabla.Theme = XLTableTheme.TableStyleMedium4;
 
         hoja.SheetView.FreezeRows(filaEncabezados);
-        hoja.SheetView.FreezeColumns(7);
+        hoja.SheetView.FreezeColumns(3);
         hoja.Rows(filaEncabezados + 1, ultimaFila).Height = 22;
         hoja.Range(filaEncabezados + 1, 1, ultimaFila, encabezados.Length)
             .Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
@@ -590,7 +590,7 @@ public sealed class ExportacionExcelService
         {
             double anchoMaximo = columna switch
             {
-                7 => 40,
+                3 => 40,
                 9 or 11 => 42,
                 14 => 60,
                 42 => 65,

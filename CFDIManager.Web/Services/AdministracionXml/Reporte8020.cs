@@ -197,8 +197,9 @@ public static class Reporte8020
         var ws = wb.Worksheets.Add("Detalle CFDI");
         ws.SetTabColor(XLColor.FromHtml("#7F7F7F"));
 
-        string[] encabezados = ["Fecha", "Tipo", "Serie", "Folio", "UUID", clientes ? "RFC Receptor" : "RFC Emisor",
-            clientes ? "Cliente" : "Proveedor", "Moneda", "Tipo de cambio", "Total", "Total MXN (con signo)", "Estado SAT"];
+        // Mismo orden que la rejilla de Administración de XML: Serie, Folio y UUID primero.
+        string[] encabezados = ["Serie", "Folio", "UUID", "Estado SAT", "Tipo", "Fecha", clientes ? "RFC Receptor" : "RFC Emisor",
+            clientes ? "Cliente" : "Proveedor", "Moneda", "Tipo de cambio", "Total", "Total MXN (con signo)"];
         for (var i = 0; i < encabezados.Length; i++) ws.Cell(1, i + 1).Value = encabezados[i];
 
         var ordenados = usados.OrderBy(x => x.FechaEmision).ToList();
@@ -207,24 +208,24 @@ public static class Reporte8020
         {
             AdminXmlFilaDto x = ordenados[i];
             int r = i + 2;
-            ws.Cell(r, 1).Value = x.FechaEmision;
-            ws.Cell(r, 2).Value = x.TipoCfdi == "E" ? "Nota de crédito" : "Factura";
-            ws.Cell(r, 3).Value = x.Serie;
-            ws.Cell(r, 4).Value = x.Folio;
-            ws.Cell(r, 5).Value = x.Uuid;
-            ws.Cell(r, 6).Value = rfcDe(x);
-            ws.Cell(r, 7).Value = nombreDe(x);
-            ws.Cell(r, 8).Value = x.Moneda;
-            ws.Cell(r, 9).Value = x.TipoCambio ?? 1;
-            ws.Cell(r, 10).Value = x.Total;
-            ws.Cell(r, 11).Value = Signo(x) * Mxn(x);
-            ws.Cell(r, 12).Value = x.EstadoSat;
+            ws.Cell(r, 1).Value = x.Serie;
+            ws.Cell(r, 2).Value = x.Folio;
+            ws.Cell(r, 3).Value = x.Uuid;
+            ws.Cell(r, 4).Value = x.EstadoSat;
+            ws.Cell(r, 5).Value = x.TipoCfdi == "E" ? "Nota de crédito" : "Factura";
+            ws.Cell(r, 6).Value = x.FechaEmision;
+            ws.Cell(r, 7).Value = rfcDe(x);
+            ws.Cell(r, 8).Value = nombreDe(x);
+            ws.Cell(r, 9).Value = x.Moneda;
+            ws.Cell(r, 10).Value = x.TipoCambio ?? 1;
+            ws.Cell(r, 11).Value = x.Total;
+            ws.Cell(r, 12).Value = Signo(x) * Mxn(x);
         }
 
         var tabla = ws.Range(1, 1, Math.Max(ordenados.Count, 1) + 1, encabezados.Length).CreateTable("TblDetalle8020");
         tabla.Theme = XLTableTheme.TableStyleLight9;
-        ws.Column(1).Style.DateFormat.Format = "dd/MM/yyyy";
-        ws.Columns(10, 11).Style.NumberFormat.Format = Moneda;
+        ws.Column(6).Style.DateFormat.Format = "dd/MM/yyyy";
+        ws.Columns(11, 12).Style.NumberFormat.Format = Moneda;
         ws.Columns().AdjustToContents(1, Math.Min(ordenados.Count + 1, 300));
         ws.SheetView.FreezeRows(1);
     }

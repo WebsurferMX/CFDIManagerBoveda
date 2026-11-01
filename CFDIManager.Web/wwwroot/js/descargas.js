@@ -13,3 +13,15 @@ window.descargarArchivoBase64 = (
     enlace.click();
     document.body.removeChild(enlace);
 };
+
+// Archivos grandes que el servidor entrega por URL (ZIP de XML y PDF).
+window.descargarUrl = (url) => {
+    const enlace = document.createElement("a");
+
+    enlace.href = url;
+    enlace.download = "";
+
+    document.body.appendChild(enlace);
+    enlace.click();
+    document.body.removeChild(enlace);
+};

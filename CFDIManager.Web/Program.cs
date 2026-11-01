@@ -99,6 +99,9 @@ builder.Services.AddScoped<AdministracionXmlService>();
 // "Valida Estado SAT" sigue aunque se cambie de pantalla.
 builder.Services.AddSingleton<ValidacionSatSegundoPlano>();
 
+// ZIP de XML y PDF que la pantalla arma y el navegador baja por /api/descargas/{token}.
+builder.Services.AddSingleton<DescargasTemporales>();
+
 // QuestPDF exige declarar la licencia antes de generar documentos.
 // Community: gratuita para organizaciones con ingresos anuales menores a 1 millón de USD.
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
@@ -399,6 +402,23 @@ api.MapGet(
     "/empresa/{empresaId:long}/cfdi/{cfdiId:long}/vista",
     (long empresaId, long cfdiId, AdministracionXmlService admin) =>
         Results.File(admin.GenerarVistaPdf(new EmpresaDto { EmpresaId = empresaId }, cfdiId), "image/png"));
+
+// Archivo armado por la pantalla (ZIP de XML o PDF); el token es de un solo uso y del mismo usuario.
+api.MapGet(
+    "/descargas/{token}",
+    (string token, HttpContext http, DescargasTemporales descargas) =>
+    {
+        if (descargas.Tomar(token, http.User.Identity?.Name ?? "") is not { } d)
+        {
+            return Results.Text("La descarga ya no está disponible; vuelve a generarla.", "text/plain; charset=utf-8",
+                statusCode: StatusCodes.Status404NotFound);
+        }
+
+        var archivo = new FileStream(d.Ruta, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, 81920,
+            d.Borrar ? FileOptions.DeleteOnClose | FileOptions.Asynchronous : FileOptions.Asynchronous);
+
+        return Results.File(archivo, "application/zip", d.Nombre);
+    });
 
 // PDF de los archivos SAT de una empresa: cif, opinion-sat, opinion-imss o declaracion-{id}.
 api.MapGet(

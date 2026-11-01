@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.IO.Compression;
 using System.Xml.Linq;
 using ClosedXML.Excel;
 using CFDIParser.Models;
@@ -224,7 +225,7 @@ public class AdministracionXmlService
             string estado = x.EstadoSat.ToUpperInvariant() is "" or "PENDIENTE" or "NO VALIDADO" ? "" : x.EstadoSat;
             entradas.Add(new ReporteGeneral.Entrada(
                 new ReporteGeneral.Origen(empresa.Rfc, x.Clasificacion == "RECIBIDO" ? "R" : "E", x.RutaXml, x.FechaEmision),
-                xml, estado, x.Verificado));
+                xml, estado));
         }
 
         // Un solo mes (sin acumular) da "ENE 2026"; varios meses o acumulado, el año.
@@ -241,9 +242,7 @@ public class AdministracionXmlService
 
         if (reporte.StartsWith("agrupado:"))
         {
-            string por = reporte["agrupado:".Length..];
-            Hoja(libro, $"Por {por}", ["Clave", "Nombre", "Comprobantes", "SubTotal", "IVA", "Total"], [3, 4, 5],
-                _repo.AgruparAdministracionXml(f, por).Select(a => new object?[] { a.Clave, a.Nombre, a.Cantidad, a.Subtotal, a.Iva, a.Total }));
+            HojaAgrupada(libro, f, reporte["agrupado:".Length..]);
         }
         else if (reporte == "conceptos")
         {
@@ -253,8 +252,8 @@ public class AdministracionXmlService
             {
                 foreach (ConceptoDto k in _repo.ObtenerConceptosCfdi(f.EmpresaId, x.CfdiId))
                 {
-                    renglones.Add([x.Verificado ? "Sí" : "", x.EstadoSat, Tipos.GetValueOrDefault(x.TipoCfdi, x.TipoCfdi), x.FechaEmision,
-                        x.Serie, x.Folio, x.Uuid, x.RfcEmisor, x.NombreEmisor, x.RfcReceptor, x.NombreReceptor,
+                    renglones.Add([x.Serie, x.Folio, x.Uuid, x.EstadoSat, Tipos.GetValueOrDefault(x.TipoCfdi, x.TipoCfdi), x.FechaEmision,
+                        x.RfcEmisor, x.NombreEmisor, x.RfcReceptor, x.NombreReceptor,
                         k.ClaveProdServ, k.NoIdentificacion, k.Cantidad, k.ClaveUnidad, k.Unidad, k.Descripcion,
                         k.ValorUnitario, k.Descuento ?? 0, k.Importe,
                         k.Impuestos.Where(i => EsTraslado(i) && i.Impuesto == "002").Sum(i => i.Importe),
@@ -265,16 +264,16 @@ public class AdministracionXmlService
             }
 
             Hoja(libro, "Conceptos",
-                ["Verificado ó Asoc.", "Estado SAT", "Tipo", "Fecha Emision", "Serie", "Folio", "UUID", "RFC Emisor", "Nombre Emisor",
+                ["Serie", "Folio", "UUID", "Estado SAT", "Tipo", "Fecha Emision", "RFC Emisor", "Nombre Emisor",
                  "RFC Receptor", "Nombre Receptor", "ClaveProdServ", "NoIdentificacion", "Cantidad", "ClaveUnidad", "Unidad", "Descripcion",
                  "ValorUnitario", "Descuento", "Importe", "IVA Trasladado", "IVA Retenido", "ISR Retenido", "Moneda", "Archivo XML"],
-                [17, 18, 19, 20, 21, 22], renglones);
+                [16, 17, 18, 19, 20, 21], renglones);
         }
         else
         {
             string[] columnas =
             [
-                "Verificado ó Asoc.", "Estado SAT", "Tipo", "Fecha Emision", "Fecha Timbrado", "Serie", "Folio", "UUID",
+                "Serie", "Folio", "UUID", "Estado SAT", "Tipo", "Fecha Emision", "Fecha Timbrado",
                 "RFC Emisor", "Nombre Emisor", "RFC Receptor", "Nombre Receptor", "UsoCFDI", "SubTotal", "Descuento", "IVA",
                 "IEPS", "Retenido IVA", "Retenido ISR", "Total", "Monto pagos", "Moneda", "Tipo De Cambio", "FormaDePago",
                 "Metodo de Pago", "Archivo XML"
@@ -291,11 +290,11 @@ public class AdministracionXmlService
                     continue;
                 }
 
-                Hoja(libro, hoja, columnas, [13, 14, 15, 16, 17, 18, 19, 20],
+                Hoja(libro, hoja, columnas, [12, 13, 14, 15, 16, 17, 18, 19],
                     deTipo.Select(x => new object?[]
                     {
-                        x.Verificado ? "Sí" : "", x.EstadoSat, Tipos.GetValueOrDefault(x.TipoCfdi, x.TipoCfdi), x.FechaEmision,
-                        x.FechaTimbrado, x.Serie, x.Folio, x.Uuid, x.RfcEmisor, x.NombreEmisor, x.RfcReceptor, x.NombreReceptor,
+                        x.Serie, x.Folio, x.Uuid, x.EstadoSat, Tipos.GetValueOrDefault(x.TipoCfdi, x.TipoCfdi), x.FechaEmision,
+                        x.FechaTimbrado, x.RfcEmisor, x.NombreEmisor, x.RfcReceptor, x.NombreReceptor,
                         x.UsoCfdi, x.Subtotal, x.Descuento, x.Iva, x.Ieps, x.RetIva, x.RetIsr, x.Total, x.MontoTotalPagos,
                         x.Moneda, x.TipoCambio, x.FormaPago, x.MetodoPago, x.RutaXml
                     }));
@@ -312,7 +311,8 @@ public class AdministracionXmlService
         return memoria.ToArray();
     }
 
-    public string GuardarExcel(EmpresaDto empresa, AdminXmlFiltroDto f, string reporte)
+    /// <summary>Guarda el reporte en Storage\Reportes\{RFC} y regresa la ruta con el contenido para descargarlo también.</summary>
+    public (string Ruta, byte[] Contenido) GuardarExcel(EmpresaDto empresa, AdminXmlFiltroDto f, string reporte)
     {
         string carpeta = Storage("Reportes", empresa.Rfc);
         Directory.CreateDirectory(carpeta);
@@ -327,7 +327,129 @@ public class AdministracionXmlService
         }
 
         File.WriteAllBytes(ruta, contenido);
-        return ruta;
+        return (ruta, contenido);
+    }
+
+    /// <summary>
+    /// Detalle de comprobantes agrupado con un renglón "Total ..." por grupo (esquema de Excel para contraer)
+    /// y total general. Como la pantalla de Agrupaciones: facturas menos notas de crédito, sin importar la pestaña.
+    /// </summary>
+    private void HojaAgrupada(XLWorkbook libro, AdminXmlFiltroDto f, string por)
+    {
+        var sinPestana = new AdminXmlFiltroDto
+        {
+            EmpresaId = f.EmpresaId, Clasificacion = f.Clasificacion, Anio = f.Anio, Meses = f.Meses, Dias = f.Dias,
+            Acumular = f.Acumular, Busqueda = f.Busqueda, Filtrar = f.Filtrar, Ids = f.Ids
+        };
+
+        Func<AdminXmlFilaDto, string> clave = por switch
+        {
+            "receptor" => x => $"{x.RfcReceptor} {x.NombreReceptor}",
+            "mes" => x => x.FechaEmision.ToString("yyyy-MM"),
+            "uso" => x => x.UsoCfdi,
+            "metodo" => x => x.MetodoPago,
+            "tipo" => x => Tipos.GetValueOrDefault(x.TipoCfdi, x.TipoCfdi),
+            _ => x => $"{x.RfcEmisor} {x.NombreEmisor}"
+        };
+
+        static decimal Signo(AdminXmlFilaDto x) => x.TipoCfdi == "E" ? -1 : 1;
+
+        var grupos = _repo.ObtenerSeleccionAdministracionXml(sinPestana)
+            .Where(x => x.TipoCfdi is "I" or "E")
+            .GroupBy(clave)
+            .OrderByDescending(g => g.Sum(x => Signo(x) * x.Total))
+            .ToList();
+
+        string titulo = por switch
+        {
+            "emisor" => "Emisor", "receptor" => "Receptor", "mes" => "Mes", "uso" => "Uso CFDI",
+            "metodo" => "Método de pago", _ => "Tipo"
+        };
+
+        IXLWorksheet ws = libro.AddWorksheet($"Por {titulo}");
+        string[] columnas =
+        [
+            titulo, "Serie", "Folio", "UUID", "Tipo", "Fecha Emision", "RFC Emisor", "Nombre Emisor",
+            "RFC Receptor", "Nombre Receptor", "UsoCFDI", "Metodo de Pago", "SubTotal", "IVA", "Total"
+        ];
+        int[] dinero = [13, 14, 15];
+
+        for (int c = 0; c < columnas.Length; c++)
+        {
+            ws.Cell(1, c + 1).Value = columnas[c];
+        }
+
+        ws.Row(1).Style.Font.Bold = true;
+
+        int r = 2;
+
+        foreach (var g in grupos)
+        {
+            int inicio = r;
+
+            foreach (AdminXmlFilaDto x in g.OrderBy(x => x.FechaEmision))
+            {
+                object?[] valores =
+                [
+                    g.Key, x.Serie, x.Folio, x.Uuid, Tipos.GetValueOrDefault(x.TipoCfdi, x.TipoCfdi), x.FechaEmision,
+                    x.RfcEmisor, x.NombreEmisor, x.RfcReceptor, x.NombreReceptor, x.UsoCfdi, x.MetodoPago,
+                    Signo(x) * x.Subtotal, Signo(x) * x.Iva, Signo(x) * x.Total
+                ];
+
+                for (int c = 0; c < valores.Length; c++)
+                {
+                    ws.Cell(r, c + 1).Value = valores[c] switch
+                    {
+                        decimal d => d,
+                        DateTime dt => dt,
+                        _ => XLCellValue.FromObject(valores[c])
+                    };
+                }
+
+                r++;
+            }
+
+            ws.Rows(inicio, r - 1).Group();
+            ws.Cell(r, 1).Value = $"Total {g.Key}";
+            ws.Cell(r, 2).FormulaA1 = $"SUBTOTAL(3,D{inicio}:D{r - 1})";
+
+            foreach (int c in dinero)
+            {
+                string letra = ws.Column(c + 1).ColumnLetter();
+                ws.Cell(r, c + 1).FormulaA1 = $"SUBTOTAL(9,{letra}{inicio}:{letra}{r - 1})";
+            }
+
+            ws.Row(r).Style.Font.Bold = true;
+            r++;
+        }
+
+        if (r > 2)
+        {
+            ws.Rows(2, r - 1).Group();
+        }
+
+        // SUBTOTAL ignora los subtotales de cada grupo, así que el total general no los suma dos veces.
+        ws.Cell(r, 1).Value = "Total general";
+        ws.Row(r).Style.Font.Bold = true;
+
+        if (r > 2)
+        {
+            ws.Cell(r, 2).FormulaA1 = $"SUBTOTAL(3,D2:D{r - 1})";
+
+            foreach (int c in dinero)
+            {
+                string letra = ws.Column(c + 1).ColumnLetter();
+                ws.Cell(r, c + 1).FormulaA1 = $"SUBTOTAL(9,{letra}2:{letra}{r - 1})";
+            }
+        }
+
+        foreach (int c in dinero)
+        {
+            ws.Column(c + 1).Style.NumberFormat.Format = "#,##0.00";
+        }
+
+        ws.SheetView.FreezeRows(1);
+        ws.Columns().AdjustToContents(1, Math.Min(r, 200), 8, 50);
     }
 
     private static bool EsTraslado(ImpuestoDto i) => i.Tipo.StartsWith("TRAS", StringComparison.OrdinalIgnoreCase);
@@ -409,6 +531,87 @@ public class AdministracionXmlService
 
                 r.Hechos++;
                 progreso?.Report(r);
+            }
+
+            return r;
+        }, ct);
+    }
+
+    /// <summary>XML del filtro en un ZIP que se queda guardado en Storage\ZIP\{RFC} (copia en la bóveda).</summary>
+    public Task<ResultadoProcesoXml> ZipXmlAsync(EmpresaDto empresa, AdminXmlFiltroDto f, IProgress<ResultadoProcesoXml>? progreso, CancellationToken ct)
+    {
+        string carpeta = Storage("ZIP", empresa.Rfc);
+        string nombre = Path.GetFileNameWithoutExtension(NombreReporte(empresa, f, "general")) + "_XML.zip";
+        string ruta = Path.Combine(carpeta, nombre);
+
+        // No sobrescribe un ZIP guardado antes con el mismo nombre.
+        for (int i = 2; File.Exists(ruta); i++)
+        {
+            ruta = Path.Combine(carpeta, $"{Path.GetFileNameWithoutExtension(nombre)} ({i}).zip");
+        }
+
+        return ArmarZipAsync(f, ruta, Path.GetFileName(ruta), carpeta, ".xml", x => File.ReadAllBytes(RutaExistente(x)), progreso, ct);
+    }
+
+    /// <summary>PDF del filtro generados al vuelo en un ZIP temporal: no se guarda, se borra al descargarlo.</summary>
+    public Task<ResultadoProcesoXml> ZipPdfAsync(EmpresaDto empresa, AdminXmlFiltroDto f, IProgress<ResultadoProcesoXml>? progreso, CancellationToken ct)
+    {
+        string ruta = Path.Combine(DescargasTemporales.CarpetaTemporal, $"{Guid.NewGuid():N}.zip");
+        string nombre = Path.GetFileNameWithoutExtension(NombreReporte(empresa, f, "general")) + "_PDF.zip";
+
+        return ArmarZipAsync(f, ruta, nombre, "", ".pdf", x => _pdf.Generar(_parser.Parse(RutaExistente(x))), progreso, ct);
+    }
+
+    /// <summary>Un archivo {UUID}{extension} por CFDI del filtro (los UUID repetidos entran una vez). Si se cancela, no deja el ZIP a medias.</summary>
+    private Task<ResultadoProcesoXml> ArmarZipAsync(AdminXmlFiltroDto f, string ruta, string nombre, string carpeta, string extension,
+        Func<AdminXmlFilaDto, byte[]> contenido, IProgress<ResultadoProcesoXml>? progreso, CancellationToken ct)
+    {
+        return Task.Run(() =>
+        {
+            List<AdminXmlFilaDto> filas = _repo.ObtenerSeleccionAdministracionXml(f);
+            var r = new ResultadoProcesoXml { Total = filas.Count, Carpeta = carpeta, Archivo = ruta, NombreArchivo = nombre };
+            var agregados = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(ruta)!);
+
+            try
+            {
+                using (var zip = ZipFile.Open(ruta, ZipArchiveMode.Create))
+                {
+                    foreach (AdminXmlFilaDto x in filas)
+                    {
+                        ct.ThrowIfCancellationRequested();
+
+                        if (agregados.Add(x.Uuid))
+                        {
+                            try
+                            {
+                                byte[] bytes = contenido(x);
+                                using Stream entrada = zip.CreateEntry(x.Uuid + extension, CompressionLevel.Fastest).Open();
+                                entrada.Write(bytes);
+                                r.Correctos++;
+                            }
+                            catch (Exception ex) when (ex is not OperationCanceledException)
+                            {
+                                r.Errores++;
+                            }
+                        }
+
+                        r.Hechos++;
+                        progreso?.Report(r);
+                    }
+                }
+
+                if (r.Correctos == 0)
+                {
+                    File.Delete(ruta);
+                    r.Archivo = "";
+                }
+            }
+            catch
+            {
+                File.Delete(ruta);
+                throw;
             }
 
             return r;
@@ -648,6 +851,11 @@ public sealed class ResultadoProcesoXml
     public int Correctos { get; set; }
     public int Errores { get; set; }
     public string Carpeta { get; set; } = "";
+
+    /// <summary>Archivo que armó el proceso (ZIP) y el nombre con que se descarga; vacío si no armó nada.</summary>
+    public string Archivo { get; set; } = "";
+    public string NombreArchivo { get; set; } = "";
+
     public Dictionary<string, int> Detalle { get; } = new();
 
     /// <summary>Avance por tipo de comprobante (I, E, T, P, N): hechos de total.</summary>

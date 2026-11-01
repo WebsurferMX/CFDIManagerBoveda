@@ -13,6 +13,8 @@
 @inject AdministracionXmlService Admin
 @inject CatalogoLogosService Logos
 @inject IJSRuntime JS
+@inject CFDIManager.Web.Services.Seguridad.AccesoEmpresasService Acceso
+@inject DescargasTemporales Descargas
 @inject CFDIManager.Web.Services.Storage.EstadoSincronizacionStorage Sincronizacion
 @inject RutaXmlService Rutas
 @inject CFDIManager.Web.Services.Sat.EstadoDescargaAutomaticaSat DescargaSat
@@ -150,6 +152,9 @@
                         <option value="agrupado:emisor">Agrupado por emisor</option>
                         <option value="agrupado:receptor">Agrupado por receptor</option>
                         <option value="agrupado:mes">Agrupado por mes</option>
+                        <option value="agrupado:uso">Uso CFDI</option>
+                        <option value="agrupado:metodo">Método de pago</option>
+                        <option value="agrupado:tipo">Tipo</option>
                         <option value="pareto">Análisis 80-20 (Pareto) con dashboard</option>
                     </select>
                 </div>
@@ -262,8 +267,6 @@
                         <option value="vigentes">Vigentes</option>
                         <option value="cancelados">Cancelados</option>
                         <option value="sinvalidar">Sin validar en SAT</option>
-                        <option value="verificados">Verificados</option>
-                        <option value="noverificados">No verificados</option>
                         <option value="duplicados">Duplicados (mismo UUID en varios XML)</option>
                         <option value="ppd">PPD (pago en parcialidades)</option>
                     </select>
@@ -650,7 +653,6 @@
         ("Básica",
         [
             ("Exportar a Excel", "bi-file-earmark-excel", "verde", () => Exportar(TipoReporte)),
-            ("Guardar a Excel", "bi-floppy", "verde", GuardarExcel),
             ("Enviar por correo", "bi-envelope-paper", "azul", PrepararCorreo),
             ("Abrir XML", "bi-filetype-xml", "azul", Sincrona(AbrirXml)),
             ("Generar PDF", "bi-file-earmark-pdf", "rojo", GenerarPdf),
@@ -660,10 +662,9 @@
         [
             ("Localizar XML", "bi-search", "azul", Sincrona(Localizar)),
             ("Importar XML", "bi-upload", "azul", Sincrona(() => AbrirModal("importar"))),
-            ("Verificado ó Asoc.", "bi-check2-square", "verde", AlternarVerificado),
-            ("Copiar ruta(s) XML", "bi-clipboard", "ambar", CopiarRutas),
+            ("Descargar XML (ZIP)", "bi-file-earmark-zip", "ambar", DescargarZipXml),
+            ("Descargar PDF (ZIP)", "bi-file-earmark-zip", "rojo", DescargarZipPdf),
             ("PDFs masivos", "bi-files", "rojo", PdfMasivo),
-            ("Conceptos", "bi-list-ul", "azul", () => Exportar("conceptos")),
             ("Agrupaciones", "bi-diagram-3", "ambar", Sincrona(() => AbrirModal("agrupaciones"))),
             ("Re-nombrar XML", "bi-input-cursor-text", "azul", Sincrona(() => AbrirModal("renombrar"))),
             ("Catálogo de logos", "bi-images", "ambar", Sincrona(() => AbrirModal("logos"))),
@@ -817,16 +818,15 @@
 
     private static readonly List<Columna> Columnas = new()
     {
-        new("verificado", "Verificado ó Asoc.", x => x.Verificado ? "✓" : "", ClaseFn: _ => "ok"),
+        new("serie", "Serie", x => x.Serie),
+        new("folio", "Folio", x => x.Folio),
+        new("uuid", "UUID", x => x.Uuid, ClaseFn: _ => "uuid"),
         new("estado_sat", "Estado SAT", x => TextoEstadoSat(x.EstadoSat), ClaseFn: x => x.EstadoSat.Equals("Cancelado", StringComparison.OrdinalIgnoreCase) ? "mal" : x.EstadoSat.Equals("Vigente", StringComparison.OrdinalIgnoreCase) ? "ok" : ""),
         new("validacion", "Últ. validación", x => x.FechaValidacionSat is DateTime v ? v.ToString("dd/MM/yyyy HH:mm") + (x.OrigenValidacionSat == "Metadatos SAT" ? " · metadatos" : "") : "Nunca"),
         new("version", "Versión", x => x.Version),
         new("tipo", "Tipo", x => NombreTipo(x.TipoCfdi)),
         new("fecha", "Fecha emisión", x => x.FechaEmision.ToString("dd/MM/yyyy")),
         new("timbrado", "Fecha timbrado", x => x.FechaTimbrado?.ToString("dd/MM/yyyy HH:mm:ss") ?? ""),
-        new("serie", "Serie", x => x.Serie),
-        new("folio", "Folio", x => x.Folio),
-        new("uuid", "UUID", x => x.Uuid, ClaseFn: _ => "uuid"),
         new("rfc_emisor", "RFC emisor", x => x.RfcEmisor),
         new("nombre_emisor", "Nombre emisor", x => x.NombreEmisor, ClaseFn: _ => "largo"),
         new("rfc_receptor", "RFC receptor", x => x.RfcReceptor),
@@ -1461,28 +1461,16 @@
         $"/api/empresa/{EmpresaContext.EmpresaId}/cfdi/{id}/{tipo}{(descargar ? "?descargar=true" : "")}";
 
     // ---------- acciones ----------
+    // Guarda una copia en la bóveda (Storage\Reportes\{RFC}) y además la descarga en el navegador.
     private async Task Exportar(string reporte)
     {
         try
         {
             AdminXmlFiltroDto f = FiltroAccion();
             EmpresaDto empresa = EmpresaContext.EmpresaActiva!;
-            (byte[] contenido, string nombre) = await Task.Run(() => Admin.GenerarExcel(empresa, f, reporte));
-            await JS.InvokeVoidAsync("descargarArchivoBase64", nombre,
+            (string ruta, byte[] contenido) = await Task.Run(() => Admin.GuardarExcel(empresa, f, reporte));
+            await JS.InvokeVoidAsync("descargarArchivoBase64", Path.GetFileName(ruta),
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Convert.ToBase64String(contenido));
-        }
-        catch (Exception ex)
-        {
-            Avisar(ex.Message, error: true);
-        }
-    }
-
-    private async Task GuardarExcel()
-    {
-        try
-        {
-            AdminXmlFiltroDto f = FiltroAccion();
-            string ruta = await Task.Run(() => Admin.GuardarExcel(EmpresaContext.EmpresaActiva!, f, TipoReporte));
             Avisar($"Guardado en {ruta}", carpeta: Path.GetDirectoryName(ruta)!);
         }
         catch (Exception ex)
@@ -1539,60 +1527,31 @@
         }
     }
 
-    /// <summary>Marcados (o todo el filtro, con confirmación) o, si no hay, el renglón activo. Desmarca solo si todos ya estaban verificados.</summary>
-    private async Task AlternarVerificado()
+    // El XML se queda guardado en Storage\ZIP\{RFC}; el de PDF se arma al vuelo y se borra al bajarlo.
+    private Task DescargarZipXml()
     {
-        List<AdminXmlFilaDto> objetivo;
-
-        try
-        {
-            objetivo = TodoElFiltro || Marcadas.Count > 0
-                ? Repo.ObtenerSeleccionAdministracionXml(FiltroAccion())
-                : Activa is { } a ? new() { a } : new();
-        }
-        catch (Exception ex)
-        {
-            Avisar(ex.Message, error: true);
-            return;
-        }
-
-        if (objetivo.Count == 0)
-        {
-            Avisar("Marca o selecciona comprobantes.", error: true);
-            return;
-        }
-
-        bool verificar = !objetivo.All(f => f.Verificado);
-
-        if (TodoElFiltro && !await JS.InvokeAsync<bool>("confirm",
-                $"¿{(verificar ? "Marcar" : "Desmarcar")} como verificados los {objetivo.Count:N0} comprobantes del filtro?"))
-        {
-            return;
-        }
-
-        List<long> ids = objetivo.Select(f => f.CfdiId).ToList();
-        int n = Repo.MarcarVerificadosAdministracionXml(EmpresaContext.EmpresaId, ids, verificar);
-
-        foreach (AdminXmlFilaDto f in Filas.Where(f => ids.Contains(f.CfdiId)))
-        {
-            f.Verificado = verificar;
-        }
-
-        Avisar($"{n} {(verificar ? "marcados como verificados" : "desmarcados")}.");
+        AdminXmlFiltroDto f = FiltroAccion();
+        return Ejecutar("ZIP de XML", (p, ct) => Admin.ZipXmlAsync(EmpresaContext.EmpresaActiva!, f, p, ct), recargar: false,
+            alTerminar: r => BajarZip(r, borrar: false));
     }
 
-    private async Task CopiarRutas()
+    private Task DescargarZipPdf()
     {
-        try
+        AdminXmlFiltroDto f = FiltroAccion();
+        return Ejecutar("ZIP de PDF", (p, ct) => Admin.ZipPdfAsync(EmpresaContext.EmpresaActiva!, f, p, ct), recargar: false,
+            alTerminar: r => BajarZip(r, borrar: true));
+    }
+
+    private async Task BajarZip(ResultadoProcesoXml r, bool borrar)
+    {
+        if (r.Archivo == "")
         {
-            List<string> rutas = Repo.ObtenerSeleccionAdministracionXml(FiltroAccion()).Select(f => f.RutaXml).ToList();
-            await JS.InvokeVoidAsync("navigator.clipboard.writeText", string.Join("\r\n", rutas));
-            Avisar($"{rutas.Count} rutas copiadas al portapapeles.");
+            return;
         }
-        catch (Exception ex)
-        {
-            Avisar(ex.Message, error: true);
-        }
+
+        string usuario = (await Acceso.ObtenerUsuarioActualAsync()).Identity?.Name ?? "";
+        string token = Descargas.Registrar(r.Archivo, r.NombreArchivo, borrar, usuario);
+        await JS.InvokeVoidAsync("descargarUrl", $"/api/descargas/{token}");
     }
 
     private void LeerComplemento()
@@ -1614,8 +1573,10 @@
     // ---------- procesos con progreso ----------
     /// <param name="alAvanzar">Se llama con cada avance y al terminar (bajo el candado del resultado).</param>
     /// <param name="texto">Texto de avance propio; por omisión "hechos de total".</param>
+    /// <param name="alTerminar">Se llama solo si el proceso terminó (no si se canceló o falló).</param>
     private async Task Ejecutar(string titulo, Func<IProgress<ResultadoProcesoXml>, CancellationToken, Task<ResultadoProcesoXml>> proceso, bool recargar,
-        Action<ResultadoProcesoXml>? alAvanzar = null, Func<ResultadoProcesoXml, string>? texto = null)
+        Action<ResultadoProcesoXml>? alAvanzar = null, Func<ResultadoProcesoXml, string>? texto = null,
+        Func<ResultadoProcesoXml, Task>? alTerminar = null)
     {
         if (EnProceso)
         {
@@ -1652,6 +1613,11 @@
             string detalle = r.Detalle.Count > 0 ? " · " + string.Join(", ", r.Detalle.Select(d => $"{d.Key}: {d.Value}")) : "";
             TextoProceso = $"{titulo}: terminado ({r.Hechos:N0})";
             Avisar($"{titulo}: {r.Correctos:N0} correctos, {r.Errores:N0} con error{detalle}.", error: r.Errores > 0 && r.Correctos == 0, carpeta: r.Carpeta);
+
+            if (alTerminar is not null)
+            {
+                await alTerminar(r);
+            }
         }
         catch (OperationCanceledException)
         {

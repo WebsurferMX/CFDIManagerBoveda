@@ -19,7 +19,7 @@ public static class ReporteGeneral
     /// <summary>Filtro usado para el nombre del archivo y el periodo del dashboard.</summary>
     public sealed record Filtro(string? Rfc, string? Direccion, int? Anio, int? Mes);
 
-    public sealed record Entrada(Origen Fila, XDocument Xml, string? EstadoSat, bool Verificado);
+    public sealed record Entrada(Origen Fila, XDocument Xml, string? EstadoSat);
 
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     private static readonly string[] Meses = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SEPTIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
@@ -85,16 +85,16 @@ public static class ReporteGeneral
 
     private static readonly string[] TasasIeps = ["0.03", "0.06", "0.07", "0.08", "0.09", "0.265", "0.3", "0.53", "1.6"];
 
+    // Serie, Folio y UUID primero, como en la rejilla de Administración de XML.
     private static readonly Columna[] Comprobante =
     [
-        new("Verificado ó Asoc.", f => f.C.E.Verificado ? "Sí" : ""),
+        new("Serie", f => f.C.A(f.C.Root, "Serie")),
+        new("Folio", f => f.C.A(f.C.Root, "Folio")),
+        new("UUID", f => f.C.A(f.C.Timbre, "UUID")),
         new("Estado SAT", f => f.C.E.EstadoSat ?? ""),
         new("Tipo", f => f.C.Tipo switch { "I" => "Factura", "E" => "NotaCredito", "T" => "Traslado", "P" => "Pago", "N" => "Nomina", var t => t }),
         new("Fecha Emision", f => f.C.FechaCorta),
         new("Fecha Timbrado", f => f.C.A(f.C.Timbre, "FechaTimbrado")),
-        new("Serie", f => f.C.A(f.C.Root, "Serie")),
-        new("Folio", f => f.C.A(f.C.Root, "Folio")),
-        new("UUID", f => f.C.A(f.C.Timbre, "UUID")),
         new("UUID Relacion", f => string.Join(" ", f.C.Relacionados)),
         new("RFC Emisor", f => f.C.A(f.C.Emisor, "Rfc").ToUpperInvariant()),
         new("Nombre Emisor", f => f.C.A(f.C.Emisor, "Nombre")),
@@ -141,14 +141,13 @@ public static class ReporteGeneral
 
     private static readonly Columna[] Pago =
     [
-        new("Verificado ó Asoc.", f => f.C.E.Verificado ? "Sí" : ""),
+        new("Serie", f => f.C.A(f.C.Root, "Serie")),
+        new("Folio", f => f.C.A(f.C.Root, "Folio")),
+        new("UUID", f => f.C.A(f.C.Timbre, "UUID")),
         new("Estado SAT", f => f.C.E.EstadoSat ?? ""),
         new("Version", f => f.C.A(f.C.Root, "Version")),
         new("TipoComprobante", f => f.C.Tipo),
         new("Fecha Emision", f => f.C.FechaCorta),
-        new("Serie", f => f.C.A(f.C.Root, "Serie")),
-        new("Folio", f => f.C.A(f.C.Root, "Folio")),
-        new("UUID", f => f.C.A(f.C.Timbre, "UUID")),
         new("RFC Emisor", f => f.C.A(f.C.Emisor, "Rfc").ToUpperInvariant()),
         new("Nombre Emisor", f => f.C.A(f.C.Emisor, "Nombre")),
         new("RFC Receptor", f => f.C.ReceptorRfc),
@@ -180,13 +179,12 @@ public static class ReporteGeneral
 
     private static readonly Columna[] Nomina =
     [
-        new("Verificado ó Asoc.", f => f.C.E.Verificado ? "Sí" : ""),
-        new("EstadoSAT", f => f.C.E.EstadoSat ?? ""),
-        new("FechaEmision", f => f.C.FechaCorta),
-        new("FechaTimbrado", f => f.C.A(f.C.Timbre, "FechaTimbrado")),
         new("Serie", f => f.C.A(f.C.Root, "Serie")),
         new("Folio", f => f.C.A(f.C.Root, "Folio")),
         new("UUID", f => f.C.A(f.C.Timbre, "UUID")),
+        new("EstadoSAT", f => f.C.E.EstadoSat ?? ""),
+        new("FechaEmision", f => f.C.FechaCorta),
+        new("FechaTimbrado", f => f.C.A(f.C.Timbre, "FechaTimbrado")),
         new("RFC Receptor", f => f.C.ReceptorRfc),
         new("NombreReceptor", f => f.C.ReceptorNombre),
         new("RegistroPatronal", f => f.C.A(f.C.Hijo(f.C.Nomina, "Emisor"), "RegistroPatronal")),

@@ -235,14 +235,15 @@
                 <table class="table table-vcenter card-table table-hover text-nowrap">
                     <thead>
                         <tr>
-                            <th><button type="button" class="table-sort @ClaseOrden("fecha_emision")" @onclick="@(() => Ordenar("fecha_emision"))">Fecha</button></th>
-                            <th><button type="button" class="table-sort @ClaseOrden("tipo_cfdi")" @onclick="@(() => Ordenar("tipo_cfdi"))">Tipo</button></th>
+                            @* Serie, Folio y UUID primero, como en Administración de XML y sus reportes. *@
                             <th>Serie / Folio</th>
+                            <th>UUID</th>
+                            <th title="Estado SAT y fecha de la última validación">Estado SAT</th>
+                            <th><button type="button" class="table-sort @ClaseOrden("tipo_cfdi")" @onclick="@(() => Ordenar("tipo_cfdi"))">Tipo</button></th>
+                            <th><button type="button" class="table-sort @ClaseOrden("fecha_emision")" @onclick="@(() => Ordenar("fecha_emision"))">Fecha</button></th>
                             <th><button type="button" class="table-sort @ClaseOrden("rfc")" @onclick="@(() => Ordenar("rfc"))">@EtiquetaRfc</button></th>
                             <th><button type="button" class="table-sort @ClaseOrden("nombre")" @onclick="@(() => Ordenar("nombre"))">@EtiquetaNombre</button></th>
                             <th class="text-end"><button type="button" class="table-sort @ClaseOrden("total")" @onclick="@(() => Ordenar("total"))">Total</button></th>
-                            <th>UUID</th>
-                            <th title="Estado SAT y fecha de la última validación">Estado SAT</th>
                             <th class="w-1">Acciones</th>
                         </tr>
                     </thead>
@@ -264,17 +265,17 @@
                             @foreach (CfdiConsultaDto cfdi in Resultado.Registros)
                             {
                                 <tr class="fila @(Seleccionado?.CfdiId == cfdi.CfdiId ? "table-active" : "")" @onclick="() => Seleccionar(cfdi)">
-                                    <td class="text-secondary">@cfdi.FechaEmision.ToString("dd/MM/yyyy HH:mm")</td>
-                                    <td><span class="badge bg-@ColorTipo(cfdi.TipoCfdi)-lt" title="@NombreTipo(cfdi.TipoCfdi)">@cfdi.TipoCfdi</span></td>
                                     <td><strong>@cfdi.Serie</strong> @cfdi.Folio</td>
-                                    <td class="font-monospace small">@ObtenerRfc(cfdi)</td>
-                                    <td class="nombre text-truncate" title="@ObtenerNombre(cfdi)">@ObtenerNombre(cfdi)</td>
-                                    <td class="text-end"><span class="fw-bold">@Moneda(cfdi.Total)</span> <span class="text-secondary small">@cfdi.Moneda</span></td>
                                     <td class="font-monospace small text-secondary" title="@cfdi.UUID">@AbreviarUuid(cfdi.UUID)</td>
                                     <td title="@TituloValidacion(cfdi)">
                                         <span class="status status-@ColorEstadoSat(cfdi.EstadoSat)"><span class="status-dot"></span>@ObtenerTextoEstadoSat(cfdi.EstadoSat)</span>
                                         <div class="small text-secondary validacion">@TextoValidacion(cfdi)</div>
                                     </td>
+                                    <td><span class="badge bg-@ColorTipo(cfdi.TipoCfdi)-lt" title="@NombreTipo(cfdi.TipoCfdi)">@cfdi.TipoCfdi</span></td>
+                                    <td class="text-secondary">@cfdi.FechaEmision.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td class="font-monospace small">@ObtenerRfc(cfdi)</td>
+                                    <td class="nombre text-truncate" title="@ObtenerNombre(cfdi)">@ObtenerNombre(cfdi)</td>
+                                    <td class="text-end"><span class="fw-bold">@Moneda(cfdi.Total)</span> <span class="text-secondary small">@cfdi.Moneda</span></td>
                                     <td @onclick:stopPropagation="true">
                                         <div class="btn-list flex-nowrap">
                                             <a class="btn btn-sm btn-icon btn-outline-blue" href="@ObtenerUrlXml(cfdi.CfdiId)" target="_blank" rel="noopener noreferrer" title="Ver XML">

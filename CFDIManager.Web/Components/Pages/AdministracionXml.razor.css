@@ -275,6 +275,12 @@ th.ordenada { color: var(--bs-primary); }
 th.ordenable .bi { margin-left: 2px; font-size: .62rem; opacity: .35; }
 th.ordenada .bi { opacity: 1; }
 
+/* Líneas verticales tenues entre columnas, además de las horizontales de Bootstrap. */
+.rejilla thead th + th,
+.rejilla tbody td + td {
+    border-left: 1px solid var(--bs-border-color-translucent);
+}
+
 /* Fila elegida: azul sólido (Bootstrap pinta las celdas con estas variables). */
 .rejilla tbody tr { cursor: default; }
 
