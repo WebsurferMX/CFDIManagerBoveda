@@ -664,7 +664,6 @@
             ("Importar XML", "bi-upload", "azul", Sincrona(() => AbrirModal("importar"))),
             ("Descargar XML (ZIP)", "bi-file-earmark-zip", "ambar", DescargarZipXml),
             ("Descargar PDF (ZIP)", "bi-file-earmark-zip", "rojo", DescargarZipPdf),
-            ("PDFs masivos", "bi-files", "rojo", PdfMasivo),
             ("Agrupaciones", "bi-diagram-3", "ambar", Sincrona(() => AbrirModal("agrupaciones"))),
             ("Re-nombrar XML", "bi-input-cursor-text", "azul", Sincrona(() => AbrirModal("renombrar"))),
             ("Catálogo de logos", "bi-images", "ambar", Sincrona(() => AbrirModal("logos"))),
@@ -1765,11 +1764,6 @@
         }
     }
 
-    private Task PdfMasivo()
-    {
-        AdminXmlFiltroDto f = FiltroAccion();
-        return Ejecutar("PDFs masivos", (p, ct) => Admin.PdfMasivoAsync(EmpresaContext.EmpresaActiva!, f, p, ct), recargar: false);
-    }
 
     private Task Renombrar()
     {

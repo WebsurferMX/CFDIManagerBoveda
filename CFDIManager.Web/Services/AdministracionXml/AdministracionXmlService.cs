@@ -505,38 +505,6 @@ public class AdministracionXmlService
 
     // ---------- procesos masivos ----------
 
-    public Task<ResultadoProcesoXml> PdfMasivoAsync(EmpresaDto empresa, AdminXmlFiltroDto f, IProgress<ResultadoProcesoXml>? progreso, CancellationToken ct)
-    {
-        return Task.Run(() =>
-        {
-            List<AdminXmlFilaDto> filas = _repo.ObtenerSeleccionAdministracionXml(f);
-            var r = new ResultadoProcesoXml { Total = filas.Count, Carpeta = Storage("PDF", empresa.Rfc) };
-
-            foreach (AdminXmlFilaDto x in filas)
-            {
-                ct.ThrowIfCancellationRequested();
-
-                try
-                {
-                    string carpeta = Storage("PDF", empresa.Rfc, x.Clasificacion == "RECIBIDO" ? "Recibidos" : "Emitidos",
-                        x.FechaEmision.ToString("yyyy"), x.FechaEmision.ToString("MM"));
-                    Directory.CreateDirectory(carpeta);
-                    File.WriteAllBytes(Path.Combine(carpeta, $"{x.Uuid}.pdf"), _pdf.Generar(_parser.Parse(RutaExistente(x))));
-                    r.Correctos++;
-                }
-                catch
-                {
-                    r.Errores++;
-                }
-
-                r.Hechos++;
-                progreso?.Report(r);
-            }
-
-            return r;
-        }, ct);
-    }
-
     /// <summary>XML del filtro en un ZIP que se queda guardado en Storage\ZIP\{RFC} (copia en la bóveda).</summary>
     public Task<ResultadoProcesoXml> ZipXmlAsync(EmpresaDto empresa, AdminXmlFiltroDto f, IProgress<ResultadoProcesoXml>? progreso, CancellationToken ct)
     {
