@@ -34,7 +34,12 @@ public partial class PostgreSqlRepository
             // El mismo XML (UUID) copiado en más de un archivo de la carpeta de la empresa.
             ["duplicados"] = @"(SELECT COUNT(*) FROM storage_archivos s
                                 WHERE s.empresa_id = c.empresa_id AND s.uuid = UPPER(c.uuid)) > 1",
-            ["ppd"] = "UPPER(COALESCE(c.metodo_pago, '')) = 'PPD'"
+            ["ppd"] = "UPPER(COALESCE(c.metodo_pago, '')) = 'PPD'",
+            // Los dos lados: el que relaciona (su XML trae CfdiRelacionados) y el relacionado (otro CFDI de la empresa lo cita).
+            ["relacionados"] = @"(EXISTS (SELECT 1 FROM cfdi_relacionados r WHERE r.cfdi_id = c.cfdi_id)
+                                  OR EXISTS (SELECT 1 FROM cfdi_relacionados r
+                                             INNER JOIN cfdi o ON o.cfdi_id = r.cfdi_id
+                                             WHERE o.empresa_id = c.empresa_id AND UPPER(r.uuid_relacionado) = UPPER(c.uuid)))"
         };
 
     private static readonly Dictionary<string, (string Clave, string Nombre)> AgrupacionesAdminXml =
@@ -86,7 +91,10 @@ public partial class PostgreSqlRepository
                 cfdi_id BIGINT PRIMARY KEY
                     REFERENCES cfdi (cfdi_id) ON DELETE CASCADE,
                 fecha_marca TIMESTAMP NOT NULL DEFAULT NOW()
-            );", conn);
+            );
+
+            -- Filtro Relacionados y recuadro de relacionados: buscan quién relaciona a un UUID sin importar mayúsculas.
+            CREATE INDEX IF NOT EXISTS ix_cfdi_relacionados_uuid_upper ON cfdi_relacionados (UPPER(uuid_relacionado));", conn);
 
         cmd.ExecuteNonQuery();
 
