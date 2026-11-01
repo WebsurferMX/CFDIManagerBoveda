@@ -129,6 +129,23 @@ public partial class PostgreSqlRepository
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>Cambia solo la contraseña de la e.firma (al cifrar las guardadas en claro).</summary>
+    public void ActualizarPasswordFiel(long empresaId, string passwordKey)
+    {
+        using var cn = new NpgsqlConnection(_connectionString);
+        cn.Open();
+
+        using var cmd = new NpgsqlCommand(@"
+            UPDATE empresas_sat
+            SET password_key = @password_key
+            WHERE empresa_id = @empresa_id;", cn);
+
+        cmd.Parameters.AddWithValue("empresa_id", empresaId);
+        cmd.Parameters.AddWithValue("password_key", passwordKey);
+
+        cmd.ExecuteNonQuery();
+    }
+
     /// <summary>Columnas de la descarga automática del SAT. Idempotente; se llama al arrancar.</summary>
     public void AsegurarDescargaAutomatica()
     {

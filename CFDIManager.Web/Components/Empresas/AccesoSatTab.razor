@@ -169,6 +169,13 @@
                                    type="password"
                                    @bind-Value="PasswordKey" />
 
+                        @if (PasswordKeyIlegible is not null && PasswordKey == "")
+                        {
+                            <div class="form-text text-warning">
+                                La contraseña guardada no se puede leer en este equipo; captúrala de nuevo.
+                            </div>
+                        }
+
                     </div>
 
                     <div class="col-md-6 mb-3">
@@ -341,6 +348,10 @@ public void ConfirmarGuardado(EmpresaSatDto guardado)
     CiecNueva = string.Empty;
     CapturandoCiec = false;
     EliminarCiec = false;
+
+    if (PasswordKey != "")
+        PasswordKeyIlegible = null;
+
     StateHasChanged();
 }
 
@@ -352,6 +363,12 @@ private void CiecValidada()
 }
 
 private string PasswordKey = string.Empty;
+
+// Contraseña de la e.firma guardada que no se pudo descifrar: se conserva mientras no se capture otra.
+private string? PasswordKeyIlegible;
+
+[Inject]
+private FielPasswordProtector ProtectorFiel { get; set; } = default!;
 
 private DateTime? FechaVencimiento;
 
@@ -518,7 +535,9 @@ public EmpresaSatDto ObtenerModelo(long empresaId, string rfc)
         SatUsuario = ciec is null ? null : Rfc.Trim().ToUpperInvariant(),
         SatPassword = ciec,
 
-        PasswordKey = PasswordKey,
+        PasswordKey = PasswordKey == "" && PasswordKeyIlegible is not null
+            ? PasswordKeyIlegible
+            : ProtectorFiel.Cifrar(PasswordKey),
 
         FechaVencimiento = FechaVencimiento,
 
@@ -572,6 +591,7 @@ private void CargarConfiguracion()
     RutaCerGuardada = null;
     RutaKeyGuardada = null;
     PasswordKeyGuardada = string.Empty;
+    PasswordKeyIlegible = null;
 
     CiecGuardada = string.Empty;
     CiecNueva = string.Empty;
@@ -604,7 +624,15 @@ private void CargarConfiguracion()
     CiecUltimaPrueba = sat.CiecUltimaPrueba;
     CiecResultado = sat.CiecResultado;
 
-    PasswordKey = sat.PasswordKey ?? "";
+    try
+    {
+        PasswordKey = ProtectorFiel.Descifrar(sat.PasswordKey) ?? "";
+    }
+    catch (InvalidOperationException)
+    {
+        PasswordKeyIlegible = sat.PasswordKey;
+    }
+
     PasswordKeyGuardada = PasswordKey;
 
     FechaVencimiento = sat.FechaVencimiento;

@@ -1,7 +1,4 @@
 <Solution>
-  <Project Path="CFDIManager.Api/CFDIManager.Api.csproj" />
-  <Project Path="CFDIManager.Application/CFDIManager.Application.csproj" />
-  <Project Path="CFDIManager.Domain/CFDIManager.Domain.csproj" />
   <Project Path="CFDIManager.Web/CFDIManager.Web.csproj" />
   <Project Path="CFDIParser/CFDIParser.csproj" />
 </Solution>

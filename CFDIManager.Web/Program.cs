@@ -94,6 +94,7 @@ builder.Services.AddHostedService<CFDIManager.Web.Services.Sat.DescargaAutomatic
 
 // Administración de XML
 builder.Services.AddSingleton<CFDIManager.Web.Services.Sat.CiecProtector>();
+builder.Services.AddSingleton<CFDIManager.Web.Services.Sat.FielPasswordProtector>();
 
 // Una sesión del portal del SAT por pestaña del navegador (circuito de Blazor).
 builder.Services.AddScoped<CFDIManager.Web.Services.Sat.DescargaCiecService>();
@@ -277,6 +278,34 @@ using (IServiceScope scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         app.Logger.LogError(ex, "No se pudo pasar la e.firma a las carpetas por RFC.");
+    }
+
+    // Solo con clave maestra: cifrarlas con llaves de este equipo impediría usarlas en los demás.
+    if (ClaveMaestra.Leer(app.Configuration) is not null)
+    {
+        try
+        {
+            PostgreSqlRepository repoFiel = scope.ServiceProvider.GetRequiredService<PostgreSqlRepository>();
+            var protectorFiel = app.Services.GetRequiredService<CFDIManager.Web.Services.Sat.FielPasswordProtector>();
+            int cifradas = 0;
+
+            foreach (EmpresaDto empresa in repoFiel.ObtenerEmpresas())
+            {
+                if (repoFiel.ObtenerEmpresaSat(empresa.EmpresaId)?.PasswordKey is { Length: > 0 } password &&
+                    !CFDIManager.Web.Services.Sat.ProtectorConPrefijo.EstaCifrada(password))
+                {
+                    repoFiel.ActualizarPasswordFiel(empresa.EmpresaId, protectorFiel.Cifrar(password)!);
+                    cifradas++;
+                }
+            }
+
+            if (cifradas > 0)
+                app.Logger.LogInformation("Contraseña de la e.firma cifrada en {Cantidad} empresas.", cifradas);
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogError(ex, "No se pudieron cifrar las contraseñas de la e.firma.");
+        }
     }
 
     try

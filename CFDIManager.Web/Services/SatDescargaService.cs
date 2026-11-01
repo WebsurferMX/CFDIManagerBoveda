@@ -37,17 +37,20 @@ public class SatDescargaService : ISatDescargaService
     private readonly IWebHostEnvironment _ambiente;
     private readonly IHttpClientFactory _httpFactory;
     private readonly ImportacionCfdiService _importacion;
+    private readonly FielPasswordProtector _passwordFiel;
 
     public SatDescargaService(
         PostgreSqlRepository repo,
         IWebHostEnvironment ambiente,
         IHttpClientFactory httpFactory,
-        ImportacionCfdiService importacion)
+        ImportacionCfdiService importacion,
+        FielPasswordProtector passwordFiel)
     {
         _repo = repo;
         _ambiente = ambiente;
         _httpFactory = httpFactory;
         _importacion = importacion;
+        _passwordFiel = passwordFiel;
     }
 
     public Task<SatEstadoDto> ValidarConfiguracionAsync(
@@ -85,7 +88,7 @@ public class SatDescargaService : ISatDescargaService
         try
         {
             using FielSat fiel =
-                FielSat.Abrir(rutaCer, rutaKey, sat.PasswordKey ?? "");
+                FielSat.Abrir(rutaCer, rutaKey, _passwordFiel.Descifrar(sat.PasswordKey) ?? "");
 
             estado.LlaveValida = true;
             estado.FechaVencimiento = fiel.VigenteHasta;
@@ -576,7 +579,7 @@ public class SatDescargaService : ISatDescargaService
             ?? throw new InvalidOperationException("La empresa no tiene configurada su e.firma (Empresas → Acceso SAT).");
 
         FielSat fiel =
-            FielSat.Abrir(ResolverRuta(sat.RutaCer), ResolverRuta(sat.RutaKey), sat.PasswordKey ?? "");
+            FielSat.Abrir(ResolverRuta(sat.RutaCer), ResolverRuta(sat.RutaKey), _passwordFiel.Descifrar(sat.PasswordKey) ?? "");
 
         string? problema =
             !fiel.EsFiel ? "El certificado configurado es un sello digital (CSD); la descarga masiva requiere la e.firma (FIEL)."
