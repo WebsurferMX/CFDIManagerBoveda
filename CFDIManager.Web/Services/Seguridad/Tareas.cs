@@ -32,7 +32,7 @@ public static class Tareas
         new("administracion-xml", "Administración de XML", "Operación", "bi-folder2-open", "administracion-xml", Operativos),
         new("importaciones", "Importaciones", "Operación", "bi-cloud-arrow-up-fill", "importaciones", Operativos),
         new("exportaciones", "Exportaciones", "Consulta", "bi-file-earmark-excel-fill", "exportaciones", Todos),
-        new("exportacion-sinube", "Exportación a SINUBE", "SINUBE", "bi-send-fill", "exportacion-sinube", Operativos),
+        new("exportacion-sinube", "Importación a SINUBE", "SINUBE", "bi-send-fill", "exportacion-sinube", Operativos),
         new("conciliacion-sinube", "Conciliación SINUBE", "SINUBE", "bi-arrow-left-right", "conciliacion-sinube", Operativos),
         new("efos", "EFOS / EDOS", "Consulta", "bi-shield-exclamation", "efos", Todos, CoincidenciaExacta: true),
         new("xml-azulejeras", "XML Azulejeras", "Utilerías", "bi-file-earmark-zip-fill", "utilerias/xmlazulejeras", Todos),

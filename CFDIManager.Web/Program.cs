@@ -130,6 +130,10 @@ builder.Services.AddHttpClient(
 
 builder.Services.AddSingleton<CFDIManager.Web.Services.Sat.SatMovilCliente>();
 
+// Respaldo diario (base + Storage) a la carpeta de Herramientas, p. ej. dentro de OneDrive.
+builder.Services.AddSingleton<CFDIManager.Web.Services.Respaldo.RespaldoService>();
+builder.Services.AddHostedService<CFDIManager.Web.Services.Respaldo.RespaldoHostedService>();
+
 // Mes con el que abren las pantallas (Herramientas, solo Administrador).
 builder.Services.AddSingleton<PeriodoTrabajoService>();
 
@@ -166,7 +170,7 @@ builder.Services.AddScoped<ExportacionExcelService>();
 
 builder.Services.AddScoped<XmlAzulejerasService>();
 
-// Exportación a SINUBE (mismo protocolo que HerramientasSinube; 40 s por petición como el original).
+// Importación a SINUBE (mismo protocolo que HerramientasSinube; 40 s por petición como el original).
 builder.Services.AddHttpClient(
     CFDIManager.Web.Services.Sinube.SinubeService.ClienteHttp,
     cliente => cliente.Timeout = TimeSpan.FromSeconds(40));
@@ -335,7 +339,7 @@ using (IServiceScope scope = app.Services.CreateScope())
     }
     catch (Exception ex)
     {
-        app.Logger.LogError(ex, "No se pudieron crear las tablas de Exportación a SINUBE.");
+        app.Logger.LogError(ex, "No se pudieron crear las tablas de Importación a SINUBE.");
     }
 
     try
@@ -521,21 +525,5 @@ app.MapRazorComponents<App>()
 
 app.Run();
 
-static string CadenaPostgres(IConfiguration configuration)
-{
-    string cadenaBase =
-        configuration.GetConnectionString("PostgreSQL")
-        ?? throw new InvalidOperationException(
-            "No existe ConnectionStrings:PostgreSQL.");
-
-    // Variable de entorno o, en desarrollo, user secrets (dotnet user-secrets set CFDI_POSTGRES_PASSWORD ...).
-    string password =
-        Environment.GetEnvironmentVariable(
-            "CFDI_POSTGRES_PASSWORD")
-        ?? configuration["CFDI_POSTGRES_PASSWORD"]
-        ?? throw new InvalidOperationException(
-            "No existe la variable CFDI_POSTGRES_PASSWORD (ni en user secrets).");
-
-    return new NpgsqlConnectionStringBuilder(cadenaBase) { Password = password }.ConnectionString;
-}
+static string CadenaPostgres(IConfiguration configuration) => ConexionPostgres.Cadena(configuration);
 

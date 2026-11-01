@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.DataProtection;
 namespace CFDIManager.Web.Services.Sinube;
 
 /// <summary>
-/// Exportación a SINUBE. Reproduce el protocolo de HerramientasSinube 13.9 (analizado con REA):
+/// Importación a SINUBE. Reproduce el protocolo de HerramientasSinube 13.9 (analizado con REA):
 /// facturas de clientes (frmImportarFacturasDeXmlV2, tipo=5), de proveedores
 /// (frmFacturasProveedorXMLV2, tipo=49) y la validación de usuario (validaUsuarioSinube).
 /// Los XML se leen de la carpeta de la empresa (&lt;RFC&gt;\Emitidos|Recibidos\Año\Mes) sin moverlos;
@@ -297,11 +297,29 @@ public class SinubeService
     /// Con <paramref name="sinFolio"/> las facturas de clientes se importan con el foliador elegido
     /// (comparten historial con las de clientes para no duplicarlas en SINUBE).
     /// </summary>
-    public async Task EnviarAsync(
+    public Task EnviarAsync(
         EmpresaDto empresa,
         SinubeConfiguracionDto configuracion,
         bool clientes,
         DateTime periodo,
+        ISet<string>? tiposComprobante,
+        bool reenviar,
+        bool enviarConAdvertenciaIeps,
+        Func<SinubeEnvioDto, int, int, Task> progreso,
+        CancellationToken cancelacion,
+        SinubeSinFolioDto? sinFolio = null) =>
+        EnviarArchivosAsync(empresa, configuracion, clientes, Archivos(empresa, clientes, periodo), tiposComprobante,
+            reenviar, enviarConAdvertenciaIeps, progreso, cancelacion, sinFolio);
+
+    /// <summary>
+    /// Como <see cref="EnviarAsync"/> pero con una lista de XML (p. ej. los modificados de XML Azulejeras),
+    /// con las mismas validaciones, omisiones y registro en sinube_envios.
+    /// </summary>
+    public async Task EnviarArchivosAsync(
+        EmpresaDto empresa,
+        SinubeConfiguracionDto configuracion,
+        bool clientes,
+        List<string> archivos,
         ISet<string>? tiposComprobante,
         bool reenviar,
         bool enviarConAdvertenciaIeps,
@@ -317,7 +335,6 @@ public class SinubeService
         if (sinFolio is not null && string.IsNullOrWhiteSpace(sinFolio.LlaveFoliador))
             throw new InvalidOperationException("Seleccione un foliador.");
 
-        List<string> archivos = Archivos(empresa, clientes, periodo);
         string tipo = clientes ? "C" : "P";
         HashSet<string> enviados = reenviar ? [] : _repo.ObtenerUuidsEnviadosSinube(empresa.EmpresaId, tipo);
         string password = clientes ? Password(configuracion) : "";

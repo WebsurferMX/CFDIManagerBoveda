@@ -7,9 +7,11 @@
 @using Microsoft.JSInterop
 
 @using CFDIManager.Web.Services
+@using CFDIManager.Web.Services.Sinube
 @using CFDIParser.Models
 
 @inject XmlAzulejerasService Servicio
+@inject SinubeService Sinube
 @inject EmpresaContext EmpresaContext
 @inject IJSRuntime JS
 @inject PeriodoTrabajoService Periodo
@@ -23,8 +25,8 @@
             <span class="eyebrow">CFDI MANAGER</span>
             <h1>Generar XML Azulejeras</h1>
             <p>
-                Genera un ZIP con XML modificados para mostrador
-                (RFC XAXX010101000).
+                Analiza los emitidos del periodo, genera los XML de mostrador (público general XAXX010101000) con la serie y el
+                cliente de cada sucursal, y súbelos a SINUBE.
             </p>
         </div>
     </header>
@@ -46,55 +48,58 @@
                 </strong>
             </div>
         </section>
-@if (EsEmpresaAzulejera())
-{
-    <section class="export-card">
 
-<div class="date-range-card">
-    <div class="date-field">
-        <label>📅 Desde</label>
-        <FechaInput @bind-Valor="FechaInicio" />
-    </div>
+        @if (!EsEmpresaAzulejera())
+        {
+            <section class="message error-message">
+                <strong>Sin equivalencias.</strong>
+                <span>Esta empresa no tiene series de mostrador configuradas para XML Azulejeras.</span>
+            </section>
+        }
+        else
+        {
+            <section class="export-card">
+                <div class="date-range-card">
+                    <div class="date-field">
+                        <label>📅 Desde</label>
+                        <FechaInput @bind-Valor="FechaInicio" />
+                    </div>
 
-    <div class="date-arrow">
-        ➜
-    </div>
+                    <div class="date-arrow">➜</div>
 
-    <div class="date-field">
-        <label>📅 Hasta</label>
-        <FechaInput @bind-Valor="FechaFin" />
-    </div>
+                    <div class="date-field">
+                        <label>📅 Hasta</label>
+                        <FechaInput @bind-Valor="FechaFin" />
+                    </div>
+                </div>
 
-</div>
+                <div class="export-actions">
+                    <button type="button" class="secondary-button" @onclick="Restablecer" disabled="@Ocupado">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                        <span>Restablecer</span>
+                    </button>
 
-        <div class="export-actions">
-            <button type="button"
-                    class="secondary-button"
-                    @onclick="Restablecer"
-                    disabled="@Generando">
+                    <button type="button" class="secondary-button" @onclick="Analizar" disabled="@(Ocupado || FechaFin.Date < FechaInicio.Date)">
+                        <i class="bi bi-bar-chart-line"></i>
+                        <span>@(Analizando ? "Analizando..." : "Analizar")</span>
+                    </button>
 
-                <i class="bi bi-arrow-counterclockwise"></i>
-                <span>Restablecer</span>
-            </button>
-            <button type="button"
-                    class="primary-button"
-                    @onclick="GenerarZip"
-                    disabled="@(!PuedeGenerar)">
-                @if (Generando)
-                {
-                    <i class="bi bi-hourglass-split"></i>
-                    <span>Generando...</span>
-                }
-                else
-                {
-                    <i class="bi bi-file-earmark-zip-fill"></i>
-                    <span>Generar XML Azulejeras</span>
-                }
-            </button>
-        </div>
-    </section>
-}
-
+                    <button type="button" class="primary-button" @onclick="GenerarZip" disabled="@(!PuedeGenerar)"
+                            title="@(Series is null ? "Primero analiza el periodo" : SeriesElegidas.Count == 0 ? "Elige al menos una serie" : "")">
+                        @if (Generando)
+                        {
+                            <i class="bi bi-hourglass-split"></i>
+                            <span>Generando...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-file-earmark-zip-fill"></i>
+                            <span>Generar XML Azulejeras</span>
+                        }
+                    </button>
+                </div>
+            </section>
+        }
     }
 
     @if (!string.IsNullOrWhiteSpace(Error))
@@ -105,169 +110,263 @@
         </section>
     }
 
-    @if (Resultado is not null)
-{
-    <section class="summary-strip">
-
-        <button type="button"
-                class="summary-item invoice">
-            <span class="summary-code">XML</span>
-            <span>
-                <small>Leídos</small>
-                <strong>@Resultado.Leidos.ToString("N0")</strong>
-            </span>
-        </button>
-
-        <button type="button"
-                class="summary-item payroll">
-            <span class="summary-code">OK</span>
-            <span>
-                <small>Modificados</small>
-                <strong>@Resultado.Modificados.ToString("N0")</strong>
-            </span>
-        </button>
-
-        <button type="button"
-                class="summary-item credit-note">
-            <span class="summary-code">=</span>
-            <span>
-                <small>Sin cambio</small>
-                <strong>@Resultado.SinCambios.ToString("N0")</strong>
-            </span>
-        </button>
-
-        <button type="button"
-                class="summary-item transfer">
-            <span class="summary-code">!</span>
-            <span>
-                <small>Errores</small>
-                <strong>@Resultado.Errores.ToString("N0")</strong>
-            </span>
-        </button>
-
-    </section>
-
-    <section class="summary-strip">
-
-        <button type="button"
-                class="summary-item total">
-            <span class="summary-code">$</span>
-            <span>
-                <small>Importe Total</small>
-                <strong>@Moneda(Resultado.ImporteTotal)</strong>
-            </span>
-        </button>
-
-        <button type="button"
-                class="summary-item invoice">
-            <span class="summary-code">$</span>
-            <span>
-                <small>Con Cambio</small>
-                <strong>@Moneda(Resultado.ImporteModificados)</strong>
-            </span>
-        </button>
-
-        <button type="button"
-                class="summary-item credit-note">
-            <span class="summary-code">$</span>
-            <span>
-                <small>Sin Cambio</small>
-                <strong>@Moneda(Resultado.ImporteSinCambios)</strong>
-            </span>
-        </button>
-
-    </section>
-
-    @if (Resultado.Detalles?.Count > 0)
+    @if (Series is not null)
     {
-        <section class="grid-card">
+        List<SerieAzulejeraDto> elegidas = Series.Where(s => SeriesElegidas.Contains(s.Serie)).ToList();
 
-            <div class="grid-toolbar">
-                <div>
-                    <strong>Detalle de XML procesados</strong>
-                    <span>
-                        @Resultado.Detalles.Count.ToString("N0")
-                        registro(s)
+        <div class="card shadow-sm border-primary-subtle mb-3">
+            <div class="card-header bg-primary-subtle d-flex flex-wrap align-items-center justify-content-between gap-2 py-2">
+                <div class="fw-semibold">
+                    <i class="bi bi-bar-chart-line me-1"></i>Análisis del periodo
+                    <span class="text-body-secondary fw-normal small ms-1">
+                        @FechaInicio.ToString("dd/MM/yyyy") – @FechaFin.ToString("dd/MM/yyyy")
                     </span>
+                </div>
+                <div class="d-flex flex-wrap gap-2 small">
+                    <span class="badge rounded-pill text-bg-secondary">@Series.Sum(s => s.Total).ToString("N0") emitidos</span>
+                    <span class="badge rounded-pill text-bg-secondary">@Series.Count serie(s)</span>
+                    <span class="badge rounded-pill text-bg-primary">Se modificarán @elegidas.Sum(s => s.PublicoGeneral).ToString("N0")</span>
+                    <span class="badge rounded-pill text-bg-success">@Moneda(elegidas.Sum(s => s.ImportePublicoGeneral))</span>
                 </div>
             </div>
 
-            <div class="table-container">
-
-                <table class="cfdi-table">
-
-                    <thead>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light">
                         <tr>
-                            <th>Fecha</th>
-                            <th>Tipo</th>
+                            <th class="text-center" style="width: 4rem">
+                                <input type="checkbox" class="form-check-input" title="Marcar todas" disabled="@Ocupado"
+                                       checked="@(Convertibles.Any() && Convertibles.All(s => SeriesElegidas.Contains(s.Serie)))"
+                                       @onchange="e => ElegirTodas(e.Value is true)" />
+                            </th>
                             <th>Serie</th>
-                            <th>Nueva Serie</th>
-                            <th>Total</th>
-                            <th>UUID</th>
-                            <th>Resultado</th>
+                            @foreach (string tipo in TiposPresentes)
+                            {
+                                <th class="text-end" title="@NombreTipo(tipo)">@NombreTipo(tipo)</th>
+                            }
+                            <th class="text-end">Total</th>
+                            <th class="text-end">Público general</th>
+                            <th class="text-end">Importe público general</th>
+                            <th>Se convierte a</th>
                         </tr>
                     </thead>
-
                     <tbody>
-
-                        @foreach (var item in Resultado.Detalles)
+                        @foreach (SerieAzulejeraDto s in Series)
                         {
-                            <tr>
+                            bool convertible = s.TieneEquivalencia && s.PublicoGeneral > 0;
 
+                            <tr class="@(convertible ? "" : "text-body-secondary")">
+                                <td class="text-center">
+                                    <input type="checkbox" class="form-check-input" disabled="@(!convertible || Ocupado)"
+                                           checked="@SeriesElegidas.Contains(s.Serie)"
+                                           @onchange="e => ElegirSerie(s.Serie, e.Value is true)" />
+                                </td>
+                                <td><span class="badge text-bg-light border fs-6">@(s.Serie == "" ? "(sin serie)" : s.Serie)</span></td>
+                                @foreach (string tipo in TiposPresentes)
+                                {
+                                    <td class="text-end">@(s.PorTipo.GetValueOrDefault(tipo) is int n and > 0 ? n.ToString("N0") : "—")</td>
+                                }
+                                <td class="text-end fw-semibold">@s.Total.ToString("N0")</td>
+                                <td class="text-end fw-semibold text-primary-emphasis">@s.PublicoGeneral.ToString("N0")</td>
+                                <td class="text-end">@Moneda(s.ImportePublicoGeneral)</td>
                                 <td>
-                                    @item.FechaEmision
-                                        .ToString("dd/MM/yyyy")
-                                </td>
-
-                                <td>
-                                    <span class="type-badge invoice">
-                                        @item.TipoCfdi
-                                    </span>
-                                </td>
-
-                                <td>
-                                    @item.SerieOriginal
-                                </td>
-
-                                <td>
-                                    @item.SerieNueva
-                                </td>
-
-                                <td class="amount-cell">
-                                    @Moneda(item.Total)
-                                </td>
-
-                                <td class="uuid-cell">
-                                    @item.UUID
-                                </td>
-
-                                <td>
-                                    @if (item.Resultado == "MODIFICADO")
+                                    @if (s.TieneEquivalencia)
                                     {
-                                        <span class="estado-sat estado-vigente">
-                                            Modificado
-                                        </span>
+                                        <i class="bi bi-arrow-right text-body-secondary me-1"></i>
+                                        <span class="badge text-bg-primary">@s.SerieNueva</span>
+                                        <span class="small ms-1">@s.NombreReceptor</span>
                                     }
                                     else
                                     {
-                                        <span class="estado-sat estado-pendiente">
-                                            Sin cambio
-                                        </span>
+                                        <span class="small fst-italic">Sin equivalencia: no se modifica</span>
                                     }
                                 </td>
-
                             </tr>
                         }
-
                     </tbody>
-
+                    <tfoot class="table-light fw-semibold">
+                        <tr>
+                            <td></td>
+                            <td>Total</td>
+                            @foreach (string tipo in TiposPresentes)
+                            {
+                                <td class="text-end">@Series.Sum(s => s.PorTipo.GetValueOrDefault(tipo)).ToString("N0")</td>
+                            }
+                            <td class="text-end">@Series.Sum(s => s.Total).ToString("N0")</td>
+                            <td class="text-end">@Series.Sum(s => s.PublicoGeneral).ToString("N0")</td>
+                            <td class="text-end">@Moneda(Series.Sum(s => s.ImportePublicoGeneral))</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
                 </table>
-
             </div>
 
-        </section>
+            <div class="card-footer small text-body-secondary">
+                Solo se modifican los comprobantes a público general (XAXX010101000) de las series marcadas, ingresos y
+                egresos; la nómina nunca se modifica ni se sube a SINUBE. El resto del periodo no se toca.
+            </div>
+        </div>
     }
-}
+
+    @if (Resultado is not null)
+    {
+        <section class="summary-strip">
+            <button type="button" class="summary-item invoice">
+                <span class="summary-code">XML</span>
+                <span><small>Leídos</small><strong>@Resultado.Leidos.ToString("N0")</strong></span>
+            </button>
+            <button type="button" class="summary-item payroll">
+                <span class="summary-code">OK</span>
+                <span><small>Modificados</small><strong>@Resultado.Modificados.ToString("N0")</strong></span>
+            </button>
+            <button type="button" class="summary-item credit-note">
+                <span class="summary-code">=</span>
+                <span><small>Sin cambio</small><strong>@Resultado.SinCambios.ToString("N0")</strong></span>
+            </button>
+            <button type="button" class="summary-item transfer">
+                <span class="summary-code">!</span>
+                <span><small>Errores</small><strong>@Resultado.Errores.ToString("N0")</strong></span>
+            </button>
+        </section>
+
+        <section class="summary-strip">
+            <button type="button" class="summary-item total">
+                <span class="summary-code">$</span>
+                <span><small>Importe total</small><strong>@Moneda(Resultado.ImporteTotal)</strong></span>
+            </button>
+            <button type="button" class="summary-item invoice">
+                <span class="summary-code">$</span>
+                <span><small>Con cambio</small><strong>@Moneda(Resultado.ImporteModificados)</strong></span>
+            </button>
+            <button type="button" class="summary-item credit-note">
+                <span class="summary-code">$</span>
+                <span><small>Sin cambio</small><strong>@Moneda(Resultado.ImporteSinCambios)</strong></span>
+            </button>
+        </section>
+
+        @if (Resultado.Archivos.Count > 0)
+        {
+            <section class="grid-card">
+                <div class="grid-toolbar">
+                    <div>
+                        <strong>Importación a SINUBE</strong>
+                        <span>@Resultado.Archivos.Count.ToString("N0") XML modificados listos para subir</span>
+                    </div>
+                </div>
+
+                <div class="p-3">
+                    @if (FaltaSinube is not null)
+                    {
+                        <div class="alert alert-warning small mb-0">
+                            @FaltaSinube Configúralo en <a href="exportacion-sinube" class="alert-link">Importación a SINUBE</a>.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            @if (Subiendo)
+                            {
+                                <button type="button" class="secondary-button" @onclick="() => CancelacionSinube?.Cancel()">
+                                    <i class="bi bi-stop-circle"></i><span>Detener</span>
+                                </button>
+                                <span class="small">Subiendo @Procesados.ToString("N0") de @Resultado.Archivos.Count.ToString("N0")…</span>
+                            }
+                            else
+                            {
+                                <button type="button" class="primary-button" @onclick="SubirASinube" disabled="@Ocupado">
+                                    <i class="bi bi-cloud-arrow-up-fill"></i>
+                                    <span>Subir @Resultado.Archivos.Count.ToString("N0") XML a SINUBE</span>
+                                </button>
+                                <span class="small text-body-secondary">
+                                    Mismo proceso que Importación a SINUBE: los UUID que ya se subieron antes se descartan.
+                                </span>
+                            }
+                        </div>
+                    }
+
+                    @if (Envios.Count > 0)
+                    {
+                        <div class="d-flex flex-wrap gap-3 mt-3 small">
+                            <span class="badge text-bg-success fs-6">Subidos: @Contar("OK").ToString("N0")</span>
+                            <span class="badge text-bg-info fs-6">Ya existían en SINUBE: @Contar("EXISTE").ToString("N0")</span>
+                            <span class="badge text-bg-warning fs-6">Descartados: @Descartados.ToString("N0")</span>
+                            <span class="text-body-secondary align-self-center">
+                                @string.Join(" · ", new[] { "OMITIDO", "IEPS", "INVALIDO", "ERROR" }
+                                    .Where(e => Contar(e) > 0).Select(e => $"{TextoEstatus(e)}: {Contar(e):N0}"))
+                            </span>
+                        </div>
+
+                        <div class="table-container mt-2">
+                            <table class="cfdi-table">
+                                <thead>
+                                    <tr><th>Serie-Folio</th><th>UUID</th><th>Estatus</th><th>Mensaje</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (SinubeEnvioDto envio in Envios.AsEnumerable().Reverse().Take(500))
+                                    {
+                                        <tr>
+                                            <td class="text-nowrap">@envio.Serie @envio.Folio</td>
+                                            <td class="uuid-cell">@envio.Uuid</td>
+                                            <td>
+                                                <span class="badge @ClaseEstatus(envio.Estatus)">@TextoEstatus(envio.Estatus)</span>
+                                            </td>
+                                            <td class="small">@envio.Mensaje</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+
+        @if (Resultado.Detalles.Count > 0)
+        {
+            <section class="grid-card">
+                <div class="grid-toolbar">
+                    <div>
+                        <strong>Detalle de XML modificados</strong>
+                        <span>@Resultado.Detalles.Count.ToString("N0") registro(s)</span>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="cfdi-table">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th><th>Tipo</th><th>Serie</th><th>Nueva serie</th><th>Cliente</th><th>Total</th><th>UUID</th><th>Resultado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Resultado.Detalles)
+                            {
+                                <tr>
+                                    <td>@item.FechaEmision.ToString("dd/MM/yyyy")</td>
+                                    <td><span class="type-badge invoice">@item.TipoCfdi</span></td>
+                                    <td>@item.SerieOriginal</td>
+                                    <td>@item.SerieNueva</td>
+                                    <td class="small">@item.NombreNuevo</td>
+                                    <td class="amount-cell">@Moneda(item.Total)</td>
+                                    <td class="uuid-cell">@item.UUID</td>
+                                    <td>
+                                        @if (item.Resultado == "MODIFICADO")
+                                        {
+                                            <span class="estado-sat estado-vigente">Modificado</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="estado-sat estado-cancelado" title="@item.Resultado">Error</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        }
+    }
 
 </div>
 
@@ -277,36 +376,51 @@
 
     private DateTime FechaFin { get; set; }
 
-    private bool Generando { get; set; }
+    private bool Analizando;
+    private bool Generando;
+    private bool Subiendo;
+    private bool Ocupado => Analizando || Generando || Subiendo;
 
     private string? Error { get; set; }
 
+    private List<SerieAzulejeraDto>? Series;
+    private HashSet<string> SeriesElegidas = new(StringComparer.OrdinalIgnoreCase);
+
     private XmlAzulejerasResultado? Resultado;
 
-    private static readonly HashSet<string> EmpresasAzulejeras =
-    [
-        "AAT040526RQ9",
-        "ABM090330T23",
-        "AZU010730A22",
-        "AMA071204531"
-    ];
+    private List<SinubeEnvioDto> Envios = [];
+    private int Procesados;
+    private CancellationTokenSource? CancelacionSinube;
+    private string? FaltaSinube;
 
-    private bool EsEmpresaAzulejera()
-    {
-        return EmpresaContext.EmpresaActiva is not null &&
-            EmpresasAzulejeras.Contains(EmpresaContext.EmpresaActiva.Rfc);
-    }
+    private static readonly string[] OrdenTipos = ["I", "E", "P", "T", "N"];
 
-    private static string Moneda(decimal importe)
+    private IEnumerable<string> TiposPresentes =>
+        OrdenTipos.Where(t => Series?.Any(s => s.PorTipo.ContainsKey(t)) == true)
+            .Concat(Series?.SelectMany(s => s.PorTipo.Keys).Distinct().Where(t => !OrdenTipos.Contains(t)) ?? []);
+
+    private static string NombreTipo(string tipo) => tipo switch
     {
-        return importe.ToString("C2");
-    }
+        "I" => "Ingreso",
+        "E" => "Egreso",
+        "P" => "Pago",
+        "T" => "Traslado",
+        "N" => "Nómina",
+        _ => tipo
+    };
+
+    private bool EsEmpresaAzulejera() =>
+        EmpresaContext.EmpresaActiva is not null && XmlAzulejerasService.EsAzulejera(EmpresaContext.EmpresaActiva.Rfc);
+
+    private static string Moneda(decimal importe) => importe.ToString("C2");
 
     private bool PuedeGenerar =>
         EmpresaContext.TieneEmpresaActiva &&
         EsEmpresaAzulejera() &&
+        Series is not null &&
+        SeriesElegidas.Count > 0 &&
         FechaFin.Date >= FechaInicio.Date &&
-        !Generando;
+        !Ocupado;
 
     protected override void OnInitialized()
     {
@@ -316,53 +430,160 @@
         EmpresaContext.OnChange += EmpresaCambio;
     }
 
-    private async Task GenerarZip()
+    private async Task Analizar()
     {
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa)
+            return;
+
         Error = null;
         Resultado = null;
+        Envios = [];
+        Analizando = true;
 
-        if (EmpresaContext.EmpresaActiva is null)
+        try
         {
-            Error =
-                "Selecciona una empresa.";
+            Series = await Task.Run(() => Servicio.Analizar(empresa, FechaInicio, FechaFin));
 
-            return;
+            // Por omisión, todas las series que se pueden convertir.
+            SeriesElegidas = Series.Where(s => s.TieneEquivalencia && s.PublicoGeneral > 0)
+                .Select(s => s.Serie).ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Analizando = false;
+        }
+    }
 
+    private IEnumerable<SerieAzulejeraDto> Convertibles =>
+        Series?.Where(s => s.TieneEquivalencia && s.PublicoGeneral > 0) ?? [];
+
+    private void ElegirTodas(bool incluir) =>
+        SeriesElegidas = incluir
+            ? Convertibles.Select(s => s.Serie).ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : new(StringComparer.OrdinalIgnoreCase);
+
+    private void ElegirSerie(string serie, bool incluir)
+    {
+        if (incluir)
+            SeriesElegidas.Add(serie);
+        else
+            SeriesElegidas.Remove(serie);
+    }
+
+    private async Task GenerarZip()
+    {
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa)
+            return;
+
+        Error = null;
+        Resultado = null;
+        Envios = [];
         Generando = true;
 
         try
         {
-            Resultado =
-                await Task.Run(
-                    () => Servicio.GenerarZip(
-                        EmpresaContext.EmpresaActiva,
-                        FechaInicio,
-                        FechaFin));
+            var series = SeriesElegidas.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            Resultado = await Task.Run(() => Servicio.GenerarZip(empresa, FechaInicio, FechaFin, series));
 
-            string contenidoBase64 =
-                Convert.ToBase64String(
-                    Resultado.Contenido);
+            FaltaSinube = SinubeService.FaltanDatos(Sinube.ObtenerConfiguracion(empresa), requierePassword: true);
 
-            await JS.InvokeVoidAsync(
-                "descargarArchivoBase64",
-                Resultado.NombreArchivo,
-                Resultado.TipoContenido,
-                contenidoBase64);
+            if (Resultado.Archivos.Count > 0)
+            {
+                await JS.InvokeVoidAsync(
+                    "descargarArchivoBase64",
+                    Resultado.NombreArchivo,
+                    Resultado.TipoContenido,
+                    Convert.ToBase64String(Resultado.Contenido));
+            }
         }
         catch (Exception ex)
         {
-            Error =
-                ex.Message;
+            Error = ex.Message;
         }
         finally
         {
             Generando = false;
-
-            await InvokeAsync(
-                StateHasChanged);
+            await InvokeAsync(StateHasChanged);
         }
     }
+
+    /// <summary>Sube los XML modificados con el proceso de Importación a SINUBE (facturas de clientes).</summary>
+    private async Task SubirASinube()
+    {
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa || Resultado is null)
+            return;
+
+        Error = null;
+        Envios = [];
+        Procesados = 0;
+        Subiendo = true;
+        CancelacionSinube = new CancellationTokenSource();
+
+        try
+        {
+            SinubeConfiguracionDto configuracion = Sinube.ObtenerConfiguracion(empresa);
+            List<string> archivos = Resultado.Archivos.ToList();
+
+            await Task.Run(() => Sinube.EnviarArchivosAsync(
+                empresa,
+                configuracion,
+                clientes: true,
+                archivos,
+                tiposComprobante: null,
+                reenviar: false,
+                enviarConAdvertenciaIeps: false,
+                (envio, actual, total) => InvokeAsync(() =>
+                {
+                    Envios.Add(envio);
+                    Procesados = actual;
+                    StateHasChanged();
+                }),
+                CancelacionSinube.Token));
+        }
+        catch (OperationCanceledException)
+        {
+            Error = $"Proceso detenido. Se procesaron {Procesados:N0} de {Resultado.Archivos.Count:N0} XML.";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Subiendo = false;
+            CancelacionSinube?.Dispose();
+            CancelacionSinube = null;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private int Contar(string estatus) => Envios.Count(e => e.Estatus == estatus);
+
+    private int Descartados => Envios.Count(e => e.Estatus is not ("OK" or "EXISTE"));
+
+    private static string TextoEstatus(string estatus) => estatus switch
+    {
+        "OK" => "Subido",
+        "EXISTE" => "Ya existía",
+        "OMITIDO" => "Omitido",
+        "IEPS" => "Revisar IEPS",
+        "INVALIDO" => "XML inválido",
+        "ERROR" => "Error",
+        _ => estatus
+    };
+
+    private static string ClaseEstatus(string estatus) => estatus switch
+    {
+        "OK" => "text-bg-success",
+        "EXISTE" => "text-bg-info",
+        "OMITIDO" => "text-bg-secondary",
+        "IEPS" => "text-bg-warning",
+        _ => "text-bg-danger"
+    };
 
     private void Restablecer()
     {
@@ -370,17 +591,27 @@
         FechaFin = Periodo.Fin;
 
         Error = null;
+        Series = null;
+        SeriesElegidas.Clear();
         Resultado = null;
+        Envios = [];
     }
 
     private void EmpresaCambio()
     {
-        _ = InvokeAsync(
-            StateHasChanged);
+        _ = InvokeAsync(() =>
+        {
+            Series = null;
+            SeriesElegidas.Clear();
+            Resultado = null;
+            Envios = [];
+            StateHasChanged();
+        });
     }
 
     public void Dispose()
     {
+        CancelacionSinube?.Cancel();
         EmpresaContext.OnChange -= EmpresaCambio;
     }
 }

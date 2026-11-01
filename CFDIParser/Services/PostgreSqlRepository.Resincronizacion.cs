@@ -119,6 +119,18 @@ public partial class PostgreSqlRepository
         return true;
     }
 
+    /// <summary>Cambia solo la ruta del XML (cuando se encontró en la bóveda local).</summary>
+    public void ActualizarRutaXml(long cfdiId, string rutaXml)
+    {
+        using var conn = new NpgsqlConnection(_connectionString);
+        conn.Open();
+
+        using var cmd = new NpgsqlCommand("UPDATE cfdi SET ruta_xml = @ruta WHERE cfdi_id = @cfdi_id;", conn);
+        cmd.Parameters.AddWithValue("@cfdi_id", cfdiId);
+        cmd.Parameters.AddWithValue("@ruta", rutaXml);
+        cmd.ExecuteNonQuery();
+    }
+
     /// <summary>Id, UUID y ruta guardada de todos los CFDI de la empresa (para buscar los que no tienen XML).</summary>
     public List<(long CfdiId, string Uuid, string Ruta)> ObtenerRutasCfdi(long empresaId)
     {

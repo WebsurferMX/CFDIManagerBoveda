@@ -115,14 +115,32 @@ public class SincronizacionStorageService
             }
         }
 
+        // 5. Rutas de otro equipo o de una ubicación anterior de Storage: si el XML está en la bóveda
+        //    local (mismo RFC y subcarpetas), se guarda la ruta local. Tras la primera pasada solo revisa.
+        foreach ((long cfdiId, _, string ruta) in _repo.ObtenerRutasCfdi(empresa.EmpresaId))
+        {
+            ct.ThrowIfCancellationRequested();
+
+            if (ruta == "" || File.Exists(ruta))
+                continue;
+
+            string local = RutaXmlLocal.Resolver(ruta);
+
+            if (!string.Equals(local, ruta, StringComparison.OrdinalIgnoreCase) && File.Exists(local))
+            {
+                _repo.ActualizarRutaXml(cfdiId, local);
+                r.RutasCorregidas++;
+            }
+        }
+
         r.Fin = DateTime.Now;
         progreso?.Report(r);
 
-        if (r.Nuevos + r.Reubicados + r.Eliminados + r.Errores > 0 || r.Aviso != "")
+        if (r.Nuevos + r.Reubicados + r.Eliminados + r.Errores + r.RutasCorregidas > 0 || r.Aviso != "")
         {
             _log.LogInformation(
-                "Storage {Rfc}: {Nuevos} nuevos, {Reubicados} reubicados, {Eliminados} retirados, {Errores} con error. {Aviso}",
-                empresa.Rfc, r.Nuevos, r.Reubicados, r.Eliminados, r.Errores, r.Aviso);
+                "Storage {Rfc}: {Nuevos} nuevos, {Reubicados} reubicados, {Eliminados} retirados, {Rutas} rutas corregidas, {Errores} con error. {Aviso}",
+                empresa.Rfc, r.Nuevos, r.Reubicados, r.Eliminados, r.RutasCorregidas, r.Errores, r.Aviso);
         }
 
         return r;
@@ -183,6 +201,7 @@ public sealed class ResultadoSincronizacion
     public int Errores { get; set; }
     public int Reubicados { get; set; }
     public int Eliminados { get; set; }
+    public int RutasCorregidas { get; set; }
     public string Aviso { get; set; } = "";
 
     public string Resumen =>
@@ -190,6 +209,7 @@ public sealed class ResultadoSincronizacion
         : $"{Archivos:N0} XML · {Nuevos:N0} nuevos" +
           (YaRegistrados > 0 ? $" · {YaRegistrados:N0} ya registrados" : "") +
           (Reubicados > 0 ? $" · {Reubicados:N0} reubicados" : "") +
+          (RutasCorregidas > 0 ? $" · {RutasCorregidas:N0} rutas corregidas" : "") +
           (Eliminados > 0 ? $" · {Eliminados:N0} retirados (XML eliminado)" : "") +
           (Omitidos > 0 ? $" · {Omitidos:N0} de otro RFC" : "") +
           (Errores > 0 ? $" · {Errores:N0} con error" : "") +

@@ -1,0 +1,120 @@
+@using CFDIManager.Web.Services
+
+@* Explorador de carpetas del servidor (Herramientas, solo Administrador): el selector del navegador solo vería
+   el equipo del usuario. Las unidades SUBST se convierten a su ruta real, que es la que ve el servicio. *@
+
+<div class="border rounded p-2 mb-3">
+    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+        <button class="btn btn-sm btn-outline-secondary" disabled="@(Actual is null)" title="Subir un nivel" @onclick="Subir">
+            <i class="bi bi-arrow-up"></i>
+        </button>
+        <span class="font-monospace small flex-grow-1">@(Actual ?? $"Discos de {Environment.MachineName}")</span>
+        <button class="btn btn-sm btn-primary" disabled="@(Actual is null)" @onclick="() => OnElegir.InvokeAsync(CarpetaStorage.RutaReal(Actual!))">
+            <i class="bi bi-check-lg me-1"></i>Usar esta carpeta
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="OnCerrar">Cerrar</button>
+    </div>
+
+    @if (Error is not null)
+    {
+        <div class="small text-danger mb-2">@Error</div>
+    }
+
+    <div class="list-group list-group-flush small" style="max-height: 260px; overflow-y: auto">
+        @foreach ((string nombre, string ruta) in Subcarpetas)
+        {
+            <button type="button" class="list-group-item list-group-item-action py-1" @onclick="() => Explorar(ruta)">
+                <i class="bi @(Actual is null ? "bi-device-hdd" : "bi-folder") me-2"></i>@nombre
+            </button>
+        }
+        @if (Subcarpetas.Count == 0)
+        {
+            <div class="text-body-secondary py-1 px-2">Sin subcarpetas.</div>
+        }
+    </div>
+
+    @if (Actual is not null)
+    {
+        <div class="input-group input-group-sm mt-2" style="max-width: 420px">
+            <input class="form-control" placeholder="Nombre de carpeta nueva" @bind="NombreNueva" @bind:event="oninput" />
+            <button class="btn btn-outline-secondary" disabled="@string.IsNullOrWhiteSpace(NombreNueva)" @onclick="Crear">
+                <i class="bi bi-folder-plus me-1"></i>Crear aquí
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Carpeta con la que abre (o la más cercana que exista); sin ella, la lista de discos.</summary>
+    [Parameter] public string? Inicial { get; set; }
+
+    [Parameter] public EventCallback<string> OnElegir { get; set; }
+
+    [Parameter] public EventCallback OnCerrar { get; set; }
+
+    private string? Actual;
+    private List<(string Nombre, string Ruta)> Subcarpetas = [];
+    private string NombreNueva = "";
+    private string? Error;
+
+    protected override void OnInitialized()
+    {
+        string? inicio = Inicial is { Length: > 0 } i && Path.IsPathRooted(i.Trim()) ? i.Trim() : null;
+
+        while (inicio is not null && !Directory.Exists(inicio))
+            inicio = Path.GetDirectoryName(inicio);
+
+        Explorar(inicio);
+    }
+
+    private void Explorar(string? carpeta)
+    {
+        Error = null;
+
+        try
+        {
+            Subcarpetas = carpeta is null
+                ? DriveInfo.GetDrives()
+                    .Where(d => d.IsReady && d.DriveType is DriveType.Fixed or DriveType.Network or DriveType.Removable)
+                    .Select(d => CarpetaStorage.RutaReal(d.Name) is var real && real != d.Name
+                        ? ($"{d.Name}  (SUBST de {real}; se usará la ruta real)", d.RootDirectory.FullName)
+                        : ($"{d.Name}  {d.VolumeLabel}  ({d.AvailableFreeSpace / 1_073_741_824:N0} GB libres)", d.RootDirectory.FullName))
+                    .ToList()
+                : new DirectoryInfo(carpeta).EnumerateDirectories()
+                    .Where(d => !d.Attributes.HasFlag(FileAttributes.Hidden) && !d.Attributes.HasFlag(FileAttributes.System))
+                    .OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase)
+                    .Select(d => (d.Name, d.FullName))
+                    .ToList();
+
+            Actual = carpeta;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Error = $"No se puede abrir {carpeta}: {ex.Message}";
+        }
+    }
+
+    private void Subir() => Explorar(Actual is null ? null : Path.GetDirectoryName(Actual));
+
+    private void Crear()
+    {
+        string nombre = NombreNueva.Trim();
+
+        if (Actual is null || nombre.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            Error = "El nombre de la carpeta no es válido.";
+            return;
+        }
+
+        try
+        {
+            string nueva = Directory.CreateDirectory(Path.Combine(Actual, nombre)).FullName;
+            NombreNueva = "";
+            Explorar(nueva);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Error = $"No se pudo crear la carpeta: {ex.Message}";
+        }
+    }
+}

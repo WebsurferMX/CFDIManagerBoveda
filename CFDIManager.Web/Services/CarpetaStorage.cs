@@ -34,6 +34,30 @@ public static class CarpetaStorage
     }
 
     /// <summary>
+    /// La ruta real si empieza con una unidad SUBST (p. ej. D:\ → C:\WebApps\...). SUBST solo existe en la
+    /// sesión del usuario que la creó: el servicio (cuenta del sistema) no la ve.
+    /// </summary>
+    public static string RutaReal(string ruta)
+    {
+        if (ruta.Length < 2 || ruta[1] != ':' || !OperatingSystem.IsWindows())
+            return ruta;
+
+        var destino = new System.Text.StringBuilder(1024);
+
+        // QueryDosDevice de una unidad SUBST regresa "\??\C:\carpeta"; la de un disco, "\Device\HarddiskVolumeN".
+        if (QueryDosDevice(ruta[..2], destino, destino.Capacity) > 0 &&
+            destino.ToString() is var dispositivo && dispositivo.StartsWith(@"\??\", StringComparison.Ordinal))
+        {
+            return Path.Combine(dispositivo[4..], ruta.Length > 3 ? ruta[3..] : "");
+        }
+
+        return ruta;
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern int QueryDosDevice(string unidad, System.Text.StringBuilder destino, int tamano);
+
+    /// <summary>
     /// Copia el contenido de la carpeta en uso a <paramref name="destino"/> (sin Temporal ni Diagnostico).
     /// No sobrescribe: un archivo que ya existe allá se omite. Devuelve copiados y omitidos.
     /// </summary>

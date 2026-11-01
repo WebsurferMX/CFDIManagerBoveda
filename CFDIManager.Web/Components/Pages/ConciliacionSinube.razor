@@ -40,7 +40,7 @@
                 <i class="bi bi-plug fs-5"></i>
                 <span>
                     @FaltaConfiguracion
-                    Configúralo en <a href="exportacion-sinube" class="alert-link">Exportación a SINUBE</a> (usuario y contraseña del portal).
+                    Configúralo en <a href="exportacion-sinube" class="alert-link">Importación a SINUBE</a> (usuario y contraseña del portal).
                 </span>
             </div>
         }
@@ -370,7 +370,7 @@
         SinubeConfiguracionDto c = Sinube.ObtenerConfiguracion(EmpresaContext.EmpresaActiva!);
 
         FaltaConfiguracion = SinubeService.FaltanDatos(c, requierePassword: true) is string falta
-            ? falta.Replace("Herramientas → Acceso a SINUBE", "Exportación a SINUBE") + " "
+            ? falta.Replace("Herramientas → Acceso a SINUBE", "Importación a SINUBE") + " "
             : string.IsNullOrWhiteSpace(c.Usuario) ? "Falta el usuario de SINUBE. " : null;
     }
 

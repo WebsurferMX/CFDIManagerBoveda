@@ -45,7 +45,7 @@ public class SinubeDatosService(SinubeService sinube, IHttpClientFactory http)
             throw new InvalidOperationException(falta);
 
         if (string.IsNullOrWhiteSpace(configuracion.Usuario))
-            throw new InvalidOperationException("Captura el usuario de SINUBE (el del portal) en Exportación a SINUBE → Acceso.");
+            throw new InvalidOperationException("Captura el usuario de SINUBE (el del portal) en Importación a SINUBE → Acceso.");
 
         // getpost solo tiene producción y facturanube (ClsSiNubeGetPost: ambiente 2 / 1).
         string url = configuracion.Ambiente == SinubeAmbientes.PruebasFacturanube ? UrlPruebas : UrlProduccion;

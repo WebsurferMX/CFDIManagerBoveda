@@ -5,6 +5,8 @@
 @using CFDIManager.Web.Services
 @using CFDIManager.Web.Services.Storage
 @using CFDIManager.Web.Services.Sat
+@using CFDIManager.Web.Services.Respaldo
+@using CFDIManager.Web.Components.Herramientas
 @using CFDIParser.Models
 @using CFDIParser.Services
 @implements IDisposable
@@ -16,6 +18,7 @@
 @inject EmpresaContext EmpresaContext
 @inject CFDIManager.Web.Services.Sat.EstadoDescargaAutomaticaSat DescargaSat
 @inject IConfiguration Configuracion
+@inject RespaldoService Respaldos
 
 <PageTitle>Herramientas</PageTitle>
 
@@ -245,11 +248,22 @@
                         <span class="input-group-text"><i class="bi bi-folder2"></i></span>
                         <input class="form-control font-monospace" @bind="CarpetaNueva" @bind:event="oninput"
                                placeholder="D:\CFDIManagerDatos" disabled="@CopiandoStorage" />
+                        <button class="btn btn-outline-secondary" disabled="@CopiandoStorage" title="Elegir una carpeta del servidor"
+                                @onclick='() => Explorando = "storage"'>
+                            <i class="bi bi-folder2-open me-1"></i>Examinar…
+                        </button>
                         <button class="btn btn-outline-secondary" disabled="@CopiandoStorage" title="Storage junto a la app"
                                 @onclick="() => CarpetaNueva = CarpetaStorage.Predeterminada">
                             Predeterminada
                         </button>
                     </div>
+
+                    @if (Explorando == "storage")
+                    {
+                        <ExploradorCarpetas Inicial="@CarpetaNueva"
+                                            OnElegir="c => { CarpetaNueva = c; Explorando = null; }"
+                                            OnCerrar="() => Explorando = null" />
+                    }
 
                     <div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" id="copiarDatos" @bind="CopiarDatos" disabled="@CopiandoStorage" />
@@ -271,6 +285,95 @@
                     <button class="btn btn-primary" disabled="@(CopiandoStorage || string.IsNullOrWhiteSpace(CarpetaNueva))" @onclick="GuardarCarpeta">
                         <i class="bi bi-check-lg me-1"></i>Guardar ubicación
                     </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-body py-3">
+                    <span class="eyebrow">RESPALDO</span>
+                    <h2 class="h5 mb-0">Respaldo de la base de datos y Storage</h2>
+                </div>
+
+                <div class="card-body">
+                    <p class="text-body-secondary small">
+                        De lunes a viernes a la hora indicada se genera un ZIP con la base de datos y Storage en la carpeta elegida.
+                        Dentro de OneDrive (por ejemplo <span class="font-monospace">OneDrive\Respaldos CFDI Manager</span>) se sube
+                        solo a la nube. <b>Diarios</b> conserva los últimos que indiques; el del último día hábil del mes se guarda
+                        además en <b>Mensuales</b>, que no se borran. La clave maestra no va en el respaldo: guárdala aparte.
+                    </p>
+
+                    <div class="input-group mb-2">
+                        <span class="input-group-text"><i class="bi bi-cloud-arrow-up"></i></span>
+                        <input class="form-control font-monospace" @bind="RespaldoCarpeta" @bind:event="oninput"
+                               placeholder="C:\Users\...\OneDrive\Respaldos CFDI Manager" />
+                        <button class="btn btn-outline-secondary" title="Elegir una carpeta del servidor" @onclick='() => Explorando = "respaldo"'>
+                            <i class="bi bi-folder2-open me-1"></i>Examinar…
+                        </button>
+                    </div>
+
+                    @if (Explorando == "respaldo")
+                    {
+                        <ExploradorCarpetas Inicial="@(RespaldoCarpeta != "" ? RespaldoCarpeta : CarpetaOneDrive)"
+                                            OnElegir="c => { RespaldoCarpeta = c; Explorando = null; }"
+                                            OnCerrar="() => Explorando = null" />
+                    }
+
+                    <div class="d-flex flex-wrap gap-3 align-items-end mb-3">
+                        <div>
+                            <label class="form-label small mb-1" for="horaRespaldo">Hora (lunes a viernes)</label>
+                            <input id="horaRespaldo" type="time" class="form-control" @bind="RespaldoHora" />
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1" for="diarios">Diarios a conservar</label>
+                            <input id="diarios" type="number" min="1" max="60" class="form-control" style="width: 8rem" @bind="RespaldoDiarios" />
+                        </div>
+                        <button class="btn btn-primary" @onclick="GuardarRespaldo">
+                            <i class="bi bi-check-lg me-1"></i>Guardar
+                        </button>
+                        <button class="btn btn-outline-primary" disabled="@(Respaldos.EnCurso || RespaldoGuardado == "")" @onclick="RespaldarAhora">
+                            @if (Respaldos.EnCurso)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>@Respaldos.Paso
+                            }
+                            else
+                            {
+                                <i class="bi bi-play-circle me-1"></i><span>Respaldar ahora</span>
+                            }
+                        </button>
+                    </div>
+
+                    @if (HistorialRespaldos.Count > 0)
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0 small">
+                                <thead>
+                                    <tr><th>Fecha</th><th>Tipo</th><th>Estado</th><th class="text-end">Tamaño</th><th>Archivo / detalle</th></tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (RespaldoDto r in HistorialRespaldos)
+                                    {
+                                        <tr>
+                                            <td class="text-nowrap">@r.Inicio.ToString("dd/MM/yyyy HH:mm")</td>
+                                            <td>@r.Tipo</td>
+                                            <td>
+                                                <span class="badge @(r.Estado switch { "Correcto" => "text-bg-success", "Error" => "text-bg-danger", _ => "text-bg-secondary" })">@r.Estado</span>
+                                            </td>
+                                            <td class="text-end text-nowrap">@(r.Tamano > 0 ? $"{r.Tamano / 1_048_576.0:N0} MB" : "—")</td>
+                                            <td>
+                                                @if (r.Archivo != "")
+                                                {
+                                                    <div class="font-monospace">@Path.GetFileName(r.Archivo)</div>
+                                                }
+                                                <div class="text-body-secondary">@r.Detalle</div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
                 </div>
             </div>
         </div>
@@ -425,6 +528,8 @@
         DescargaSat.Cambio += Refrescar;
         CargarDescargaAutomatica();
         CargarCarpeta();
+        CargarRespaldo();
+        Respaldos.Cambio += RefrescarRespaldo;
 
         Automatico = Periodo.EsAutomatico;
 
@@ -490,6 +595,9 @@
         CarpetaNueva = CarpetaPendiente ?? CarpetaStorage.Raiz;
     }
 
+    // Explorador de carpetas del servidor abierto: "storage", "respaldo" o null.
+    private string? Explorando;
+
     private async Task GuardarCarpeta()
     {
         Error = null;
@@ -502,7 +610,9 @@
             if (!Path.IsPathRooted(CarpetaNueva.Trim()))
                 throw new InvalidOperationException("Escribe una ruta completa, por ejemplo D:\\CFDIManagerDatos.");
 
-            nueva = Path.GetFullPath(CarpetaNueva.Trim()).TrimEnd('\\');
+            // Una unidad SUBST no existe para el servicio: se guarda la ruta real.
+            nueva = CarpetaStorage.RutaReal(Path.GetFullPath(CarpetaNueva.Trim())).TrimEnd('\\');
+            CarpetaNueva = nueva;
             string actual = CarpetaStorage.Raiz.TrimEnd('\\');
 
             if (!nueva.Equals(actual, StringComparison.OrdinalIgnoreCase) &&
@@ -560,6 +670,78 @@
             : $"Ubicación guardada.{copia} Reinicia la app para usarla (servicio: Restart-Service CFDIManager). " +
               "La carpeta anterior no se borra; después conviene Re-sincronizar cada empresa para actualizar las rutas.";
     }
+
+    // ---------- respaldo ----------
+
+    private string RespaldoCarpeta = "";
+    private string RespaldoGuardado = "";
+    private TimeOnly RespaldoHora = new(2, 0);
+    private int RespaldoDiarios = 5;
+    private List<RespaldoDto> HistorialRespaldos = [];
+
+    // OneDrive del usuario de Windows (el servicio corre como sistema y no tiene la variable).
+    private static string? CarpetaOneDrive =>
+        Environment.GetEnvironmentVariable("OneDriveCommercial") is { Length: > 0 } empresa ? empresa
+        : Environment.GetEnvironmentVariable("OneDrive") is { Length: > 0 } personal ? personal
+        : Directory.Exists(@"C:\Users") ? @"C:\Users" : null;
+
+    private void CargarRespaldo()
+    {
+        ConfiguracionRespaldo c = Respaldos.Leer();
+        RespaldoCarpeta = RespaldoGuardado = c.Carpeta;
+        RespaldoHora = TimeOnly.FromTimeSpan(c.Hora);
+        RespaldoDiarios = c.Diarios;
+        HistorialRespaldos = Respaldos.Historial();
+    }
+
+    private void GuardarRespaldo()
+    {
+        Error = null;
+        Exito = null;
+
+        try
+        {
+            string carpeta = RespaldoCarpeta.Trim();
+
+            if (carpeta != "")
+            {
+                if (!Path.IsPathRooted(carpeta))
+                    throw new InvalidOperationException("Escribe una ruta completa o usa Examinar…");
+
+                carpeta = CarpetaStorage.RutaReal(Path.GetFullPath(carpeta)).TrimEnd('\\');
+
+                // Que exista y que el servicio pueda escribir ahí.
+                Directory.CreateDirectory(carpeta);
+                string prueba = Path.Combine(carpeta, $".prueba-{Guid.NewGuid():N}");
+                File.WriteAllText(prueba, "ok");
+                File.Delete(prueba);
+            }
+
+            Respaldos.Guardar(new ConfiguracionRespaldo(carpeta, RespaldoHora.ToTimeSpan(), Math.Clamp(RespaldoDiarios, 1, 60)));
+            CargarRespaldo();
+
+            Exito = carpeta == ""
+                ? "Respaldo automático desactivado (sin carpeta)."
+                : $"Respaldo guardado: de lunes a viernes a las {RespaldoHora:HH\\:mm}, conservando {RespaldoDiarios} diarios.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or NotSupportedException)
+        {
+            Error = $"No se puede usar esa carpeta: {ex.Message}";
+        }
+    }
+
+    private void RespaldarAhora()
+    {
+        Error = null;
+        Exito = "Respaldo iniciado; puedes salir de esta pantalla.";
+        _ = Task.Run(() => Respaldos.RespaldarAsync("Manual", CancellationToken.None));
+    }
+
+    private void RefrescarRespaldo() => InvokeAsync(() =>
+    {
+        HistorialRespaldos = Respaldos.Historial();
+        StateHasChanged();
+    });
 
     // ---------- descarga automática ----------
 
@@ -648,5 +830,6 @@
     {
         Resincronizacion.Cambio -= Refrescar;
         DescargaSat.Cambio -= Refrescar;
+        Respaldos.Cambio -= RefrescarRespaldo;
     }
 }
