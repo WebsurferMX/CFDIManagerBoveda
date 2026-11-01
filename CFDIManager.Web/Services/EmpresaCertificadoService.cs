@@ -19,9 +19,7 @@ public class EmpresaCertificadoService
     IBrowserFile? archivoKey)
     
     {
-        var carpeta = Path.Combine(
-            _env.ContentRootPath,
-            "Storage",
+        var carpeta = CarpetaStorage.Ruta(
             "Certificados",
             empresaId.ToString());
 

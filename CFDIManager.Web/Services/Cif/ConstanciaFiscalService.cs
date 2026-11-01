@@ -168,7 +168,7 @@ public sealed class ConstanciaFiscalService
     }
 
     private string Carpeta(long empresaId) =>
-        Path.Combine(_ambiente.ContentRootPath, "Storage", "Cif", empresaId.ToString(CultureInfo.InvariantCulture));
+        CarpetaStorage.Ruta("Cif", empresaId.ToString(CultureInfo.InvariantCulture));
 
     // ---------- lectura del PDF ----------
 

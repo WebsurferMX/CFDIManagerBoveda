@@ -70,9 +70,7 @@ public class ImportacionXmlService
             }
 
             string carpetaTemporal =
-                Path.Combine(
-                    _entorno.ContentRootPath,
-                    "Storage",
+                CarpetaStorage.Ruta(
                     "Temporal");
 
             Directory.CreateDirectory(
@@ -414,12 +412,8 @@ public class ImportacionXmlService
                     empresa.Rfc);
         }
 
-        return Path.IsPathRooted(
-            rutaConfigurada)
-                ? rutaConfigurada
-                : Path.Combine(
-                    _entorno.ContentRootPath,
-                    rutaConfigurada);
+        return CarpetaStorage.Resolver(
+            rutaConfigurada);
     }
 
     private static string ObtenerNombreSeguro(

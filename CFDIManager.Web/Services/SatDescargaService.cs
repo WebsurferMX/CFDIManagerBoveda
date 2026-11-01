@@ -488,7 +488,7 @@ public class SatDescargaService : ISatDescargaService
         bool soloNuevos = false)
     {
         string carpetaTemporal =
-            Path.Combine(_ambiente.ContentRootPath, "Storage", "Temporal", Guid.NewGuid().ToString("N"));
+            CarpetaStorage.Ruta("Temporal", Guid.NewGuid().ToString("N"));
 
         Directory.CreateDirectory(carpetaTemporal);
 
@@ -644,20 +644,13 @@ public class SatDescargaService : ISatDescargaService
     private string ResolverRuta(
         string? ruta)
     {
-        if (string.IsNullOrWhiteSpace(ruta))
-        {
-            return "";
-        }
-
-        return Path.IsPathRooted(ruta)
-            ? ruta
-            : Path.Combine(_ambiente.ContentRootPath, ruta);
+        return CarpetaStorage.Resolver(ruta);
     }
 
     private string CarpetaEmpresa(
         long empresaId)
     {
-        return Path.Combine(_ambiente.ContentRootPath, "Storage", "SatDescargas", empresaId.ToString());
+        return CarpetaStorage.Ruta("SatDescargas", empresaId.ToString());
     }
 
     private string RutaSolicitudes(

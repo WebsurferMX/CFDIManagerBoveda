@@ -49,7 +49,7 @@ public class AdministracionXmlService
     }
 
     private string Storage(params string[] partes) =>
-        Path.Combine([_ambiente.ContentRootPath, "Storage", .. partes]);
+        CarpetaStorage.Ruta(partes);
 
     // ---------- un CFDI ----------
 
@@ -530,15 +530,20 @@ public class AdministracionXmlService
         return ArmarZipAsync(f, ruta, nombre, "", ".pdf", x => _pdf.Generar(_parser.Parse(RutaExistente(x))), progreso, ct);
     }
 
-    /// <summary>Un archivo {UUID}{extension} por CFDI del filtro (los UUID repetidos entran una vez). Si se cancela, no deja el ZIP a medias.</summary>
+    /// <summary>
+    /// Un archivo por CFDI del filtro (los UUID repetidos entran una vez), llamado {UUID}{extension} o como diga
+    /// <paramref name="nombreEntrada"/> (con "_2", "_3"... si se repite). Si se cancela, no deja el ZIP a medias.
+    /// </summary>
     private Task<ResultadoProcesoXml> ArmarZipAsync(AdminXmlFiltroDto f, string ruta, string nombre, string carpeta, string extension,
-        Func<AdminXmlFilaDto, byte[]> contenido, IProgress<ResultadoProcesoXml>? progreso, CancellationToken ct)
+        Func<AdminXmlFilaDto, byte[]> contenido, IProgress<ResultadoProcesoXml>? progreso, CancellationToken ct,
+        Func<AdminXmlFilaDto, string>? nombreEntrada = null)
     {
         return Task.Run(() =>
         {
             List<AdminXmlFilaDto> filas = _repo.ObtenerSeleccionAdministracionXml(f);
             var r = new ResultadoProcesoXml { Total = filas.Count, Carpeta = carpeta, Archivo = ruta, NombreArchivo = nombre };
             var agregados = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var nombres = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             Directory.CreateDirectory(Path.GetDirectoryName(ruta)!);
 
@@ -555,7 +560,15 @@ public class AdministracionXmlService
                             try
                             {
                                 byte[] bytes = contenido(x);
-                                using Stream entrada = zip.CreateEntry(x.Uuid + extension, CompressionLevel.Fastest).Open();
+                                string baseEntrada = nombreEntrada?.Invoke(x) ?? x.Uuid;
+                                string entradaNombre = baseEntrada + extension;
+
+                                for (int i = 2; !nombres.Add(entradaNombre); i++)
+                                {
+                                    entradaNombre = $"{baseEntrada}_{i}{extension}";
+                                }
+
+                                using Stream entrada = zip.CreateEntry(entradaNombre, CompressionLevel.Fastest).Open();
                                 entrada.Write(bytes);
                                 r.Correctos++;
                             }
@@ -630,46 +643,17 @@ public class AdministracionXmlService
         }
     }
 
-    /// <summary>Copia los XML con el nombre de la estructura elegida; los originales no se tocan.</summary>
+    /// <summary>
+    /// Copias de los XML con el nombre de la estructura elegida, en un ZIP temporal (Emitidos\ y Recibidos\) que se
+    /// descarga en el navegador y se borra: así llegan al equipo del usuario aunque trabaje remoto. Los originales no se tocan.
+    /// </summary>
     public Task<ResultadoProcesoXml> RenombrarAsync(EmpresaDto empresa, AdminXmlFiltroDto f, IReadOnlyList<string> campos, string separador, IProgress<ResultadoProcesoXml>? progreso, CancellationToken ct)
     {
-        return Task.Run(() =>
-        {
-            List<AdminXmlFilaDto> filas = _repo.ObtenerSeleccionAdministracionXml(f);
-            string baseDestino = Storage("Renombrados", DateTime.Now.ToString("yyyy-MM-dd_HHmmss"), empresa.Rfc);
-            var r = new ResultadoProcesoXml { Total = filas.Count, Carpeta = baseDestino };
+        string ruta = Path.Combine(DescargasTemporales.CarpetaTemporal, $"{Guid.NewGuid():N}.zip");
+        string nombre = Path.GetFileNameWithoutExtension(NombreReporte(empresa, f, "general")) + "_Renombrados.zip";
 
-            foreach (AdminXmlFilaDto x in filas)
-            {
-                ct.ThrowIfCancellationRequested();
-
-                try
-                {
-                    string carpeta = Path.Combine(baseDestino, x.Clasificacion == "RECIBIDO" ? "Recibidos" : "Emitidos");
-                    Directory.CreateDirectory(carpeta);
-
-                    string nombre = NombreArchivo(x, campos, separador);
-                    string destino = Path.Combine(carpeta, nombre + ".xml");
-
-                    for (int i = 2; File.Exists(destino); i++)
-                    {
-                        destino = Path.Combine(carpeta, $"{nombre}_{i}.xml");
-                    }
-
-                    File.Copy(RutaExistente(x), destino);
-                    r.Correctos++;
-                }
-                catch
-                {
-                    r.Errores++;
-                }
-
-                r.Hechos++;
-                progreso?.Report(r);
-            }
-
-            return r;
-        }, ct);
+        return ArmarZipAsync(f, ruta, nombre, "", ".xml", x => File.ReadAllBytes(RutaExistente(x)), progreso, ct,
+            x => $"{(x.Clasificacion == "RECIBIDO" ? "Recibidos" : "Emitidos")}/{NombreArchivo(x, campos, separador)}");
     }
 
     private const int ConsultasSatSimultaneas = 3;

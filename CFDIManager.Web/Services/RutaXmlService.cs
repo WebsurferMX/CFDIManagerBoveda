@@ -19,13 +19,12 @@ public class RutaXmlService
         _ambiente = ambiente;
     }
 
-    /// <summary>Carpeta raíz; una ruta relativa se toma desde la carpeta de la aplicación.</summary>
+    /// <summary>Carpeta raíz; "Storage\XML" (el valor de omisión) queda dentro de la carpeta de datos (CarpetaStorage).</summary>
     public string CarpetaGeneral =>
-        Path.GetFullPath(
+        CarpetaStorage.Resolver(
             _configuracion["AppSettings:CarpetaXml"] is { Length: > 0 } ruta
                 ? ruta
-                : Path.Combine("Storage", "XML"),
-            _ambiente.ContentRootPath);
+                : Path.Combine("Storage", "XML"));
 
     public string CarpetaEmpresa(
         string rfc)

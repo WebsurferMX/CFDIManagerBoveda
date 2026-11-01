@@ -40,7 +40,7 @@ public sealed class DescargaCiecService : IDisposable
         _importacion = importacion;
         _protector = protector;
         _ambiente = ambiente;
-        _portal = new PortalSatCiec(Path.Combine(ambiente.ContentRootPath, "Storage", "Diagnostico", "SatCiec"));
+        _portal = new PortalSatCiec(CarpetaStorage.Ruta("Diagnostico", "SatCiec"));
     }
 
     /// <summary>Empresa con sesión abierta en el portal, o null.</summary>
@@ -123,7 +123,7 @@ public sealed class DescargaCiecService : IDisposable
         ValidarSesion(empresa);
 
         var resultado = new ResultadoDescargaCiec();
-        string carpetaTemporal = Path.Combine(_ambiente.ContentRootPath, "Storage", "Temporal", Guid.NewGuid().ToString("N"));
+        string carpetaTemporal = CarpetaStorage.Ruta("Temporal", Guid.NewGuid().ToString("N"));
 
         Directory.CreateDirectory(carpetaTemporal);
 

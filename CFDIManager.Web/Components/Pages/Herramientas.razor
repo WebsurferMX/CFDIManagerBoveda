@@ -219,6 +219,65 @@
         <div class="col-12">
             <div class="card shadow-sm">
                 <div class="card-header bg-body py-3">
+                    <span class="eyebrow">CARPETA DE DATOS</span>
+                    <h2 class="h5 mb-0">Ubicación de Storage en este equipo (@Environment.MachineName)</h2>
+                </div>
+
+                <div class="card-body">
+                    <p class="text-body-secondary small">
+                        Aquí viven los XML de la bóveda, las e.firmas, logos, constancias y descargas del SAT. Puede estar
+                        fuera de la carpeta de la app (por ejemplo <span class="font-monospace">D:\CFDIManagerDatos</span>) para que
+                        publicar una versión nueva nunca la toque y respaldarla sea más fácil. Es una carpeta de este equipo
+                        (el servidor): quien entra remoto recibe sus archivos por descarga.
+                    </p>
+
+                    <dl class="row small mb-3">
+                        <dt class="col-sm-3">En uso</dt>
+                        <dd class="col-sm-9 font-monospace">@CarpetaStorage.Raiz</dd>
+                        @if (CarpetaPendiente is not null)
+                        {
+                            <dt class="col-sm-3 text-warning">Al reiniciar la app</dt>
+                            <dd class="col-sm-9 font-monospace text-warning">@CarpetaPendiente</dd>
+                        }
+                    </dl>
+
+                    <div class="input-group mb-2">
+                        <span class="input-group-text"><i class="bi bi-folder2"></i></span>
+                        <input class="form-control font-monospace" @bind="CarpetaNueva" @bind:event="oninput"
+                               placeholder="D:\CFDIManagerDatos" disabled="@CopiandoStorage" />
+                        <button class="btn btn-outline-secondary" disabled="@CopiandoStorage" title="Storage junto a la app"
+                                @onclick="() => CarpetaNueva = CarpetaStorage.Predeterminada">
+                            Predeterminada
+                        </button>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="copiarDatos" @bind="CopiarDatos" disabled="@CopiandoStorage" />
+                        <label class="form-check-label small" for="copiarDatos">
+                            Copiar los datos actuales a la nueva carpeta (recomendado; la carpeta actual no se borra)
+                        </label>
+                    </div>
+
+                    @if (CopiandoStorage)
+                    {
+                        int porcentaje = AvanceStorage.Total == 0 ? 0 : AvanceStorage.Hechos * 100 / AvanceStorage.Total;
+
+                        <div class="progress mb-1" role="progressbar" aria-valuenow="@porcentaje" aria-valuemin="0" aria-valuemax="100">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: @porcentaje%"></div>
+                        </div>
+                        <div class="small text-body-secondary mb-2">Copiando @AvanceStorage.Hechos.ToString("N0") de @AvanceStorage.Total.ToString("N0") archivos…</div>
+                    }
+
+                    <button class="btn btn-primary" disabled="@(CopiandoStorage || string.IsNullOrWhiteSpace(CarpetaNueva))" @onclick="GuardarCarpeta">
+                        <i class="bi bi-check-lg me-1"></i>Guardar ubicación
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-body py-3">
                     <span class="eyebrow">BÓVEDA</span>
                     <h2 class="h5 mb-0">Re-sincronizar con la bóveda</h2>
                 </div>
@@ -365,6 +424,7 @@
         Resincronizacion.Cambio += Refrescar;
         DescargaSat.Cambio += Refrescar;
         CargarDescargaAutomatica();
+        CargarCarpeta();
 
         Automatico = Periodo.EsAutomatico;
 
@@ -411,6 +471,94 @@
 
         int quitados = Resincronizacion.QuitarSinXml(r.EmpresaId);
         Exito = $"Se quitaron {quitados:N0} CFDI sin XML de {r.Nombre}.";
+    }
+
+    // ---------- carpeta de datos (Storage) ----------
+
+    private string CarpetaNueva = "";
+    private string? CarpetaPendiente;
+    private bool CopiarDatos = true;
+    private bool CopiandoStorage;
+    private (int Hechos, int Total) AvanceStorage;
+
+    private void CargarCarpeta()
+    {
+        string definida = Repo.ObtenerConfiguracionApp(CarpetaStorage.ClaveConfiguracion) ?? "";
+        string siguiente = definida == "" ? CarpetaStorage.Predeterminada : Path.GetFullPath(definida);
+
+        CarpetaPendiente = string.Equals(siguiente, CarpetaStorage.Raiz, StringComparison.OrdinalIgnoreCase) ? null : siguiente;
+        CarpetaNueva = CarpetaPendiente ?? CarpetaStorage.Raiz;
+    }
+
+    private async Task GuardarCarpeta()
+    {
+        Error = null;
+        Exito = null;
+
+        string nueva;
+
+        try
+        {
+            if (!Path.IsPathRooted(CarpetaNueva.Trim()))
+                throw new InvalidOperationException("Escribe una ruta completa, por ejemplo D:\\CFDIManagerDatos.");
+
+            nueva = Path.GetFullPath(CarpetaNueva.Trim()).TrimEnd('\\');
+            string actual = CarpetaStorage.Raiz.TrimEnd('\\');
+
+            if (!nueva.Equals(actual, StringComparison.OrdinalIgnoreCase) &&
+                (nueva.StartsWith(actual + "\\", StringComparison.OrdinalIgnoreCase) || actual.StartsWith(nueva + "\\", StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException("La nueva carpeta no puede estar dentro de la actual ni contenerla.");
+
+            // Que exista y que la app (la cuenta del servicio) pueda escribir ahí.
+            Directory.CreateDirectory(nueva);
+            string prueba = Path.Combine(nueva, $".prueba-{Guid.NewGuid():N}");
+            await File.WriteAllTextAsync(prueba, "ok");
+            File.Delete(prueba);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException or NotSupportedException)
+        {
+            Error = $"No se puede usar esa carpeta: {ex.Message}";
+            return;
+        }
+
+        int copiados = 0, omitidos = 0;
+
+        if (CopiarDatos && !nueva.Equals(CarpetaStorage.Raiz.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+        {
+            CopiandoStorage = true;
+
+            try
+            {
+                (copiados, omitidos) = await Task.Run(() => CarpetaStorage.CopiarA(nueva, (h, t) =>
+                {
+                    AvanceStorage = (h, t);
+                    InvokeAsync(StateHasChanged);
+                }, CancellationToken.None));
+            }
+            catch (Exception ex)
+            {
+                Error = $"Falló la copia; no se cambió la ubicación: {ex.Message}";
+                return;
+            }
+            finally
+            {
+                CopiandoStorage = false;
+            }
+        }
+
+        // La predeterminada se guarda vacía: así sigue a la carpeta de la app aunque esta se mueva.
+        bool predeterminada = nueva.Equals(CarpetaStorage.Predeterminada.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+        Repo.GuardarConfiguracionApp(CarpetaStorage.ClaveConfiguracion, predeterminada ? "" : nueva);
+        CargarCarpeta();
+
+        string copia = CopiarDatos && copiados + omitidos > 0
+            ? $" Se copiaron {copiados:N0} archivos ({omitidos:N0} ya estaban)."
+            : "";
+
+        Exito = CarpetaPendiente is null
+            ? $"La app ya usa esa carpeta.{copia}"
+            : $"Ubicación guardada.{copia} Reinicia la app para usarla (servicio: Restart-Service CFDIManager). " +
+              "La carpeta anterior no se borra; después conviene Re-sincronizar cada empresa para actualizar las rutas.";
     }
 
     // ---------- descarga automática ----------

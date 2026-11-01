@@ -1764,7 +1764,8 @@
     {
         CerrarModal();
         AdminXmlFiltroDto f = FiltroAccion();
-        return Ejecutar("Renombrar XML's", (p, ct) => Admin.RenombrarAsync(EmpresaContext.EmpresaActiva!, f, estructura.Campos, estructura.Separador, p, ct), recargar: false);
+        return Ejecutar("Renombrar XML's", (p, ct) => Admin.RenombrarAsync(EmpresaContext.EmpresaActiva!, f, estructura.Campos, estructura.Separador, p, ct), recargar: false,
+            alTerminar: r => BajarZip(r, borrar: true));
     }
 
     private void ElegirArchivos(InputFileChangeEventArgs e)

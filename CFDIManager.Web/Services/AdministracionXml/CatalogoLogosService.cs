@@ -9,7 +9,7 @@ public partial class CatalogoLogosService
 
     public CatalogoLogosService(IWebHostEnvironment ambiente)
     {
-        _carpeta = Path.Combine(ambiente.ContentRootPath, "Storage", "Logos");
+        _carpeta = CarpetaStorage.Ruta("Logos");
     }
 
     [GeneratedRegex("^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$")]

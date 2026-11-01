@@ -23,6 +23,21 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 
 builder.Services.AddWindowsService(opciones => opciones.ServiceName = "CFDIManager");
 
+// Carpeta de datos: la definida en Herramientas para este equipo, AppSettings:CarpetaStorage o "Storage" junto a la app.
+string? carpetaDefinida = null;
+
+try
+{
+    carpetaDefinida = new PostgreSqlRepository(CadenaPostgres(builder.Configuration))
+        .ObtenerConfiguracionApp(CarpetaStorage.ClaveConfiguracion);
+}
+catch (Exception)
+{
+    // Sin base al arrancar: se usa la de configuración o la de omisión.
+}
+
+CarpetaStorage.Configurar(builder.Configuration, builder.Environment.ContentRootPath, carpetaDefinida);
+
 // Cultura de la app: fechas dd/MM/yyyy (también para servicios en segundo plano).
 var CulturaMexico = new System.Globalization.CultureInfo("es-MX");
 System.Globalization.CultureInfo.DefaultThreadCurrentCulture = CulturaMexico;
@@ -55,7 +70,7 @@ if (ClaveMaestra.Leer(builder.Configuration) is byte[] claveMaestra)
 else
 {
     proteccion
-        .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "Storage", "Llaves")))
+        .PersistKeysToFileSystem(new DirectoryInfo(CarpetaStorage.Ruta("Llaves")))
         .ProtectKeysWithDpapi();
 }
 

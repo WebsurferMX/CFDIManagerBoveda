@@ -30,11 +30,8 @@ public sealed class CertificadosEmpresa
 
     private static string RutaKeyAnterior(long empresaId) => Path.Combine("Storage", "Certificados", empresaId.ToString(), "llave.key");
 
-    /// <summary>Ruta absoluta; las relativas se toman desde la carpeta de la app.</summary>
-    public string Resolver(string? ruta) =>
-        string.IsNullOrWhiteSpace(ruta) ? ""
-        : Path.IsPathRooted(ruta) ? ruta
-        : Path.Combine(_ambiente.ContentRootPath, ruta);
+    /// <summary>Ruta absoluta; las relativas "Storage\..." se toman de la carpeta de datos (CarpetaStorage).</summary>
+    public string Resolver(string? ruta) => CarpetaStorage.Resolver(ruta);
 
     public bool Existe(string? ruta) => Resolver(ruta) is { Length: > 0 } absoluta && File.Exists(absoluta);
 

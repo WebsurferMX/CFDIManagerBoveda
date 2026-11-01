@@ -45,7 +45,7 @@ public sealed class DescargaArchivosSatService : IDisposable
         _satMovil = satMovil;
         _archivos = archivos;
         _constancias = constancias;
-        _portal = new PortalSatDeclaraciones(Path.Combine(ambiente.ContentRootPath, "Storage", "Diagnostico", "SatDeclaraciones"));
+        _portal = new PortalSatDeclaraciones(CarpetaStorage.Ruta("Diagnostico", "SatDeclaraciones"));
     }
 
     private long? _empresaSesion;

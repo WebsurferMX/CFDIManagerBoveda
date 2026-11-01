@@ -76,7 +76,7 @@ public sealed class ArchivosSatService
     }
 
     public string Carpeta(long empresaId) =>
-        Path.Combine(_ambiente.ContentRootPath, "Storage", "ArchivosSat", empresaId.ToString(CultureInfo.InvariantCulture));
+        CarpetaStorage.Ruta("ArchivosSat", empresaId.ToString(CultureInfo.InvariantCulture));
 
     // ---------- Opiniones de cumplimiento ----------
 
