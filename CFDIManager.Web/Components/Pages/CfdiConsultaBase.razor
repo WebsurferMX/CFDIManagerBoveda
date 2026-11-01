@@ -10,6 +10,7 @@
 @inject PostgreSqlRepository Repo
 @inject EmpresaContext EmpresaContext
 @inject AccesoEmpresasService Acceso
+@inject PeriodoTrabajoService Periodo
 
 @* Tabler solo en estas pantallas: en toda la app cambia el aspecto de las que ya estaban terminadas. *@
 <HeadContent>
@@ -370,7 +371,7 @@
     [Parameter] public string EtiquetaRfc { get; set; } = "RFC";
     [Parameter] public string EtiquetaNombre { get; set; } = "Razón social";
 
-    private CfdiFiltroDto Filtro { get; set; } = CrearFiltroInicial();
+    private CfdiFiltroDto Filtro { get; set; } = new();
     private ResultadoPaginadoDto<CfdiConsultaDto> Resultado { get; set; } = new();
     private CfdiResumenConsultaDto Resumen { get; set; } = new();
     private CfdiConsultaDto? Seleccionado { get; set; }
@@ -414,6 +415,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Filtro = CrearFiltroInicial();
         EmpresaContext.OnChange += CambiarEmpresa;
         await InicializarEmpresaAsync();
         CargarDatos();
@@ -690,10 +692,10 @@
         EmpresaContext.OnChange -= CambiarEmpresa;
     }
 
-    private static CfdiFiltroDto CrearFiltroInicial() => new()
+    private CfdiFiltroDto CrearFiltroInicial() => new()
     {
-        FechaInicio = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
-        FechaFin = DateTime.Today,
+        FechaInicio = Periodo.Inicio,
+        FechaFin = Periodo.Fin,
         Pagina = 1,
         RegistrosPorPagina = 25,
         OrdenarPor = "fecha_emision",

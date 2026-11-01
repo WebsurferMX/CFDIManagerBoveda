@@ -8,6 +8,7 @@
 @inject EmpresaContext EmpresaContext
 @inject PostgreSqlRepository Repo
 @inject DescargaCiecService Ciec
+@inject PeriodoTrabajoService Periodo
 
 @* Descarga desde el portal de facturas del SAT con RFC + CIEC (requiere captcha por sesión). *@
 @if (!TieneCiec)
@@ -188,8 +189,8 @@ else
 @code {
     private bool TieneCiec;
 
-    private DateTime Desde = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
-    private DateTime Hasta = DateTime.Today;
+    private DateTime Desde;
+    private DateTime Hasta;
     private string Tipo = "emitidos";
     private string Estado = "-1";
     private string RfcContraparte = "";
@@ -217,6 +218,8 @@ else
 
     protected override void OnInitialized()
     {
+        Desde = Periodo.Inicio;
+        Hasta = Periodo.Fin;
         EmpresaContext.OnChange += EmpresaCambio;
         Cargar();
     }

@@ -84,6 +84,9 @@ builder.Services.AddScoped<SincronizacionStorageService>();
 
 builder.Services.AddHostedService<SincronizacionStorageHostedService>();
 
+// Re-sincronizar con la bóveda (Herramientas): rehace los datos de todos los XML en segundo plano.
+builder.Services.AddSingleton<ResincronizacionBoveda>();
+
 // Descarga masiva automática del SAT para las empresas que la tienen encendida.
 builder.Services.AddSingleton<CFDIManager.Web.Services.Sat.EstadoDescargaAutomaticaSat>();
 
@@ -111,6 +114,9 @@ builder.Services.AddHttpClient(
     cliente => cliente.Timeout = TimeSpan.FromSeconds(45));
 
 builder.Services.AddSingleton<CFDIManager.Web.Services.Sat.SatMovilCliente>();
+
+// Mes con el que abren las pantallas (Herramientas, solo Administrador).
+builder.Services.AddSingleton<PeriodoTrabajoService>();
 
 // e.firma de cada empresa en Storage\Certificados\{RFC}\{RFC}.cer/.key.
 builder.Services.AddSingleton<CFDIManager.Web.Services.Sat.CertificadosEmpresa>();

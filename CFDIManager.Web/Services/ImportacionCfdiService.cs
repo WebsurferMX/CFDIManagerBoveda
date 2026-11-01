@@ -218,6 +218,48 @@ public class ImportacionCfdiService
     }
 
     /// <summary>
+    /// Re-sincronizar (Herramientas): si el UUID ya está registrado, rehace sus datos con el XML
+    /// (REHECHO) conservando validaciones; si no, lo importa en sitio (CORRECTO).
+    /// </summary>
+    public ResultadoImportacionCfdi Rehacer(
+        EmpresaDto empresa,
+        string rutaXml)
+    {
+        try
+        {
+            CfdiDto cfdi = _parser.Parse(rutaXml);
+
+            if (DeterminarClasificacion(cfdi, empresa.Rfc) is not string clasificacion)
+            {
+                return new ResultadoImportacionCfdi
+                {
+                    Uuid = cfdi.UUID ?? "",
+                    Estatus = "OMITIDO",
+                    Detalle = "El RFC de la empresa no coincide con el emisor ni con el receptor."
+                };
+            }
+
+            if (!_repositorio.RehacerDatosCfdi(empresa.EmpresaId, cfdi, clasificacion, Path.GetFullPath(rutaXml)))
+            {
+                return Importar(empresa, rutaXml, Path.GetFileName(rutaXml), enSitio: true);
+            }
+
+            return new ResultadoImportacionCfdi
+            {
+                Uuid = cfdi.UUID ?? "",
+                Clasificacion = clasificacion,
+                Estatus = "REHECHO",
+                YaExistia = true,
+                Detalle = "Datos rehechos con el XML."
+            };
+        }
+        catch (Exception ex)
+        {
+            return new ResultadoImportacionCfdi { Estatus = "ERROR", Detalle = ex.Message };
+        }
+    }
+
+    /// <summary>
     /// Si el emisor o receptor del CFDI es otra empresa activa que aún no lo tiene,
     /// lo registra también en ella (copiando el XML a su carpeta). Devuelve el RFC de
     /// esa empresa, o vacío si no aplica. Un fallo aquí no invalida el registro principal.

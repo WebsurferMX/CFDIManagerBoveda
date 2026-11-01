@@ -480,4 +480,5 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
-Storage/
+# Solo la carpeta de datos (XML, certificados); no Services/Storage, que es código.
+/Storage/

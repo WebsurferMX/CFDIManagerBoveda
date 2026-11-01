@@ -224,9 +224,11 @@
 
     private DashboardDto Datos { get; set; } = new();
 
-    private DateTime FechaInicio { get; set; } = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    [Inject] private PeriodoTrabajoService Periodo { get; set; } = default!;
 
-    private DateTime FechaFin { get; set; } = DateTime.Today;
+    private DateTime FechaInicio { get; set; }
+
+    private DateTime FechaFin { get; set; }
 
     private bool Cargando { get; set; } = true;
 
@@ -277,6 +279,8 @@
 
     protected override void OnInitialized()
     {
+        FechaInicio = Periodo.Inicio;
+        FechaFin = Periodo.Fin;
         EmpresaContext.OnChange += CambiarEmpresa;
         CargarDashboard();
     }

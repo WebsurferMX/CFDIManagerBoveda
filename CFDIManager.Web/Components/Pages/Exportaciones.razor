@@ -9,6 +9,7 @@
 @inject ExportacionExcelService Exportador
 @inject EmpresaContext EmpresaContext
 @inject IJSRuntime JS
+@inject PeriodoTrabajoService Periodo
 
 <PageTitle>Exportaciones</PageTitle>
 
@@ -332,14 +333,8 @@
 
     private void EstablecerPeriodoInicial()
     {
-        DateTime hoy = DateTime.Today;
-
-        FechaInicio = new DateTime(
-            hoy.Year,
-            hoy.Month,
-            1);
-
-        FechaFin = DateTime.Today;
+        FechaInicio = Periodo.Inicio;
+        FechaFin = Periodo.Fin;
     }
 
     private async Task GenerarArchivos()

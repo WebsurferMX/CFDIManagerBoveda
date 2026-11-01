@@ -10,6 +10,7 @@
 @inject EmpresaContext EmpresaContext
 @inject ISatDescargaService SatDescargaService
 @inject IJSRuntime JS
+@inject PeriodoTrabajoService Periodo
 
 <PageTitle>Descarga SAT</PageTitle>
 
@@ -365,9 +366,9 @@ else
     // fiel: descarga masiva con e.firma (web service) · ciec: portal del SAT con contraseña.
     private string Modo = "fiel";
 
-    private DateTime FechaInicial = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime FechaInicial;
 
-    private DateTime FechaFinal = DateTime.Today;
+    private DateTime FechaFinal;
 
     // Texto y no bool: Blazor pinta un bool como "True"/"False" y el select no encuentra su opción.
     private string TipoDescarga = "emitidos";
@@ -413,6 +414,8 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        FechaInicial = Periodo.Inicio;
+        FechaFinal = Periodo.Fin;
         EmpresaContext.OnChange += EmpresaCambio;
 
         await CargarSolicitudes();

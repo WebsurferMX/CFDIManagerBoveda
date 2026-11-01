@@ -39,7 +39,8 @@ public static class Tareas
         new("descargas-sat", "Descargas SAT", "Operación", "bi-cloud-arrow-down-fill", "sat-descargas", Operativos),
         new("empresas", "Empresas", "Configuración", "bi-building", "configuracion/empresas", [Roles.Administrador, Roles.Supervisor]),
         new("usuarios", "Usuarios", "Configuración", "bi-people-fill", "configuracion/usuarios", [Roles.Administrador]),
-        new("correo", "Correo", "Configuración", "bi-envelope-at-fill", "configuracion/correo", [Roles.Administrador])
+        new("correo", "Correo", "Configuración", "bi-envelope-at-fill", "configuracion/correo", [Roles.Administrador]),
+        new("herramientas", "Herramientas", "Configuración", "bi-tools", "configuracion/herramientas", [Roles.Administrador])
     ];
 
     private static readonly Dictionary<string, Tarea> PorClave = Catalogo.ToDictionary(t => t.Clave);

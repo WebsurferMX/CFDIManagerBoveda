@@ -156,6 +156,16 @@ public partial class PostgreSqlRepository
             return;
         }
 
+        InsertarConceptos(conn, tx, cfdiId, conceptos);
+        tx.Commit();
+    }
+
+    private static void InsertarConceptos(
+        NpgsqlConnection conn,
+        NpgsqlTransaction tx,
+        long cfdiId,
+        List<ConceptoDto>? conceptos)
+    {
         const string sql = @"
             INSERT INTO cfdi_conceptos
             (
@@ -191,8 +201,6 @@ public partial class PostgreSqlRepository
             long conceptoId = Convert.ToInt64(cmd.ExecuteScalar());
             GuardarImpuestos(conn, tx, conceptoId, concepto.Impuestos);
         }
-
-        tx.Commit();
     }
 
 

@@ -12,6 +12,7 @@
 @inject XmlAzulejerasService Servicio
 @inject EmpresaContext EmpresaContext
 @inject IJSRuntime JS
+@inject PeriodoTrabajoService Periodo
 
 <PageTitle>Generar XML Azulejeras</PageTitle>
 
@@ -309,15 +310,8 @@
 
     protected override void OnInitialized()
     {
-        DateTime hoy = DateTime.Today;
-
-        FechaInicio =
-            new DateTime(
-                hoy.Year,
-                hoy.Month,
-                1);
-
-        FechaFin = DateTime.Today;
+        FechaInicio = Periodo.Inicio;
+        FechaFin = Periodo.Fin;
 
         EmpresaContext.OnChange += EmpresaCambio;
     }
@@ -372,15 +366,8 @@
 
     private void Restablecer()
     {
-        DateTime hoy = DateTime.Today;
-
-        FechaInicio =
-            new DateTime(
-                hoy.Year,
-                hoy.Month,
-                1);
-
-        FechaFin = DateTime.Today;
+        FechaInicio = Periodo.Inicio;
+        FechaFin = Periodo.Fin;
 
         Error = null;
         Resultado = null;

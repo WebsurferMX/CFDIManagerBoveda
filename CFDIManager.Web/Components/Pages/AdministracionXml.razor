@@ -17,6 +17,7 @@
 @inject DescargasTemporales Descargas
 @inject CFDIManager.Web.Services.Storage.EstadoSincronizacionStorage Sincronizacion
 @inject RutaXmlService Rutas
+@inject PeriodoTrabajoService Periodo
 @inject CFDIManager.Web.Services.Sat.EstadoDescargaAutomaticaSat DescargaSat
 @inject CFDIManager.Web.Services.AdministracionXml.ValidacionSatSegundoPlano ValidacionesSat
 
@@ -1026,9 +1027,11 @@
 
         Anios =Repo.ObtenerAniosAdministracionXml(EmpresaContext.EmpresaId, Clasificacion);
 
+        // Por omisión el periodo de trabajo (Herramientas); si no tiene CFDI, el más reciente.
         if (Anio is null || !Anios.Contains(Anio.Value))
         {
-            Anio = Anios.FirstOrDefault() is int a and > 0 ? a : null;
+            Anio = Anios.Contains(Periodo.Anio) ? Periodo.Anio
+                : Anios.FirstOrDefault() is int a and > 0 ? a : null;
             MesesElegidos.Clear();
             DiasElegidos.Clear();
         }
@@ -1038,7 +1041,7 @@
 
         if (MesesElegidos.Count == 0 && MesesDisponibles.Count > 0)
         {
-            MesesElegidos.Add(MesesDisponibles[^1]);
+            MesesElegidos.Add(Anio == Periodo.Anio && MesesDisponibles.Contains(Periodo.Mes) ? Periodo.Mes : MesesDisponibles[^1]);
         }
 
         await Consultar();

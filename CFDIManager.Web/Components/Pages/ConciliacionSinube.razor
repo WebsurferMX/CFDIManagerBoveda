@@ -13,6 +13,7 @@
 @inject SinubeService Sinube
 @inject SatMetadatosService MetadatosSat
 @inject IJSRuntime JS
+@inject PeriodoTrabajoService Periodo
 
 <PageTitle>Conciliación SINUBE vs SAT</PageTitle>
 
@@ -322,8 +323,8 @@
 
     private TipoConciliacion Tipo = TipoConciliacion.Proveedores;
 
-    private int Anio = DateTime.Today.Year;
-    private int Mes = DateTime.Today.Month;
+    private int Anio;
+    private int Mes;
 
     private ResultadoConciliacion? Resultado;
     private bool Procesando;
@@ -341,6 +342,8 @@
 
     protected override void OnInitialized()
     {
+        Anio = Periodo.Anio;
+        Mes = Periodo.Mes;
         EmpresaContext.OnChange += EmpresaCambio;
         RevisarConfiguracion();
     }
