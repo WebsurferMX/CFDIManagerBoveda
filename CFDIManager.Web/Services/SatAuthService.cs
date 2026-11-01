@@ -1,5 +1,6 @@
 using CFDIManager.Web.Models;
 using CFDIManager.Web.Services.Interfaces;
+using CFDIManager.Web.Services.Sat;
 using CFDIParser.Services;
 
 
@@ -9,13 +10,16 @@ public class SatAuthService : ISatAuthService
 {
     private readonly PostgreSqlRepository _repository;
     private readonly IWebHostEnvironment _env;
+    private readonly CertificadosEmpresa _certificados;
 
     public SatAuthService(
         PostgreSqlRepository repository,
-        IWebHostEnvironment env)
+        IWebHostEnvironment env,
+        CertificadosEmpresa certificados)
     {
         _repository = repository;
         _env = env;
+        _certificados = certificados;
     }
 
     public async Task<SatAuthResult> ValidarAsync(long empresaId)
@@ -51,27 +55,27 @@ public class SatAuthService : ISatAuthService
 
         if (!string.IsNullOrWhiteSpace(accesoSat.RutaCer))
         {
-            if (!File.Exists(accesoSat.RutaCer))
+            if (!_certificados.Existe(accesoSat.RutaCer))
             {
                 resultado.Errores.Add(
                     $"No existe el archivo CER: {accesoSat.RutaCer}");
             }
             else
             {
-                resultado.RutaCer = accesoSat.RutaCer;
+                resultado.RutaCer = _certificados.Resolver(accesoSat.RutaCer);
             }
         }
 
         if (!string.IsNullOrWhiteSpace(accesoSat.RutaKey))
         {
-            if (!File.Exists(accesoSat.RutaKey))
+            if (!_certificados.Existe(accesoSat.RutaKey))
             {
                 resultado.Errores.Add(
                     $"No existe el archivo KEY: {accesoSat.RutaKey}");
             }
             else
             {
-                resultado.RutaKey = accesoSat.RutaKey;
+                resultado.RutaKey = _certificados.Resolver(accesoSat.RutaKey);
             }
         }
 

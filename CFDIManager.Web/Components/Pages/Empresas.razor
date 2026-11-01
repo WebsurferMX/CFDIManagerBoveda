@@ -17,6 +17,9 @@
 @inject ConstanciaFiscalService Constancias
 @inject ArchivosSatService ArchivosSat
 @inject AccesoEmpresasService Acceso
+@inject CertificadosEmpresa Certificados
+@inject CiecProtector Protector
+@inject SatMovilCliente SatMovil
 
 
 
@@ -170,6 +173,7 @@
                                 <th>Opinión</th>
                                 <th>FIEL</th>
                                 <th>Vence</th>
+                                <th>CIEC</th>
                                 <th>Estado</th>
                                 <th class="text-end">Acciones</th>
                             </tr>
@@ -250,6 +254,33 @@
                                         else
                                         {
                                             <span class="sin-dato">—</span>
+                                        }
+                                    </td>
+
+                                    <td class="text-nowrap">
+                                        @if (Ciecs.TryGetValue(empresa.EmpresaId, out EstadoCiec? ciec))
+                                        {
+                                            <span class="badge rounded-pill bg-@(ciec.Color)-subtle text-@(ciec.Color)-emphasis border border-@(ciec.Color)-subtle"
+                                                  title="@ciec.Titulo">
+                                                <i class="ti @ciec.Icono"></i> @ciec.Texto
+                                            </span>
+
+                                            @if (ciec.Verificable)
+                                            {
+                                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1"
+                                                        title="Verificar la CIEC con el SAT (un intento)"
+                                                        disabled="@(VerificandoCiecId is not null)"
+                                                        @onclick="() => VerificarCiec(empresa)" @onclick:stopPropagation="true">
+                                                    @if (VerificandoCiecId == empresa.EmpresaId)
+                                                    {
+                                                        <span class="spinner-border spinner-border-sm"></span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <i class="ti ti-refresh"></i>
+                                                    }
+                                                </button>
+                                            }
                                         }
                                     </td>
 
@@ -580,9 +611,12 @@
             ListaEmpresas = Repo.ObtenerEmpresas()
                 .Where(empresa => EmpresasPermitidas is null || EmpresasPermitidas.Contains(empresa.EmpresaId))
                 .ToList();
+            Dictionary<long, EmpresaSatDto?> accesos = ListaEmpresas
+                .ToDictionary(empresa => empresa.EmpresaId, empresa => Repo.ObtenerEmpresaSat(empresa.EmpresaId));
             RfcFiel = ListaEmpresas
                 .Where(empresa => empresa.TieneFiel)
-                .ToDictionary(empresa => empresa.EmpresaId, LeerRfcFiel);
+                .ToDictionary(empresa => empresa.EmpresaId, empresa => LeerRfcFiel(accesos[empresa.EmpresaId]));
+            Ciecs = accesos.ToDictionary(a => a.Key, a => CalcularCiec(a.Value));
             CargarArchivosSat();
         }
         catch (Exception ex)
@@ -618,22 +652,96 @@
         }
     }
 
-    private string? LeerRfcFiel(EmpresaDto empresa)
+    private string? LeerRfcFiel(EmpresaSatDto? sat)
     {
-        string? rutaCer = Repo.ObtenerEmpresaSat(empresa.EmpresaId)?.RutaCer;
-
-        if (string.IsNullOrWhiteSpace(rutaCer) || !File.Exists(rutaCer))
+        if (!Certificados.Existe(sat?.RutaCer))
             return null;
 
         try
         {
-            using var certificado = X509CertificateLoader.LoadCertificateFromFile(rutaCer);
+            using var certificado = X509CertificateLoader.LoadCertificateFromFile(Certificados.Resolver(sat!.RutaCer));
 
             return FielSat.LeerRfc(certificado);
         }
         catch (Exception)
         {
             return null;
+        }
+    }
+
+    /// <summary>Estado de la CIEC para la columna; Verificable si se puede probar con el SAT.</summary>
+    private sealed record EstadoCiec(string Texto, string Color, string Icono, string Titulo, bool Verificable);
+
+    private Dictionary<long, EstadoCiec> Ciecs { get; set; } = new();
+
+    private long? VerificandoCiecId;
+
+    private EstadoCiec CalcularCiec(EmpresaSatDto? sat)
+    {
+        if (string.IsNullOrEmpty(sat?.SatPassword))
+            return new("Sin CIEC", "secondary", "ti-key-off", "Captúrala en Accesos SAT", false);
+
+        try
+        {
+            Protector.Descifrar(sat.SatPassword);
+        }
+        catch (InvalidOperationException)
+        {
+            return new("CIEC ilegible", "warning", "ti-alert-triangle",
+                "Se guardó en otro equipo o con otras llaves de cifrado; captúrala de nuevo en Accesos SAT", false);
+        }
+
+        string fecha = sat.CiecUltimaPrueba is DateTime f ? f.ToString("dd/MM/yyyy HH:mm") : "";
+
+        return sat.CiecResultado switch
+        {
+            null => new("Sin verificar", "info", "ti-key", "Guardada, aún no se ha probado con el SAT", true),
+            "Correcta" => new("CIEC OK", "success", "ti-key", $"Verificada con el SAT el {fecha}", true),
+            string error => new("CIEC incorrecta", "danger", "ti-key-off", $"{fecha}: {error}", true)
+        };
+    }
+
+    /// <summary>
+    /// Un solo intento con SAT Móvil (sin captcha). No se reintenta: varios intentos
+    /// fallidos pueden bloquear la CIEC.
+    /// </summary>
+    private async Task VerificarCiec(EmpresaDto empresa)
+    {
+        if (VerificandoCiecId is not null)
+            return;
+
+        LimpiarMensajes();
+        VerificandoCiecId = empresa.EmpresaId;
+
+        try
+        {
+            string ciec = Protector.Descifrar(Repo.ObtenerEmpresaSat(empresa.EmpresaId)?.SatPassword) ?? "";
+
+            if (ciec == "")
+                throw new InvalidOperationException($"{empresa.NombreParaMostrar} no tiene CIEC guardada.");
+
+            try
+            {
+                await SatMovil.VerificarCiecAsync(empresa.Rfc, ciec);
+                Repo.RegistrarPruebaCiec(empresa.EmpresaId, "Correcta");
+                MensajeExito = $"La CIEC de {empresa.NombreParaMostrar} es correcta.";
+            }
+            catch (CiecRechazadaException ex)
+            {
+                Repo.RegistrarPruebaCiec(empresa.EmpresaId, ex.Message);
+                MensajeError = $"{empresa.NombreParaMostrar}: {ex.Message}";
+            }
+
+            Ciecs[empresa.EmpresaId] = CalcularCiec(Repo.ObtenerEmpresaSat(empresa.EmpresaId));
+        }
+        catch (Exception ex)
+        {
+            // Falla de conexión: no se registra como CIEC incorrecta.
+            MensajeError = $"{empresa.NombreParaMostrar}: {ex.Message}";
+        }
+        finally
+        {
+            VerificandoCiecId = null;
         }
     }
 
@@ -719,9 +827,9 @@
 
                 if (AccesoSat is not null)
                 {
-                    await AccesoSat.GuardarArchivosAsync(Modelo.EmpresaId);
+                    await AccesoSat.GuardarArchivosAsync(Modelo.EmpresaId, Modelo.Rfc);
 
-                    EmpresaSatDto sat = AccesoSat.ObtenerModelo(Modelo.EmpresaId);
+                    EmpresaSatDto sat = AccesoSat.ObtenerModelo(Modelo.EmpresaId, Modelo.Rfc);
 
                     Repo.GuardarEmpresaSat(sat);
                     AccesoSat.ConfirmarGuardado(sat);

@@ -110,6 +110,25 @@ public partial class PostgreSqlRepository
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>Cambia solo la ubicación de la e.firma (al pasarla a la carpeta por RFC).</summary>
+    public void ActualizarRutasFiel(long empresaId, string rutaCer, string rutaKey)
+    {
+        using var cn = new NpgsqlConnection(_connectionString);
+        cn.Open();
+
+        using var cmd = new NpgsqlCommand(@"
+            UPDATE empresas_sat
+            SET ruta_cer = @ruta_cer,
+                ruta_key = @ruta_key
+            WHERE empresa_id = @empresa_id;", cn);
+
+        cmd.Parameters.AddWithValue("empresa_id", empresaId);
+        cmd.Parameters.AddWithValue("ruta_cer", rutaCer);
+        cmd.Parameters.AddWithValue("ruta_key", rutaKey);
+
+        cmd.ExecuteNonQuery();
+    }
+
     /// <summary>Columnas de la descarga automática del SAT. Idempotente; se llama al arrancar.</summary>
     public void AsegurarDescargaAutomatica()
     {

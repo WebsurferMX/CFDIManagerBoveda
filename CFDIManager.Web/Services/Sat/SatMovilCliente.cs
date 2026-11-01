@@ -47,6 +47,16 @@ public sealed class SatMovilCliente
         }
     }
 
+    /// <summary>
+    /// Inicia sesión en SAT Móvil sin pedir documentos: confirma que el SAT acepta el RFC y la CIEC.
+    /// Lanza <see cref="CiecRechazadaException"/> si la rechaza; otra excepción si el SAT no respondió.
+    /// </summary>
+    public async Task VerificarCiecAsync(string rfc, string ciec, CancellationToken ct = default)
+    {
+        HttpClient http = _fabrica.CreateClient("SatMovil");
+        await TokenAsync(http, rfc.Trim().ToUpperInvariant(), ciec, ct);
+    }
+
     private static async Task<string> TokenAsync(HttpClient http, string rfc, string ciec, CancellationToken ct)
     {
         string url = $"{UrlBase}/smnovel?grant_type=password&username={Uri.EscapeDataString(rfc)}" +
@@ -68,10 +78,10 @@ public sealed class SatMovilCliente
             // Respuesta que no es JSON: se informa abajo.
         }
 
-        throw new InvalidOperationException(
-            (int)respuesta.StatusCode is 400 or 401
-                ? "El SAT no aceptó el RFC y la contraseña (CIEC). Revísala en Accesos SAT."
-                : $"No se pudo acceder al SAT Móvil ({(int)respuesta.StatusCode}). Intenta más tarde.");
+        if ((int)respuesta.StatusCode is 400 or 401)
+            throw new CiecRechazadaException("El SAT no aceptó el RFC y la contraseña (CIEC). Revísala en Accesos SAT.");
+
+        throw new InvalidOperationException($"No se pudo acceder al SAT Móvil ({(int)respuesta.StatusCode}). Intenta más tarde.");
     }
 
     /// <summary>{"bodyResponse": {"constancia": "&lt;PDF en base64&gt;", ...}}</summary>
@@ -97,3 +107,6 @@ public sealed class SatMovilCliente
         return null;
     }
 }
+
+/// <summary>El SAT rechazó el RFC y la CIEC (no es una falla de conexión).</summary>
+public sealed class CiecRechazadaException(string mensaje) : InvalidOperationException(mensaje);

@@ -1222,7 +1222,7 @@ public List<EmpresaDto> ObtenerEmpresasActivas()
             (
                 SELECT 1 FROM empresas
                 WHERE UPPER(TRIM(rfc)) = UPPER(TRIM(@rfc))
-                  AND (@empresa_id_excluir IS NULL
+                  AND (CAST(@empresa_id_excluir AS BIGINT) IS NULL
                        OR empresa_id <> @empresa_id_excluir)
             );";
         using var cmd = new NpgsqlCommand(sql, conn);

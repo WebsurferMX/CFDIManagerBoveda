@@ -7,12 +7,21 @@ using CFDIManager.Web.Services.AdministracionXml;
 using CFDIManager.Web.Services.Storage;
 using CFDIParser.Models;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using CFDIManager.Web.Services.Seguridad;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Hosting.WindowsServices;
 
-var builder = WebApplication.CreateBuilder(args);
+// Como servicio de Windows arranca en System32; Storage se busca junto al ejecutable.
+var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+{
+    Args = args,
+    ContentRootPath = WindowsServiceHelpers.IsWindowsService() ? AppContext.BaseDirectory : null
+});
+
+builder.Services.AddWindowsService(opciones => opciones.ServiceName = "CFDIManager");
 
 // Cultura de la app: fechas dd/MM/yyyy (también para servicios en segundo plano).
 var CulturaMexico = new System.Globalization.CultureInfo("es-MX");
@@ -29,12 +38,26 @@ builder.Services.AddScoped<EmpresaCertificadoService>();
 
 builder.Services.AddHttpClient();
 
-// Llaves para cifrar la CIEC: en Storage\Llaves (protegidas con DPAPI de Windows) y con
-// nombre fijo para que mover la carpeta de la app no impida leer las CIEC guardadas.
-builder.Services.AddDataProtection()
-    .SetApplicationName("CFDIManager")
-    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "Storage", "Llaves")))
-    .ProtectKeysWithDpapi();
+// Llaves para cifrar la CIEC, el SMTP y SINUBE. Con CFDI_CLAVE_MAESTRA van en la base
+// (proteccion_llaves) cifradas con esa clave, así se leen en cualquier equipo que tenga la
+// misma clave. Sin ella, como antes: Storage\Llaves con DPAPI, solo legibles en este equipo.
+IDataProtectionBuilder proteccion = builder.Services.AddDataProtection()
+    .SetApplicationName("CFDIManager");
+
+if (ClaveMaestra.Leer(builder.Configuration) is byte[] claveMaestra)
+{
+    builder.Services.Configure<KeyManagementOptions>(opciones =>
+    {
+        opciones.XmlRepository = new LlavesProteccionPostgres(CadenaPostgres(builder.Configuration));
+        opciones.XmlEncryptor = new CifradoLlaves(claveMaestra);
+    });
+}
+else
+{
+    proteccion
+        .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, "Storage", "Llaves")))
+        .ProtectKeysWithDpapi();
+}
 
 // Los paquetes de la descarga masiva pueden pesar decenas de MB.
 builder.Services.AddHttpClient(
@@ -88,6 +111,9 @@ builder.Services.AddHttpClient(
 
 builder.Services.AddSingleton<CFDIManager.Web.Services.Sat.SatMovilCliente>();
 
+// e.firma de cada empresa en Storage\Certificados\{RFC}\{RFC}.cer/.key.
+builder.Services.AddSingleton<CFDIManager.Web.Services.Sat.CertificadosEmpresa>();
+
 builder.Services.AddScoped<CFDIManager.Web.Services.Sat.DescargaArchivosSatService>();
 
 builder.Services.AddSingleton<CatalogoLogosService>();
@@ -137,33 +163,8 @@ builder.Services.AddScoped<CFDIManager.Web.Services.Sinube.SatMetadatosService>(
 builder.Services.AddScoped<CFDIManager.Web.Services.Sinube.ConciliacionSinubeService>();
 
 builder.Services.AddScoped<PostgreSqlRepository>(
-    serviceProvider =>
-    {
-        IConfiguration configuration =
-            serviceProvider.GetRequiredService<IConfiguration>();
-
-        string cadenaBase =
-            configuration.GetConnectionString("PostgreSQL")
-            ?? throw new InvalidOperationException(
-                "No existe ConnectionStrings:PostgreSQL.");
-
-        // Variable de entorno o, en desarrollo, user secrets (dotnet user-secrets set CFDI_POSTGRES_PASSWORD ...).
-        string password =
-            Environment.GetEnvironmentVariable(
-                "CFDI_POSTGRES_PASSWORD")
-            ?? configuration["CFDI_POSTGRES_PASSWORD"]
-            ?? throw new InvalidOperationException(
-                "No existe la variable CFDI_POSTGRES_PASSWORD (ni en user secrets).");
-
-        var connectionBuilder =
-            new NpgsqlConnectionStringBuilder(cadenaBase)
-            {
-                Password = password
-            };
-
-        return new PostgreSqlRepository(
-            connectionBuilder.ConnectionString);
-    });
+    serviceProvider => new PostgreSqlRepository(
+        CadenaPostgres(serviceProvider.GetRequiredService<IConfiguration>())));
 
 // Usuarios, roles y empresas por usuario: ASP.NET Identity sobre las tablas de PostgreSQL
 // (usuarios, roles, usuario_roles, usuario_empresas). Ver Services\Seguridad.
@@ -227,6 +228,11 @@ builder.Services
 
 var app = builder.Build();
 
+if (ClaveMaestra.Leer(app.Configuration) is null)
+    app.Logger.LogWarning(
+        "Sin {Variable}: las contraseñas guardadas (CIEC, correo, SINUBE) solo se podrán leer en este equipo.",
+        ClaveMaestra.Nombre);
+
 // Rutas de XML guardadas en otro equipo se buscan en la carpeta local (CFDIParser.Services.RutaXmlLocal).
 RutaXmlLocal.CarpetaGeneral = app.Services.GetRequiredService<RutaXmlService>().CarpetaGeneral;
 
@@ -259,6 +265,18 @@ using (IServiceScope scope = app.Services.CreateScope())
     catch (Exception ex)
     {
         app.Logger.LogError(ex, "No se pudieron crear las columnas de la CIEC.");
+    }
+
+    try
+    {
+        int movidas = app.Services.GetRequiredService<CFDIManager.Web.Services.Sat.CertificadosEmpresa>()
+            .Migrar(scope.ServiceProvider.GetRequiredService<PostgreSqlRepository>(), app.Logger);
+        if (movidas > 0)
+            app.Logger.LogInformation("e.firma de {Cantidad} empresas pasada a su carpeta por RFC.", movidas);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "No se pudo pasar la e.firma a las carpetas por RFC.");
     }
 
     try
@@ -452,4 +470,22 @@ app.MapRazorComponents<App>()
    .AddInteractiveServerRenderMode();
 
 app.Run();
+
+static string CadenaPostgres(IConfiguration configuration)
+{
+    string cadenaBase =
+        configuration.GetConnectionString("PostgreSQL")
+        ?? throw new InvalidOperationException(
+            "No existe ConnectionStrings:PostgreSQL.");
+
+    // Variable de entorno o, en desarrollo, user secrets (dotnet user-secrets set CFDI_POSTGRES_PASSWORD ...).
+    string password =
+        Environment.GetEnvironmentVariable(
+            "CFDI_POSTGRES_PASSWORD")
+        ?? configuration["CFDI_POSTGRES_PASSWORD"]
+        ?? throw new InvalidOperationException(
+            "No existe la variable CFDI_POSTGRES_PASSWORD (ni en user secrets).");
+
+    return new NpgsqlConnectionStringBuilder(cadenaBase) { Password = password }.ConnectionString;
+}
 

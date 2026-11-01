@@ -485,25 +485,22 @@ public void ValidarFiel(string rfcEmpresa)
     FechaVencimiento = fiel.VigenteHasta;
 }
 
-private static byte[]? LeerGuardado(string? ruta) =>
-    !string.IsNullOrWhiteSpace(ruta) && File.Exists(ruta)
-        ? File.ReadAllBytes(ruta)
-        : null;
+[Inject]
+private CertificadosEmpresa Certificados { get; set; } = default!;
 
-private static string Carpeta(long empresaId) =>
-    Path.Combine(
-        "Storage",
-        "Certificados",
-        empresaId.ToString());
+private byte[]? LeerGuardado(string? ruta) => Certificados.Leer(ruta);
 
-public EmpresaSatDto ObtenerModelo(long empresaId)
+/// <summary>La ruta por RFC si ahí está el archivo; si no, la guardada (p. ej. si cambió el RFC).</summary>
+private string? RutaVigente(string porRfc, string? guardada) =>
+    Certificados.Existe(porRfc) ? porRfc
+    : Certificados.Existe(guardada) ? guardada
+    : null;
+
+public EmpresaSatDto ObtenerModelo(long empresaId, string rfc)
 {
-    string rutaCer = Path.Combine(Carpeta(empresaId), "certificado.cer");
-    string rutaKey = Path.Combine(Carpeta(empresaId), "llave.key");
-
     // Sin archivos no hay e.firma: rutas nulas para no marcarla como cargada.
-    ConfigSat.RutaCer = File.Exists(rutaCer) ? rutaCer : null;
-    ConfigSat.RutaKey = File.Exists(rutaKey) ? rutaKey : null;
+    ConfigSat.RutaCer = RutaVigente(CertificadosEmpresa.RutaCer(rfc), RutaCerGuardada);
+    ConfigSat.RutaKey = RutaVigente(CertificadosEmpresa.RutaKey(rfc), RutaKeyGuardada);
 
     // Cifrar no toca lo ya cifrado y cifra una CIEC guardada en claro por versiones anteriores.
     string? ciec =
@@ -651,25 +648,39 @@ private void CargarConfiguracion()
 }
 
 
-public async Task GuardarArchivosAsync(long empresaId)
+/// <summary>Guarda lo subido en Storage\Certificados\{RFC}\{RFC}.cer y .key.</summary>
+public async Task GuardarArchivosAsync(long empresaId, string rfc)
 {
     if (CerSubido is null && KeySubido is null)
         return;
 
-    string carpeta = Carpeta(empresaId);
-
-    Directory.CreateDirectory(carpeta);
-
     if (CerSubido is not null)
-        await File.WriteAllBytesAsync(Path.Combine(carpeta, "certificado.cer"), CerSubido);
+    {
+        await Certificados.GuardarAsync(CertificadosEmpresa.RutaCer(rfc), CerSubido);
+        RutaCerGuardada = CertificadosEmpresa.RutaCer(rfc);
+    }
 
     if (KeySubido is not null)
-        await File.WriteAllBytesAsync(Path.Combine(carpeta, "llave.key"), KeySubido);
+    {
+        await Certificados.GuardarAsync(CertificadosEmpresa.RutaKey(rfc), KeySubido);
+        RutaKeyGuardada = CertificadosEmpresa.RutaKey(rfc);
+    }
+
+    // Si solo se subió uno, el otro archivo guardado pasa también a la carpeta del RFC.
+    if (RutaCerGuardada != CertificadosEmpresa.RutaCer(rfc) && LeerGuardado(RutaCerGuardada) is byte[] cer)
+    {
+        await Certificados.GuardarAsync(CertificadosEmpresa.RutaCer(rfc), cer);
+        RutaCerGuardada = CertificadosEmpresa.RutaCer(rfc);
+    }
+
+    if (RutaKeyGuardada != CertificadosEmpresa.RutaKey(rfc) && LeerGuardado(RutaKeyGuardada) is byte[] key)
+    {
+        await Certificados.GuardarAsync(CertificadosEmpresa.RutaKey(rfc), key);
+        RutaKeyGuardada = CertificadosEmpresa.RutaKey(rfc);
+    }
 
     CerSubido = null;
     KeySubido = null;
-    RutaCerGuardada = Path.Combine(carpeta, "certificado.cer");
-    RutaKeyGuardada = Path.Combine(carpeta, "llave.key");
     PasswordKeyGuardada = PasswordKey;
     EmpresaCargada = empresaId;
 }

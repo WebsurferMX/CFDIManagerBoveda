@@ -16,8 +16,10 @@
   </ItemGroup>
 
   <ItemGroup>
+  <!-- Al publicar CFDIManager.Web chocaría con su appsettings.json. -->
   <None Update="appsettings.json">
     <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    <CopyToPublishDirectory>Never</CopyToPublishDirectory>
   </None>
 </ItemGroup>
 
