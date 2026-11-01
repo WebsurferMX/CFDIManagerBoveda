@@ -139,8 +139,35 @@ public class SatDescargaService : ISatDescargaService
 
         using FielSat fiel = AbrirFiel(empresa);
 
+        SatDescargaMasivaCliente cliente = CrearCliente(fiel);
+
         ResultadoSolicitudSat r =
-            await CrearCliente(fiel).SolicitarAsync(p, cancelacion);
+            await cliente.SolicitarAsync(p, cancelacion);
+
+        // 5002: el SAT ya no acepta más solicitudes con exactamente los mismos datos. Con la fecha
+        // inicial unos segundos antes es otra solicitud y cubre el mismo periodo (más esos segundos).
+        int segundosAntes = 0;
+
+        while (r.CodEstatus == 5002 && segundosAntes < MaximoAjusteSegundos)
+        {
+            segundosAntes++;
+
+            r = await cliente.SolicitarAsync(
+                new ParametrosSolicitudSat
+                {
+                    FechaInicial = p.FechaInicial.AddSeconds(-segundosAntes),
+                    FechaFinal = p.FechaFinal,
+                    Recibidos = p.Recibidos,
+                    Metadatos = p.Metadatos,
+                    TipoComprobante = p.TipoComprobante,
+                    RfcContraparte = p.RfcContraparte
+                },
+                cancelacion);
+        }
+
+        string ajuste = segundosAntes > 0 && r.Aceptada
+            ? $" (el SAT ya tenía esta solicitud: se pidió desde {p.FechaInicial.AddSeconds(-segundosAntes):dd/MM/yyyy HH:mm:ss})"
+            : "";
 
         var solicitud = new SolicitudSatDto
         {
@@ -158,13 +185,15 @@ public class SatDescargaService : ISatDescargaService
             TipoComprobante = p.TipoComprobante,
             RfcContraparte = (p.RfcContraparte ?? "").Trim().ToUpperInvariant(),
             Estado = r.Aceptada ? "Aceptada" : "Rechazada",
-            Mensaje = $"{r.CodEstatus} {r.Mensaje}".Trim()
+            Mensaje = $"{r.CodEstatus} {r.Mensaje}{ajuste}".Trim()
         };
 
         await GuardarAsync(solicitud);
 
         return solicitud;
     }
+
+    private const int MaximoAjusteSegundos = 10;
 
     public async Task<SolicitudSatDto> CrearSolicitudPorUuidAsync(
         EmpresaDto empresa,
