@@ -399,13 +399,15 @@ public sealed class PortalSatDeclaraciones : IDisposable
             var doc = new HtmlDocument();
             doc.LoadHtml(html);
 
-            HtmlNode? form = doc.DocumentNode.SelectNodes("//form")?.FirstOrDefault(EsAutomatico);
+            HtmlNode? form = doc.DocumentNode.SelectNodes("//form")?.FirstOrDefault(f => EsAutomatico(f, html));
 
             if (form is null)
                 break;
 
             string accion = HtmlEntity.DeEntitize(form.GetAttributeValue("action", ""));
-            Uri destino = accion == "" ? actual : new Uri(actual, accion);
+
+            // El login de anuales manda sola la opción de e.firma (responde 500 sin certificado): se pide la de contraseña.
+            Uri destino = SinEFirma(accion == "" ? actual : new Uri(actual, accion));
 
             using var solicitud = new HttpRequestMessage(HttpMethod.Post, destino) { Content = new FormUrlEncodedContent(CamposOcultos(form)) };
             solicitud.Headers.Referrer = actual;
@@ -418,14 +420,21 @@ public sealed class PortalSatDeclaraciones : IDisposable
         return (html, actual);
     }
 
-    /// <summary>Formulario sin campos para el usuario (solo ocultos) y con al menos uno: lo envía la página sola.</summary>
-    private static bool EsAutomatico(HtmlNode form)
+    /// <summary>
+    /// Formulario sin campos para el usuario que la página envía sola: con campos ocultos, o vacío
+    /// cuando la página lo manda por script (document.forms[0].submit(), como hace el login del SAT).
+    /// </summary>
+    private static bool EsAutomatico(HtmlNode form, string html)
     {
         List<HtmlNode> inputs = form.SelectNodes(".//input[@name]")?.ToList() ?? [];
 
-        return inputs.Count > 0 &&
-               form.SelectSingleNode(".//select|.//textarea") is null &&
-               inputs.All(i => i.GetAttributeValue("type", "text").ToLowerInvariant() is "hidden" or "submit");
+        if (form.SelectSingleNode(".//select|.//textarea") is not null)
+            return false;
+
+        if (inputs.Count == 0)
+            return html.Contains(".submit()", StringComparison.OrdinalIgnoreCase);
+
+        return inputs.All(i => i.GetAttributeValue("type", "text").ToLowerInvariant() is "hidden" or "submit");
     }
 
     private static Dictionary<string, string> CamposOcultos(HtmlNode form)
@@ -478,6 +487,12 @@ public sealed class PortalSatDeclaraciones : IDisposable
 
         return new Uri("https://login.mat.sat.gob.mx/nidp/app/login?id=contr-dual-totp-eFirma&sid=0&option=credential&sid=0");
     }
+
+    /// <summary>La misma URL, pero con la opción de contraseña si apunta a la de e.firma.</summary>
+    private static Uri SinEFirma(Uri url) =>
+        url.ToString().Contains("contr-dual-eFirma-totp", StringComparison.OrdinalIgnoreCase)
+            ? new Uri(url.ToString().Replace("contr-dual-eFirma-totp", "contr-dual-totp-eFirma", StringComparison.OrdinalIgnoreCase))
+            : url;
 
     private static string Token(string html)
     {
