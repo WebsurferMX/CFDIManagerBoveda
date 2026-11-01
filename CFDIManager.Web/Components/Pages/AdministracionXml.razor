@@ -556,18 +556,10 @@
                 break;
 
             case "renombrar":
-                <div class="alert alert-secondary small">
-                    Se crean <b>copias</b> con el nombre nuevo en Storage\Renombrados; los XML originales no se tocan. Se aplicará a @DescribirAlcance().
-                </div>
-                <div class="input-group">
-                    <span class="input-group-text">Formato</span>
-                    <select class="form-select" @bind="PatronNombre">
-                        <option value="serie_folio_uuid">Serie_Folio_UUID</option>
-                        <option value="tipo_serie_folio_uuid">Tipo_Serie_Folio_UUID</option>
-                        <option value="fecha_rfc_uuid">Fecha_RFCContraparte_UUID</option>
-                    </select>
-                    <button class="btn btn-primary text-nowrap" @onclick="Renombrar"><i class="bi bi-copy me-1"></i>Crear copias</button>
-                </div>
+                <CFDIManager.Web.Components.AdministracionXml.RenombrarXmlAsistente
+                    Ejemplo="@(Activa ?? Filas.FirstOrDefault())"
+                    Alcance="@DescribirAlcance()"
+                    OnIniciar="Renombrar" />
                 break;
 
             case "logos":
@@ -667,7 +659,7 @@
             ("Descargar XML (ZIP)", "bi-file-earmark-zip", "ambar", DescargarZipXml),
             ("Descargar PDF (ZIP)", "bi-file-earmark-zip", "rojo", DescargarZipPdf),
             ("Agrupaciones", "bi-diagram-3", "ambar", Sincrona(() => AbrirModal("agrupaciones"))),
-            ("Re-nombrar XML", "bi-input-cursor-text", "azul", Sincrona(() => AbrirModal("renombrar"))),
+            ("Renombrar XML's", "bi-input-cursor-text", "azul", Sincrona(() => AbrirModal("renombrar"))),
             ("Catálogo de logos", "bi-images", "ambar", Sincrona(() => AbrirModal("logos"))),
             ("Verifica series", "bi-123", "azul", Sincrona(() => AbrirModal("series"))),
             ("Leer complemento", "bi-braces", "verde", Sincrona(LeerComplemento)),
@@ -765,7 +757,6 @@
     private string AgruparPor = "emisor";
     private List<AdminXmlSerieDto> Series = new();
     private List<NodoXml> Complementos = new();
-    private string PatronNombre = "serie_folio_uuid";
     private List<IBrowserFile> ArchivosElegidos = new();
     private string CarpetaImportar = "";
     private string RfcLogo = "";
@@ -1408,7 +1399,7 @@
                     TituloModal = "XML externos";
                     break;
                 case "renombrar":
-                    TituloModal = "Re-nombrar XML";
+                    TituloModal = "Asistente para renombrar tus archivos XML";
                     break;
                 case "columnas":
                     TituloModal = "Columnas visibles";
@@ -1769,11 +1760,11 @@
     }
 
 
-    private Task Renombrar()
+    private Task Renombrar((List<string> Campos, string Separador) estructura)
     {
         CerrarModal();
         AdminXmlFiltroDto f = FiltroAccion();
-        return Ejecutar("Re-nombrar XML", (p, ct) => Admin.RenombrarAsync(EmpresaContext.EmpresaActiva!, f, PatronNombre, p, ct), recargar: false);
+        return Ejecutar("Renombrar XML's", (p, ct) => Admin.RenombrarAsync(EmpresaContext.EmpresaActiva!, f, estructura.Campos, estructura.Separador, p, ct), recargar: false);
     }
 
     private void ElegirArchivos(InputFileChangeEventArgs e)

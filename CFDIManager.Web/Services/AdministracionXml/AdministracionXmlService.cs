@@ -586,8 +586,52 @@ public class AdministracionXmlService
         }, ct);
     }
 
-    /// <summary>Copia los XML con nombre nuevo; los originales no se tocan.</summary>
-    public Task<ResultadoProcesoXml> RenombrarAsync(EmpresaDto empresa, AdminXmlFiltroDto f, string patron, IProgress<ResultadoProcesoXml>? progreso, CancellationToken ct)
+    /// <summary>Campos que se pueden usar en el nombre del archivo (Renombrar XML's), en el orden del asistente.</summary>
+    public static readonly string[] CamposNombre =
+        ["UUID", "Serie", "Folio", "FechaEmision", "RFCEmisor", "RFCReceptor", "Total", "EstadoSAT", "TipoComprobante", "SubContRfcLabora"];
+
+    /// <summary>
+    /// Nombre del archivo (sin .xml) con los campos en el orden elegido. Los vacíos se omiten.
+    /// SubContRfcLabora sale del complemento de nómina, por eso se lee del XML solo si se usa.
+    /// </summary>
+    public string NombreArchivo(AdminXmlFilaDto x, IReadOnlyList<string> campos, string separador)
+    {
+        string nombre = string.Join(separador, campos.Select(c => Limpiar(Valor(x, c))).Where(v => v != ""));
+        return nombre == "" ? x.Uuid : nombre;
+    }
+
+    private string Valor(AdminXmlFilaDto x, string campo) => campo switch
+    {
+        "UUID" => x.Uuid,
+        "Serie" => x.Serie,
+        "Folio" => x.Folio,
+        "FechaEmision" => x.FechaEmision.ToString("yyyy-MM-dd"),
+        "RFCEmisor" => x.RfcEmisor,
+        "RFCReceptor" => x.RfcReceptor,
+        "Total" => x.Total.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+        "EstadoSAT" => x.EstadoSat,
+        "TipoComprobante" => x.TipoCfdi,
+        "SubContRfcLabora" => RfcLaboraSubcontratacion(x),
+        _ => ""
+    };
+
+    // nomina12:Receptor/nomina12:SubContratacion/@RfcLabora; si hay varias, la primera.
+    private string RfcLaboraSubcontratacion(AdminXmlFilaDto x)
+    {
+        try
+        {
+            return System.Xml.Linq.XDocument.Load(RutaExistente(x))
+                .Descendants().FirstOrDefault(e => e.Name.LocalName == "SubContratacion")
+                ?.Attribute("RfcLabora")?.Value ?? "";
+        }
+        catch (Exception)
+        {
+            return "";
+        }
+    }
+
+    /// <summary>Copia los XML con el nombre de la estructura elegida; los originales no se tocan.</summary>
+    public Task<ResultadoProcesoXml> RenombrarAsync(EmpresaDto empresa, AdminXmlFiltroDto f, IReadOnlyList<string> campos, string separador, IProgress<ResultadoProcesoXml>? progreso, CancellationToken ct)
     {
         return Task.Run(() =>
         {
@@ -604,15 +648,7 @@ public class AdministracionXmlService
                     string carpeta = Path.Combine(baseDestino, x.Clasificacion == "RECIBIDO" ? "Recibidos" : "Emitidos");
                     Directory.CreateDirectory(carpeta);
 
-                    string contraparte = x.Clasificacion == "RECIBIDO" ? x.RfcEmisor : x.RfcReceptor;
-                    string[] partes = patron switch
-                    {
-                        "tipo_serie_folio_uuid" => [x.TipoCfdi, x.Serie, x.Folio, x.Uuid],
-                        "fecha_rfc_uuid" => [x.FechaEmision.ToString("yyyy-MM-dd"), contraparte, x.Uuid],
-                        _ => [x.Serie, x.Folio, x.Uuid]
-                    };
-
-                    string nombre = string.Join("_", partes.Select(Limpiar).Where(p => p != ""));
+                    string nombre = NombreArchivo(x, campos, separador);
                     string destino = Path.Combine(carpeta, nombre + ".xml");
 
                     for (int i = 2; File.Exists(destino); i++)

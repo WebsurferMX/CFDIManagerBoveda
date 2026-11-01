@@ -1,0 +1,174 @@
+@using CFDIParser.Models
+@using CFDIManager.Web.Services.AdministracionXml
+
+@inject AdministracionXmlService Admin
+@inject IJSRuntime JS
+
+@* Asistente de Renombrar XML's: se arma la estructura del nombre con los campos disponibles, se ve un ejemplo
+   con el comprobante activo y se lanza el proceso masivo (copias; los originales no se tocan). *@
+
+<p class="small text-body-secondary mb-2">
+    Define la estructura del nombre de los archivos. Se crean <b>copias</b> con el nombre nuevo en Storage\Renombrados;
+    los XML originales no se tocan. Se aplicará a @Alcance.
+</p>
+
+<div class="renombrar-listas">
+    <div>
+        <label class="form-label small fw-semibold mb-1">Campos disponibles</label>
+        <select class="form-select form-select-sm" multiple size="10" @bind="SelDisponibles">
+            @foreach (string campo in Disponibles)
+            {
+                <option value="@campo" @ondblclick="() => Agregar([campo])">@campo</option>
+            }
+        </select>
+    </div>
+
+    <div class="d-flex flex-column gap-2 justify-content-center">
+        <button type="button" class="btn btn-sm btn-outline-primary" title="Agregar al nombre" disabled="@(SelDisponibles.Length == 0)"
+                @onclick="() => Agregar(SelDisponibles)">
+            <i class="bi bi-chevron-right"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-primary" title="Quitar del nombre" disabled="@(SelElegidos.Length == 0)"
+                @onclick="() => Quitar(SelElegidos)">
+            <i class="bi bi-chevron-left"></i>
+        </button>
+    </div>
+
+    <div>
+        <label class="form-label small fw-semibold mb-1">Campos del archivo</label>
+        <select class="form-select form-select-sm" multiple size="10" @bind="SelElegidos">
+            @foreach (string campo in Elegidos)
+            {
+                <option value="@campo" @ondblclick="() => Quitar([campo])">@campo</option>
+            }
+        </select>
+    </div>
+
+    <div class="d-flex flex-column gap-2 justify-content-center">
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Subir" disabled="@(SelElegidos.Length != 1)" @onclick="() => Mover(-1)">
+            <i class="bi bi-chevron-up"></i>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" title="Bajar" disabled="@(SelElegidos.Length != 1)" @onclick="() => Mover(1)">
+            <i class="bi bi-chevron-down"></i>
+        </button>
+    </div>
+</div>
+
+<div class="d-flex align-items-center gap-2 mt-3">
+    <label class="small fw-semibold" for="separador">Separador</label>
+    <select id="separador" class="form-select form-select-sm w-auto" @bind="Separador">
+        <option value="_">Guion bajo  _</option>
+        <option value="-">Guion  -</option>
+        <option value=".">Punto  .</option>
+        <option value=" ">Espacio</option>
+    </select>
+</div>
+
+<div class="renombrar-ejemplo mt-3">
+    <div class="small fw-semibold mb-1">Ejemplo:</div>
+    <div class="small">
+        <span class="text-body-secondary">Estructura de archivo:</span>
+        <span class="text-danger-emphasis font-monospace">@(Elegidos.Count == 0 ? "—" : string.Join(Separador, Elegidos) + ".xml")</span>
+    </div>
+    <div class="small">
+        <span class="text-body-secondary">Archivo renombrado:</span>
+        <span class="text-success-emphasis font-monospace">
+            @(Ejemplo is null || Elegidos.Count == 0 ? "—" : Admin.NombreArchivo(Ejemplo, Elegidos, Separador) + ".xml")
+        </span>
+        @if (Ejemplo is not null)
+        {
+            <span class="text-body-secondary ms-1">(del comprobante activo)</span>
+        }
+    </div>
+</div>
+
+<div class="d-flex flex-wrap gap-2 justify-content-end mt-3">
+    <button type="button" class="btn btn-primary" disabled="@(Elegidos.Count == 0)"
+            title="@(Elegidos.Count == 0 ? "Agrega al menos un campo al nombre" : "")" @onclick="Iniciar">
+        <i class="bi bi-play-circle me-1"></i>Iniciar proceso masivo
+    </button>
+</div>
+
+@code {
+    /// <summary>Comprobante con el que se arma el ejemplo (el activo de la tabla).</summary>
+    [Parameter] public AdminXmlFilaDto? Ejemplo { get; set; }
+
+    /// <summary>Descripción de a qué comprobantes se aplica (marcados o filtro actual).</summary>
+    [Parameter] public string Alcance { get; set; } = "";
+
+    [Parameter] public EventCallback<(List<string> Campos, string Separador)> OnIniciar { get; set; }
+
+    private const string ClaveGuardada = "adminxml-renombrar-estructura";
+
+    private List<string> Elegidos = ["Serie", "Folio", "UUID"];
+    private string Separador = "_";
+    private string[] SelDisponibles = [];
+    private string[] SelElegidos = [];
+
+    private IEnumerable<string> Disponibles => AdministracionXmlService.CamposNombre.Where(c => !Elegidos.Contains(c));
+
+    // La última estructura usada se recuerda en este navegador.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        try
+        {
+            if (await JS.InvokeAsync<string?>("localStorage.getItem", ClaveGuardada) is { Length: > 2 } guardada &&
+                guardada[1] == '|')
+            {
+                List<string> campos = guardada[2..].Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Where(AdministracionXmlService.CamposNombre.Contains).ToList();
+
+                if (campos.Count > 0)
+                {
+                    Separador = guardada[..1];
+                    Elegidos = campos;
+                    StateHasChanged();
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Sin localStorage: se usa la estructura de omisión.
+        }
+    }
+
+    private void Agregar(IEnumerable<string> campos)
+    {
+        Elegidos.AddRange(campos.Where(c => !Elegidos.Contains(c)));
+        SelDisponibles = [];
+    }
+
+    private void Quitar(IEnumerable<string> campos)
+    {
+        Elegidos.RemoveAll(campos.Contains);
+        SelElegidos = [];
+    }
+
+    private void Mover(int direccion)
+    {
+        int i = Elegidos.IndexOf(SelElegidos[0]);
+        int j = i + direccion;
+
+        if (i < 0 || j < 0 || j >= Elegidos.Count)
+            return;
+
+        (Elegidos[i], Elegidos[j]) = (Elegidos[j], Elegidos[i]);
+    }
+
+    private async Task Iniciar()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", ClaveGuardada, $"{Separador}|{string.Join(",", Elegidos)}");
+        }
+        catch (Exception)
+        {
+            // Si no se puede guardar, solo dura esta sesión.
+        }
+
+        await OnIniciar.InvokeAsync((Elegidos.ToList(), Separador));
+    }
+}
