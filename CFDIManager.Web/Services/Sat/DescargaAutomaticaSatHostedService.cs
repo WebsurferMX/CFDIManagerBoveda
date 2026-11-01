@@ -36,6 +36,12 @@ public class EstadoDescargaAutomaticaSat
 
     public bool EnCurso { get; set; }
 
+    /// <summary>configuracion_app: "1" pausa la descarga automática de todas las empresas (Herramientas).</summary>
+    public const string ClavePausa = "descarga_automatica_pausada";
+
+    /// <summary>Si la última pasada se saltó por la pausa general.</summary>
+    public bool Pausada { get; set; }
+
     public DateTime? UltimaPasada { get; set; }
 
     public DateTime? SiguientePasada { get; set; }
@@ -178,6 +184,15 @@ public class DescargaAutomaticaSatHostedService : BackgroundService
             using IServiceScope scope = _scopes.CreateScope();
             var repo = scope.ServiceProvider.GetRequiredService<PostgreSqlRepository>();
             var descargas = scope.ServiceProvider.GetRequiredService<ISatDescargaService>();
+
+            // Pausa general (Herramientas): no se pide, verifica ni descarga nada, aunque la empresa la tenga encendida.
+            _estado.Pausada = repo.ObtenerConfiguracionApp(EstadoDescargaAutomaticaSat.ClavePausa) == "1";
+
+            if (_estado.Pausada)
+            {
+                _estado.UltimaPasada = DateTime.Now;
+                return;
+            }
 
             foreach (EmpresaDto empresa in repo.ObtenerEmpresasActivas())
             {

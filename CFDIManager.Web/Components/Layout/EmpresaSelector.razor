@@ -1,5 +1,6 @@
 @using CFDIParser.Models
 @using CFDIManager.Web.Services
+@implements IDisposable
 
 @inject AccesoEmpresasService Acceso
 @inject EmpresaContext EmpresaContext
@@ -7,20 +8,47 @@
 <div class="empresa-selector">
     <label for="empresa-activa">Empresa activa</label>
 
-    <select id="empresa-activa"
-            value="@EmpresaContext.EmpresaId"
-            @onchange="CambiarEmpresa">
+    @* Lista con buscador (un <select> nativo no permite buscar): filtra por RFC o nombre; ↑ ↓ Enter Esc. *@
+    <div class="empresa-combo">
+        <button id="empresa-activa" type="button" class="empresa-combo-boton"
+                aria-haspopup="listbox" aria-expanded="@(Abierto ? "true" : "false")"
+                @onclick="Abrir">
+            <span class="texto">@TextoActual</span>
+            <i class="bi bi-chevron-down" aria-hidden="true"></i>
+        </button>
 
-        <option value="0">@(Empresas.Count == 0 ? "Sin empresas asignadas" : "Selecciona un RFC")</option>
-
-        @foreach (var empresa in Empresas)
+        @if (Abierto)
         {
-            <option value="@empresa.EmpresaId">
-                @empresa.Rfc · @empresa.NombreParaMostrar
-            </option>
-        }
+            <div class="empresa-combo-fondo" @onclick="Cerrar"></div>
 
-    </select>
+            <div class="empresa-combo-panel">
+                <input @ref="CampoBusqueda" type="search" class="empresa-combo-busqueda"
+                       placeholder="Buscar RFC o empresa" autocomplete="off"
+                       @bind="Busqueda" @bind:event="oninput" @bind:after="() => Resaltada = 0"
+                       @onkeydown="Tecla" />
+
+                <ul role="listbox">
+                    @if (Filtradas.Count == 0)
+                    {
+                        <li class="vacio">@(Empresas.Count == 0 ? "Sin empresas asignadas" : "Sin coincidencias")</li>
+                    }
+
+                    @for (int i = 0; i < Filtradas.Count; i++)
+                    {
+                        int indice = i;
+                        EmpresaDto empresa = Filtradas[i];
+
+                        <li role="option" aria-selected="@(empresa.EmpresaId == EmpresaContext.EmpresaId ? "true" : "false")"
+                            class="@(indice == Resaltada ? "resaltada" : "") @(empresa.EmpresaId == EmpresaContext.EmpresaId ? "activa" : "")"
+                            @onclick="() => Elegir(empresa)" @onmouseover="() => Resaltada = indice">
+                            <span class="rfc">@empresa.Rfc</span>
+                            <span class="nombre">@empresa.NombreParaMostrar</span>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+    </div>
 
     <AuthorizeView Policy="@Permisos.OperarCfdi">
         <DescargaSatSwitch />
@@ -38,22 +66,86 @@
     // Solo las empresas asignadas al usuario (el Administrador ve todas).
     private List<EmpresaDto> Empresas = new();
 
+    private bool Abierto;
+    private bool Enfocar;
+    private string Busqueda = "";
+    private int Resaltada;
+    private ElementReference CampoBusqueda;
+
+    private string TextoActual =>
+        Empresas.FirstOrDefault(e => e.EmpresaId == EmpresaContext.EmpresaId) is EmpresaDto actual
+            ? $"{actual.Rfc} · {actual.NombreParaMostrar}"
+            : Empresas.Count == 0 ? "Sin empresas asignadas" : "Selecciona un RFC";
+
+    private List<EmpresaDto> Filtradas =>
+        Empresas.Where(e =>
+                Busqueda.Trim() == "" ||
+                e.Rfc.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                e.NombreParaMostrar.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                e.RazonSocial.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
     protected override async Task OnInitializedAsync()
     {
         Empresas = await Acceso.ObtenerEmpresasPermitidasAsync();
+        EmpresaContext.OnChange += Refrescar;
     }
 
-    private void CambiarEmpresa(ChangeEventArgs args)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!long.TryParse(args.Value?.ToString(), out var empresaId))
-            return;
-
-        var empresa = Empresas.FirstOrDefault(
-            e => e.EmpresaId == empresaId);
-
-        if (empresa is null)
-            return;
-
-        EmpresaContext.Seleccionar(empresa);
+        if (Enfocar)
+        {
+            Enfocar = false;
+            await CampoBusqueda.FocusAsync();
+        }
     }
+
+    private void Abrir()
+    {
+        if (Abierto)
+        {
+            Cerrar();
+            return;
+        }
+
+        Busqueda = "";
+        Resaltada = Math.Max(0, Empresas.FindIndex(e => e.EmpresaId == EmpresaContext.EmpresaId));
+        Abierto = true;
+        Enfocar = true;
+    }
+
+    private void Cerrar() => Abierto = false;
+
+    private void Tecla(KeyboardEventArgs e)
+    {
+        List<EmpresaDto> filtradas = Filtradas;
+
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                Resaltada = Math.Min(Resaltada + 1, filtradas.Count - 1);
+                break;
+            case "ArrowUp":
+                Resaltada = Math.Max(Resaltada - 1, 0);
+                break;
+            case "Enter" when filtradas.Count > 0:
+                Elegir(filtradas[Math.Clamp(Resaltada, 0, filtradas.Count - 1)]);
+                break;
+            case "Escape":
+                Cerrar();
+                break;
+        }
+    }
+
+    private void Elegir(EmpresaDto empresa)
+    {
+        Abierto = false;
+
+        if (empresa.EmpresaId != EmpresaContext.EmpresaId)
+            EmpresaContext.Seleccionar(empresa);
+    }
+
+    private void Refrescar() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => EmpresaContext.OnChange -= Refrescar;
 }

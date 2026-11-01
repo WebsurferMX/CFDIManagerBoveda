@@ -4,6 +4,7 @@
 @using System.Globalization
 @using CFDIManager.Web.Services
 @using CFDIManager.Web.Services.Storage
+@using CFDIManager.Web.Services.Sat
 @using CFDIParser.Models
 @using CFDIParser.Services
 @implements IDisposable
@@ -13,6 +14,8 @@
 @inject PostgreSqlRepository Repo
 @inject IJSRuntime JS
 @inject EmpresaContext EmpresaContext
+@inject CFDIManager.Web.Services.Sat.EstadoDescargaAutomaticaSat DescargaSat
+@inject IConfiguration Configuracion
 
 <PageTitle>Herramientas</PageTitle>
 
@@ -101,6 +104,113 @@
                             Ahora: <strong>@(Periodo.EsAutomatico ? "automático" : "mes fijo")</strong>,
                             las pantallas abren del @Periodo.Inicio.ToString("dd/MM/yyyy") al @Periodo.Fin.ToString("dd/MM/yyyy").
                         </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-body d-flex flex-wrap align-items-center justify-content-between gap-2 py-3">
+                    <div>
+                        <span class="eyebrow">SAT</span>
+                        <h2 class="h5 mb-0">Descarga automática del SAT</h2>
+                    </div>
+
+                    <div class="form-check form-switch m-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="descargaGeneral"
+                               checked="@(!DescargaPausada)" @onchange="CambiarPausa" />
+                        <label class="form-check-label fw-semibold" for="descargaGeneral">
+                            @(DescargaPausada ? "Pausada para todas las empresas" : "Encendida")
+                        </label>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <p class="text-body-secondary small">
+                        Ventana diaria (@string.Join(" y ", Horarios)), meses pendientes desde "Descargar desde" y cierre de mes.
+                        El interruptor general la detiene para todas aunque la empresa la tenga encendida; las casillas
+                        la encienden o apagan por empresa (igual que el switch de Administración de XML).
+                        Las descargas que lances a mano en Descargas SAT no se ven afectadas.
+                    </p>
+
+                    @if (DescargaPausada)
+                    {
+                        <div class="alert alert-warning py-2 small">
+                            <i class="bi bi-pause-circle me-1"></i>
+                            Pausada: no se pide, verifica ni descarga nada automáticamente. Al encenderla, en la siguiente pasada
+                            (máximo 30 min) se piden los periodos y ventanas que hayan quedado pendientes.
+                        </div>
+                    }
+
+                    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                        <div class="input-group input-group-sm" style="max-width: 360px">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="search" class="form-control" placeholder="Buscar por RFC o empresa"
+                                   @bind="BusquedaDescarga" @bind:event="oninput" />
+                        </div>
+                        <span class="small text-body-secondary">@EmpresasDescarga.Count() de @Empresas.Count empresas</span>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Automática</th>
+                                    <th>
+                                        <button type="button" class="btn btn-link btn-sm p-0 text-reset fw-semibold text-decoration-none"
+                                                @onclick='() => OrdenarDescarga("empresa")'>
+                                            Empresa <i class="bi @IconoOrden("empresa")"></i>
+                                        </button>
+                                    </th>
+                                    <th>
+                                        <button type="button" class="btn btn-link btn-sm p-0 text-reset fw-semibold text-decoration-none"
+                                                @onclick='() => OrdenarDescarga("rfc")'>
+                                            RFC <i class="bi @IconoOrden("rfc")"></i>
+                                        </button>
+                                    </th>
+                                    <th>Descarga</th>
+                                    <th>Desde</th>
+                                    <th>Último ciclo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (EmpresaDto e in EmpresasDescarga)
+                                {
+                                    EmpresaSatDto? sat = AccesosSat.GetValueOrDefault(e.EmpresaId);
+
+                                    <tr class="@(DescargaPausada ? "opacity-75" : "")">
+                                        <td>
+                                            <div class="form-check form-switch m-0">
+                                                <input class="form-check-input" type="checkbox" role="switch"
+                                                       checked="@(sat?.DescargaAutomatica == true)"
+                                                       disabled="@(sat is not { TieneEFirma: true })"
+                                                       title="@(sat is { TieneEFirma: true } ? "" : "Sin e.firma: cárgala en Empresas → Accesos SAT")"
+                                                       @onchange="ev => CambiarEmpresa(e, ev.Value is true)" />
+                                            </div>
+                                        </td>
+                                        <td><strong>@e.NombreParaMostrar</strong></td>
+                                        <td class="small font-monospace">@e.Rfc</td>
+                                        <td class="small">@QueDescarga(sat)</td>
+                                        <td class="small">@(sat?.DescargaDesde?.ToString("dd/MM/yyyy") ?? "—")</td>
+                                        <td class="small">
+                                            @if (DescargaSat.PorEmpresa.TryGetValue(e.EmpresaId, out ResultadoDescargaAutomatica? r))
+                                            {
+                                                @($"{r.Fin:dd/MM HH:mm} · {r.SolicitudesNuevas} nuevas · {r.Pendientes} pendientes")
+                                                @if (r.Aviso != "")
+                                                {
+                                                    <div class="text-warning">@r.Aviso</div>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="text-body-secondary">—</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -253,6 +363,8 @@
             : Empresas.FirstOrDefault()?.EmpresaId ?? 0;
 
         Resincronizacion.Cambio += Refrescar;
+        DescargaSat.Cambio += Refrescar;
+        CargarDescargaAutomatica();
 
         Automatico = Periodo.EsAutomatico;
 
@@ -301,7 +413,92 @@
         Exito = $"Se quitaron {quitados:N0} CFDI sin XML de {r.Nombre}.";
     }
 
+    // ---------- descarga automática ----------
+
+    private bool DescargaPausada;
+    private Dictionary<long, EmpresaSatDto?> AccesosSat = new();
+
+    private IEnumerable<string> Horarios =>
+        (Configuracion["DescargaAutomaticaSat:Horarios"] ?? "07:00,21:00").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+    private void CargarDescargaAutomatica()
+    {
+        DescargaPausada = Repo.ObtenerConfiguracionApp(EstadoDescargaAutomaticaSat.ClavePausa) == "1";
+        AccesosSat = Empresas.ToDictionary(e => e.EmpresaId, e => Repo.ObtenerEmpresaSat(e.EmpresaId));
+    }
+
+    private void CambiarPausa(ChangeEventArgs e)
+    {
+        bool encendida = e.Value is true;
+        Repo.GuardarConfiguracionApp(EstadoDescargaAutomaticaSat.ClavePausa, encendida ? "0" : "1");
+        CargarDescargaAutomatica();
+
+        Exito = encendida
+            ? "Descarga automática encendida: corre en la siguiente pasada para las empresas que la tienen activa."
+            : "Descarga automática pausada para todas las empresas.";
+    }
+
+    private void CambiarEmpresa(EmpresaDto empresa, bool activa)
+    {
+        Error = null;
+
+        try
+        {
+            Repo.CambiarDescargaAutomatica(empresa.EmpresaId, activa, new DateTime(DateTime.Today.Year, 1, 1));
+            Exito = $"Descarga automática {(activa ? "encendida" : "apagada")} para {empresa.NombreParaMostrar}.";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+
+        CargarDescargaAutomatica();
+    }
+
+    private string BusquedaDescarga = "";
+    private string OrdenDescarga = "empresa";
+    private bool OrdenDescargaDesc;
+
+    private static readonly StringComparer Alfabetico = StringComparer.Create(Mx, ignoreCase: true);
+
+    private IEnumerable<EmpresaDto> EmpresasDescarga
+    {
+        get
+        {
+            string texto = BusquedaDescarga.Trim();
+
+            IEnumerable<EmpresaDto> filtradas = Empresas.Where(e =>
+                texto == "" ||
+                e.Rfc.Contains(texto, StringComparison.OrdinalIgnoreCase) ||
+                e.NombreParaMostrar.Contains(texto, StringComparison.OrdinalIgnoreCase) ||
+                e.RazonSocial.Contains(texto, StringComparison.OrdinalIgnoreCase));
+
+            Func<EmpresaDto, string> clave = OrdenDescarga == "rfc" ? e => e.Rfc : e => e.NombreParaMostrar;
+
+            return OrdenDescargaDesc ? filtradas.OrderByDescending(clave, Alfabetico) : filtradas.OrderBy(clave, Alfabetico);
+        }
+    }
+
+    private void OrdenarDescarga(string columna)
+    {
+        OrdenDescargaDesc = OrdenDescarga == columna && !OrdenDescargaDesc;
+        OrdenDescarga = columna;
+    }
+
+    private string IconoOrden(string columna) =>
+        OrdenDescarga != columna ? "bi-arrow-down-up text-body-secondary"
+        : OrdenDescargaDesc ? "bi-sort-alpha-up-alt" : "bi-sort-alpha-down";
+
+    private static string QueDescarga(EmpresaSatDto? sat) =>
+        sat is null ? "—"
+        : string.Join(" · ", new[] { (sat.DescargaEmitidos, "Emitidos"), (sat.DescargaRecibidos, "Recibidos"), (sat.DescargaMetadatos, "Metadatos") }
+            .Where(x => x.Item1).Select(x => x.Item2)) is { Length: > 0 } texto ? texto : "—";
+
     private void Refrescar() => InvokeAsync(StateHasChanged);
 
-    public void Dispose() => Resincronizacion.Cambio -= Refrescar;
+    public void Dispose()
+    {
+        Resincronizacion.Cambio -= Refrescar;
+        DescargaSat.Cambio -= Refrescar;
+    }
 }

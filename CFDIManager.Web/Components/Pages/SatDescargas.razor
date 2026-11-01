@@ -587,7 +587,8 @@ else
 
     private async Task Eliminar(SolicitudSatDto solicitud)
     {
-        if (!await JS.InvokeAsync<bool>("confirm", $"¿Eliminar la solicitud {solicitud.Descripcion} del {solicitud.FechaInicial:dd/MM/yyyy} al {solicitud.FechaFinal:dd/MM/yyyy}?\nLos CFDI ya importados se conservan."))
+        if (!await JS.InvokeAsync<bool>("confirm", $"¿Eliminar la solicitud {solicitud.Descripcion} del {solicitud.FechaInicial:dd/MM/yyyy} al {solicitud.FechaFinal:dd/MM/yyyy}?\nLos CFDI ya importados se conservan." +
+            (solicitud.Automatica ? "\nEs automática: si la descarga automática está encendida, el servicio volverá a pedir ese periodo al SAT." : "")))
         {
             return;
         }
@@ -636,9 +637,10 @@ else
             return;
 
         int enProceso = elegidas.Count(s => s.Pendiente);
-        string aviso = enProceso > 0
-            ? $"\n{enProceso} todavía están en proceso en el SAT; ya no se verificarán ni descargarán."
-            : "";
+        int automaticas = elegidas.Count(s => s.Automatica);
+        string aviso =
+            (enProceso > 0 ? $"\n{enProceso} todavía están en proceso en el SAT; ya no se verificarán ni descargarán." : "") +
+            (automaticas > 0 ? $"\n{automaticas} son automáticas: si la descarga automática está encendida, el servicio volverá a pedir esos periodos al SAT." : "");
 
         if (!await JS.InvokeAsync<bool>("confirm", $"¿Eliminar {elegidas.Count} solicitud(es) de la lista?\nLos CFDI ya importados se conservan.{aviso}"))
             return;
