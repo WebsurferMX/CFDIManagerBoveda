@@ -333,18 +333,23 @@ public class SatDescargaService : ISatDescargaService
         return solicitud;
     }
 
-    public async Task EliminarAsync(
+    public Task EliminarAsync(
         long empresaId,
-        string solicitudId)
+        string solicitudId) =>
+        EliminarVariasAsync(empresaId, [solicitudId]);
+
+    public async Task<int> EliminarVariasAsync(
+        long empresaId,
+        IReadOnlyCollection<string> solicitudIds)
     {
         string archivo = RutaSolicitudes(empresaId);
 
-        if (!File.Exists(archivo))
+        if (!File.Exists(archivo) || solicitudIds.Count == 0)
         {
-            return;
+            return 0;
         }
 
-        SolicitudSatDto? eliminada;
+        List<SolicitudSatDto> eliminadas;
 
         await CandadoArchivo.WaitAsync();
 
@@ -353,14 +358,15 @@ public class SatDescargaService : ISatDescargaService
             List<SolicitudSatDto> todas =
                 JsonSerializer.Deserialize<List<SolicitudSatDto>>(await File.ReadAllTextAsync(archivo)) ?? new();
 
-            eliminada = todas.FirstOrDefault(s => s.Id == solicitudId);
+            var ids = solicitudIds.ToHashSet();
+            eliminadas = todas.Where(s => ids.Contains(s.Id)).ToList();
 
-            if (eliminada is null)
+            if (eliminadas.Count == 0)
             {
-                return;
+                return 0;
             }
 
-            todas.Remove(eliminada);
+            todas.RemoveAll(s => ids.Contains(s.Id));
 
             string temporal = archivo + ".tmp";
 
@@ -375,7 +381,7 @@ public class SatDescargaService : ISatDescargaService
 
         string carpetaPaquetes = Path.Combine(CarpetaEmpresa(empresaId), "Paquetes");
 
-        foreach (string paquete in eliminada.Paquetes)
+        foreach (string paquete in eliminadas.SelectMany(s => s.Paquetes))
         {
             string zip = Path.Combine(carpetaPaquetes, $"{paquete}.zip");
 
@@ -384,6 +390,8 @@ public class SatDescargaService : ISatDescargaService
                 File.Delete(zip);
             }
         }
+
+        return eliminadas.Count;
     }
 
     public List<SatCfdiDto> LeerMetadatos(

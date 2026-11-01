@@ -60,7 +60,10 @@ public partial class PostgreSqlRepository
             );
 
             -- De dónde salió el último estado SAT del CFDI: 'Consulta SAT' (uno por uno) o 'Metadatos SAT'.
-            ALTER TABLE cfdi ADD COLUMN IF NOT EXISTS origen_validacion_sat TEXT;", cn);
+            ALTER TABLE cfdi ADD COLUMN IF NOT EXISTS origen_validacion_sat TEXT;
+
+            -- Los cruces con metadatos comparan UPPER(uuid); sin este índice revisan todos los CFDI de la empresa por cada metadato.
+            CREATE INDEX IF NOT EXISTS ix_cfdi_empresa_uuid_upper ON cfdi (empresa_id, UPPER(uuid));", cn);
 
         cmd.ExecuteNonQuery();
     }

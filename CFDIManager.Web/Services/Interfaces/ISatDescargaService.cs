@@ -63,6 +63,11 @@ public interface ISatDescargaService
         long empresaId,
         string solicitudId);
 
+    /// <summary>Como <see cref="EliminarAsync"/> con varias a la vez; devuelve cuántas se quitaron.</summary>
+    Task<int> EliminarVariasAsync(
+        long empresaId,
+        IReadOnlyCollection<string> solicitudIds);
+
     /// <param name="marcarImportados">Consulta la base por cada UUID para llenar YaImportado (lento con miles).</param>
     List<SatCfdiDto> LeerMetadatos(
         EmpresaDto empresa,

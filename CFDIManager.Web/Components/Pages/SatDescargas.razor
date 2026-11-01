@@ -175,6 +175,16 @@ else
                 <button class="btn btn-sm btn-outline-secondary" disabled="@Ocupado" @onclick="VerificarPendientes">
                     Verificar pendientes
                 </button>
+                <button class="btn btn-sm btn-outline-danger" disabled="@(Ocupado || !IdsSeleccionados.Any())"
+                        title="Quitar de la lista las solicitudes marcadas (los CFDI importados se conservan)"
+                        @onclick="() => EliminarVarias(IdsSeleccionados.ToList())">
+                    Eliminar seleccionadas@(IdsSeleccionados.Any() ? $" ({IdsSeleccionados.Count()})" : "")
+                </button>
+                <button class="btn btn-sm btn-outline-danger" disabled="@(Ocupado || !Solicitudes.Any())"
+                        title="Quitar de la lista todas las solicitudes de esta empresa (los CFDI importados se conservan)"
+                        @onclick="() => EliminarVarias(Solicitudes.Select(s => s.Id).ToList())">
+                    Eliminar todas
+                </button>
             </div>
         </div>
 
@@ -187,6 +197,11 @@ else
             <table class="table table-sm table-striped align-middle mb-0">
                 <thead>
                     <tr>
+                        <th>
+                            <input type="checkbox" class="form-check-input" title="Marcar todas"
+                                   checked="@(Solicitudes.All(s => Seleccionadas.Contains(s.Id)))"
+                                   @onchange="e => MarcarTodas((bool)e.Value!)" />
+                        </th>
                         <th>Creada</th>
                         <th>Periodo</th>
                         <th>Qué</th>
@@ -201,6 +216,11 @@ else
                     @foreach (var s in Solicitudes)
                     {
                         <tr>
+                            <td>
+                                <input type="checkbox" class="form-check-input"
+                                       checked="@Seleccionadas.Contains(s.Id)"
+                                       @onchange="e => Marcar(s.Id, (bool)e.Value!)" />
+                            </td>
                             <td>@s.Creada.ToString("dd/MM/yyyy HH:mm")</td>
                             <td>
                                 @if (s.Uuid == "")
@@ -580,6 +600,58 @@ else
             }
 
             Mensaje = "Solicitud eliminada.";
+        });
+    }
+
+    // Marcadas para eliminar; solo cuentan las que siguen en la lista (al cambiar de empresa no se arrastran).
+    private readonly HashSet<string> Seleccionadas = new();
+
+    private IEnumerable<string> IdsSeleccionados =>
+        Solicitudes.Select(s => s.Id).Where(Seleccionadas.Contains);
+
+    private void Marcar(string id, bool marcada)
+    {
+        if (marcada)
+            Seleccionadas.Add(id);
+        else
+            Seleccionadas.Remove(id);
+    }
+
+    private void MarcarTodas(bool marcadas)
+    {
+        Seleccionadas.Clear();
+
+        if (marcadas)
+            Seleccionadas.UnionWith(Solicitudes.Select(s => s.Id));
+    }
+
+    private async Task EliminarVarias(List<string> ids)
+    {
+        List<SolicitudSatDto> elegidas = Solicitudes.Where(s => ids.Contains(s.Id)).ToList();
+
+        if (elegidas.Count == 0)
+            return;
+
+        int enProceso = elegidas.Count(s => s.Pendiente);
+        string aviso = enProceso > 0
+            ? $"\n{enProceso} todavía están en proceso en el SAT; ya no se verificarán ni descargarán."
+            : "";
+
+        if (!await JS.InvokeAsync<bool>("confirm", $"¿Eliminar {elegidas.Count} solicitud(es) de la lista?\nLos CFDI ya importados se conservan.{aviso}"))
+            return;
+
+        await Ejecutar(async () =>
+        {
+            int eliminadas = await SatDescargaService.EliminarVariasAsync(EmpresaContext.EmpresaId, ids);
+
+            if (SolicitudMetadatos is not null && ids.Contains(SolicitudMetadatos.Id))
+            {
+                SolicitudMetadatos = null;
+                Resultados = new();
+            }
+
+            Seleccionadas.ExceptWith(ids);
+            Mensaje = $"{eliminadas} solicitud(es) eliminada(s).";
         });
     }
 
