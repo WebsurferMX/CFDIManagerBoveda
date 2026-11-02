@@ -62,6 +62,19 @@
             return;
         }
 
+        // Toda carga completa (F5, reconexión fallida, URL escrita) pasa por el prerender estático:
+        // ahí se manda siempre al Resumen. Las navegaciones dentro de la app ya son interactivas.
+        if (!RendererInfo.IsInteractive)
+        {
+            string ruta = Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/');
+
+            if (ruta is not "" and not "resumen")
+            {
+                Navigation.NavigateTo("/");
+                return;
+            }
+        }
+
         if (EmpresaContext.TieneEmpresaActiva)
             return;
 
