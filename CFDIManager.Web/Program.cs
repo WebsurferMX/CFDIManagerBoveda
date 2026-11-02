@@ -134,6 +134,9 @@ builder.Services.AddSingleton<CFDIManager.Web.Services.Sat.SatMovilCliente>();
 builder.Services.AddSingleton<CFDIManager.Web.Services.Respaldo.RespaldoService>();
 builder.Services.AddHostedService<CFDIManager.Web.Services.Respaldo.RespaldoHostedService>();
 
+// Reporte "Empresas asignadas por usuario" (Empresas y Usuarios).
+builder.Services.AddScoped<CFDIManager.Web.Services.Seguridad.ReporteAsignacionesService>();
+
 // Mes con el que abren las pantallas (Herramientas, solo Administrador).
 builder.Services.AddSingleton<PeriodoTrabajoService>();
 

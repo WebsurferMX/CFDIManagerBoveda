@@ -14,6 +14,7 @@
 @inject CorreoService Correo
 @inject IJSRuntime JS
 @inject TareasUsuarioCache TareasCache
+@inject ReporteAsignacionesService ReporteAsignaciones
 
 <PageTitle>Usuarios</PageTitle>
 
@@ -25,10 +26,16 @@
             <p class="text-body-secondary mb-0">Da de alta usuarios, asigna su rol y las empresas que pueden consultar.</p>
         </div>
 
-        <button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" @onclick="NuevoUsuario" disabled="@Guardando">
-            <i class="bi bi-person-plus-fill"></i>
-            Nuevo usuario
-        </button>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-success d-inline-flex align-items-center gap-2" @onclick="DescargarAsignaciones" disabled="@GenerandoReporte">
+                <i class="bi bi-file-earmark-excel"></i>
+                Empresas por usuario
+            </button>
+            <button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" @onclick="NuevoUsuario" disabled="@Guardando">
+                <i class="bi bi-person-plus-fill"></i>
+                Nuevo usuario
+            </button>
+        </div>
     </header>
 
     @if (!string.IsNullOrWhiteSpace(MensajeExito))
@@ -618,6 +625,27 @@
     private bool Guardando;
     private string? MensajeError;
     private string? MensajeExito;
+    private bool GenerandoReporte;
+
+    private async Task DescargarAsignaciones()
+    {
+        GenerandoReporte = true;
+
+        try
+        {
+            (byte[] contenido, string nombre) = await Task.Run(ReporteAsignaciones.GenerarExcel);
+            await JS.InvokeVoidAsync("descargarArchivoBase64", nombre,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Convert.ToBase64String(contenido));
+        }
+        catch (Exception ex)
+        {
+            MensajeError = ex.Message;
+        }
+        finally
+        {
+            GenerandoReporte = false;
+        }
+    }
 
     private UsuarioDto? PorEliminar;
     private UsuarioDto? PorRestablecer;

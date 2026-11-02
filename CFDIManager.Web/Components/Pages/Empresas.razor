@@ -20,6 +20,8 @@
 @inject CertificadosEmpresa Certificados
 @inject CiecProtector Protector
 @inject SatMovilCliente SatMovil
+@inject ReporteAsignacionesService ReporteAsignaciones
+@inject IJSRuntime JS
 
 
 
@@ -36,12 +38,17 @@
 
         @if (PuedeDarDeAlta)
         {
-            <button type="button"
-                    class="secondary-button"
-                    @onclick="NuevaEmpresa"
-                    disabled="@Guardando">
-                Nueva empresa
-            </button>
+            <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="secondary-button" @onclick="DescargarAsignaciones" disabled="@GenerandoReporte">
+                    <i class="bi bi-file-earmark-excel"></i> Empresas por usuario
+                </button>
+                <button type="button"
+                        class="secondary-button"
+                        @onclick="NuevaEmpresa"
+                        disabled="@Guardando">
+                    Nueva empresa
+                </button>
+            </div>
         }
     </header>
 
@@ -174,6 +181,10 @@
                                 <th>FIEL</th>
                                 <th>Vence</th>
                                 <th>CIEC</th>
+                                @if (PuedeDarDeAlta)
+                                {
+                                    <th>Usuarios</th>
+                                }
                                 <th>Estado</th>
                                 <th class="text-end">Acciones</th>
                             </tr>
@@ -283,6 +294,28 @@
                                             }
                                         }
                                     </td>
+
+                                    @if (PuedeDarDeAlta)
+                                    {
+                                        <td>
+                                            @if (UsuariosAsignados.TryGetValue(empresa.EmpresaId, out List<AsignacionEmpresaDto>? usuarios))
+                                            {
+                                                <div class="d-flex flex-wrap gap-1">
+                                                    @foreach (AsignacionEmpresaDto u in usuarios)
+                                                    {
+                                                        <span class="badge rounded-pill @(u.Activo ? "bg-primary-subtle text-primary-emphasis border border-primary-subtle" : "bg-secondary-subtle text-secondary-emphasis border")"
+                                                              title="@($"{u.NombreCompleto} · {u.Rol}{(u.Activo ? "" : " · inactivo")}")">
+                                                            <i class="ti ti-user"></i> @u.Usuario
+                                                        </span>
+                                                    }
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="sin-dato" title="Solo la ven los administradores">—</span>
+                                            }
+                                        </td>
+                                    }
 
                                     <td>
                                         <span class="status-badge @(empresa.Activa ? "active-status" : "inactive-status")">
@@ -617,6 +650,7 @@
                 .Where(empresa => empresa.TieneFiel)
                 .ToDictionary(empresa => empresa.EmpresaId, empresa => LeerRfcFiel(accesos[empresa.EmpresaId]));
             Ciecs = accesos.ToDictionary(a => a.Key, a => CalcularCiec(a.Value));
+            UsuariosAsignados = PuedeDarDeAlta ? ReporteAsignaciones.UsuariosPorEmpresa() : new();
             CargarArchivosSat();
         }
         catch (Exception ex)
@@ -666,6 +700,31 @@
         catch (Exception)
         {
             return null;
+        }
+    }
+
+    /// <summary>Usuarios asignados a cada empresa (columna Usuarios; solo el Administrador la ve).</summary>
+    private Dictionary<long, List<AsignacionEmpresaDto>> UsuariosAsignados { get; set; } = new();
+
+    private bool GenerandoReporte;
+
+    private async Task DescargarAsignaciones()
+    {
+        GenerandoReporte = true;
+
+        try
+        {
+            (byte[] contenido, string nombre) = await Task.Run(ReporteAsignaciones.GenerarExcel);
+            await JS.InvokeVoidAsync("descargarArchivoBase64", nombre,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Convert.ToBase64String(contenido));
+        }
+        catch (Exception ex)
+        {
+            MensajeError = ex.Message;
+        }
+        finally
+        {
+            GenerandoReporte = false;
         }
     }
 

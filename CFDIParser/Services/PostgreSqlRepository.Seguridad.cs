@@ -73,6 +73,52 @@ public partial class PostgreSqlRepository
         cmd.ExecuteNonQuery();
     }
 
+    // ---------- Asignaciones (reporte "Empresas asignadas por usuario") ----------
+
+    /// <summary>
+    /// Una fila por usuario y empresa asignada; los usuarios sin empresas salen con EmpresaId null.
+    /// El Administrador ve todas las empresas sin asignación: se marca con EsAdministrador.
+    /// </summary>
+    public List<AsignacionEmpresaDto> ObtenerAsignacionesEmpresas()
+    {
+        using var cn = new NpgsqlConnection(_connectionString);
+        cn.Open();
+
+        using var cmd = new NpgsqlCommand(@"
+            SELECT u.usuario_id, u.nombre_usuario, u.nombre_completo, u.activo,
+                   COALESCE((SELECT r.nombre FROM usuario_roles ur JOIN roles r ON r.rol_id = ur.rol_id
+                             WHERE ur.usuario_id = u.usuario_id ORDER BY r.rol_id LIMIT 1), '') AS rol,
+                   e.empresa_id, COALESCE(e.rfc, ''), COALESCE(NULLIF(e.nombre_corto, ''), e.razon_social, ''), ue.fecha_asignacion
+            FROM usuarios u
+            LEFT JOIN usuario_empresas ue ON ue.usuario_id = u.usuario_id
+            LEFT JOIN empresas e ON e.empresa_id = ue.empresa_id
+            ORDER BY u.nombre_usuario, 8;", cn);
+
+        using var dr = cmd.ExecuteReader();
+        var lista = new List<AsignacionEmpresaDto>();
+
+        while (dr.Read())
+        {
+            string rol = dr.GetString(4);
+
+            lista.Add(new AsignacionEmpresaDto
+            {
+                UsuarioId = dr.GetInt64(0),
+                Usuario = dr.GetString(1),
+                NombreCompleto = dr.GetString(2),
+                Activo = dr.GetBoolean(3),
+                Rol = rol,
+                EsAdministrador = rol.Equals("Administrador", StringComparison.OrdinalIgnoreCase),
+                EmpresaId = dr.IsDBNull(5) ? null : dr.GetInt64(5),
+                Rfc = dr.GetString(6),
+                Empresa = dr.GetString(7),
+                FechaAsignacion = dr.IsDBNull(8) ? null : dr.GetDateTime(8)
+            });
+        }
+
+        return lista;
+    }
+
     // ---------- Usuarios ----------
 
     private const string SelectUsuario = @"
