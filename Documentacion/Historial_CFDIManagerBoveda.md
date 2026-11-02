@@ -9,6 +9,7 @@ Documentos de detalle en esta carpeta:
 | Documento | Tema |
 |---|---|
 | [Proceso_Importacion_XML_SINUBE.md](Proceso_Importacion_XML_SINUBE.md) | Protocolo de HerramientasSinube para subir XML de clientes y proveedores (base de "Exportación a SINUBE") |
+| [Guia_Publicacion_Servicio.md](Guia_Publicacion_Servicio.md) | Publicar la app, instalar y actualizar el servicio de Windows |
 | [Conciliacion_SINUBE_vs_SAT.md](Conciliacion_SINUBE_vs_SAT.md) | Conciliación SAT / bóveda / SINUBE, descarga de XML faltantes, descarga automática por horarios y cierre de mes |
 
 ## Resumen

@@ -15,6 +15,12 @@
     <PackageReference Include="QuestPDF" Version="2026.9.1" />
   </ItemGroup>
 
+  <!-- Storage son datos de cada equipo: publicarlo sobrescribiría los del servidor (solicitudes del SAT, CIF...). -->
+  <ItemGroup>
+    <Content Remove="Storage\**" />
+    <None Remove="Storage\**" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
