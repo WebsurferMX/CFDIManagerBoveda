@@ -12,6 +12,27 @@
     font-size: 1rem;
 }
 
+.resumen .avatar-xs .ti {
+    font-size: .85rem;
+}
+
+.resumen .previo .operador {
+    font-size: 1.1rem;
+    color: var(--tblr-secondary);
+}
+
+/* Etiqueta EMITIDOS / RECIBIDOS / PREVIO IVA del mismo ancho para que se alineen. */
+.resumen .clave {
+    min-width: 6.5rem;
+}
+
+/* Filas compactas en las tablas por tipo. */
+.resumen .card-table td,
+.resumen .card-table th {
+    padding-top: .3rem;
+    padding-bottom: .3rem;
+}
+
 /* Que la barra de composición se vea aunque un tipo tenga muy pocos CFDI. */
 .resumen .progress-bar {
     min-width: 4px;

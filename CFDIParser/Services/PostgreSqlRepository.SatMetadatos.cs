@@ -62,6 +62,11 @@ public partial class PostgreSqlRepository
             -- De dónde salió el último estado SAT del CFDI: 'Consulta SAT' (uno por uno) o 'Metadatos SAT'.
             ALTER TABLE cfdi ADD COLUMN IF NOT EXISTS origen_validacion_sat TEXT;
 
+            -- Impuestos de los complementos de pago (Totales); NULL = todavía no se leen del XML.
+            ALTER TABLE cfdi ADD COLUMN IF NOT EXISTS pago_iva_trasladado NUMERIC(18,2);
+            ALTER TABLE cfdi ADD COLUMN IF NOT EXISTS pago_iva_retenido NUMERIC(18,2);
+            ALTER TABLE cfdi ADD COLUMN IF NOT EXISTS pago_isr_retenido NUMERIC(18,2);
+
             -- Los cruces con metadatos comparan UPPER(uuid); sin este índice revisan todos los CFDI de la empresa por cada metadato.
             CREATE INDEX IF NOT EXISTS ix_cfdi_empresa_uuid_upper ON cfdi (empresa_id, UPPER(uuid));", cn);
 

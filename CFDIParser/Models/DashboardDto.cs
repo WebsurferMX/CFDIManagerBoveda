@@ -55,4 +55,31 @@ public class DashboardDto
     public decimal TotalNominasRecibidas { get; set; }
 
     public decimal ComprasNetas { get; set; }
+
+    // ========================================
+    // IMPUESTOS (por flujo: facturas PUE − notas de crédito + complementos de pago)
+    // ========================================
+
+    public ImpuestoDashboardDto IvaTrasladadoEmitidos { get; set; } = new();
+
+    public ImpuestoDashboardDto IvaRetenidoEmitidos { get; set; } = new();
+
+    public ImpuestoDashboardDto IsrRetenidoEmitidos { get; set; } = new();
+
+    public ImpuestoDashboardDto IvaTrasladadoRecibidos { get; set; } = new();
+
+    public ImpuestoDashboardDto IvaRetenidoRecibidos { get; set; } = new();
+
+    public ImpuestoDashboardDto IsrRetenidoRecibidos { get; set; } = new();
+}
+
+public class ImpuestoDashboardDto
+{
+    // Facturas PUE menos notas de crédito.
+    public decimal Facturas { get; set; }
+
+    // Complementos de pago (Totales).
+    public decimal Pagos { get; set; }
+
+    public decimal Total => Facturas + Pagos;
 }

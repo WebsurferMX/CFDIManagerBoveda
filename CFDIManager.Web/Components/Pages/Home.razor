@@ -135,6 +135,58 @@
             </div>
         </div>
 
+        @* ---------- Impuestos y previo de IVA ---------- *@
+        <div class="card grupo mb-3" style="--color-tipo: var(--tblr-azure)">
+            <div class="card-body py-2">
+                <div class="row g-2">
+                    @foreach (GrupoImpuestos grupo in Impuestos)
+                    {
+                        <div class="col-xl-6 d-flex align-items-center gap-2">
+                            <span class="badge bg-@grupo.Color-lt clave">@grupo.Clave</span>
+                            <div class="row g-2 flex-fill">
+                                @foreach (Impuesto i in grupo.Renglones)
+                                {
+                                    <div class="col-4">
+                                        <div class="d-flex align-items-center gap-2"
+                                             title="Facturas PUE y notas de crédito: @Moneda(i.Importe.Facturas)&#10;Complementos de pago: @Moneda(i.Importe.Pagos)">
+                                            <span class="avatar avatar-xs @i.Claro"><i class="ti @i.Icono"></i></span>
+                                            <div>
+                                                <div class="subheader">@i.Nombre</div>
+                                                <div class="fw-bold">@Moneda(i.Importe.Total)</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+            <div class="card-body py-2 border-top">
+                <div class="d-flex flex-wrap align-items-center gap-2 previo">
+                    <span class="badge bg-@(IvaPorPagar >= 0 ? "red" : "green")-lt clave">PREVIO IVA</span>
+                    <div title="IVA trasladado: @Moneda(Datos.IvaTrasladadoEmitidos.Total)&#10;IVA que me retuvieron: @Moneda(Datos.IvaRetenidoEmitidos.Total)">
+                        <div class="subheader">IVA cobrado</div>
+                        <div class="fw-bold">@Moneda(IvaCobrado)</div>
+                    </div>
+                    <span class="operador">−</span>
+                    <div>
+                        <div class="subheader">IVA acreditable</div>
+                        <div class="fw-bold">@Moneda(Datos.IvaTrasladadoRecibidos.Total)</div>
+                    </div>
+                    <span class="operador">=</span>
+                    <div>
+                        <div class="subheader">@(IvaPorPagar >= 0 ? "IVA por pagar" : "Saldo a favor")</div>
+                        <div class="fw-bold @(IvaPorPagar >= 0 ? "text-red" : "text-green")">@Moneda(Math.Abs(IvaPorPagar))</div>
+                    </div>
+                    <div class="ms-auto text-end">
+                        <div class="subheader">Retenciones de IVA por enterar</div>
+                        <div class="fw-bold">@Moneda(Datos.IvaRetenidoRecibidos.Total)</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         @* ---------- Emitidos y recibidos por tipo ---------- *@
         <div class="row row-cards">
             @foreach (Grupo grupo in Grupos)
@@ -185,7 +237,7 @@
                         </div>
 
                         <div class="table-responsive">
-                            <table class="table table-vcenter card-table">
+                            <table class="table table-sm table-vcenter card-table">
                                 <thead>
                                     <tr>
                                         <th>Tipo</th>
@@ -200,7 +252,7 @@
                                         <tr>
                                             <td>
                                                 <div class="d-flex align-items-center gap-2">
-                                                    <span class="avatar avatar-sm @r.Claro"><i class="ti @r.Icono"></i></span>
+                                                    <span class="avatar avatar-xs @r.Claro"><i class="ti @r.Icono"></i></span>
                                                     <span>@r.Nombre</span>
                                                 </div>
                                             </td>
@@ -239,6 +291,12 @@
 
     private decimal Diferencia => Datos.FacturacionNeta - Datos.ComprasNetas;
 
+    // Lo que retuvieron los clientes no se cobró: lo enteran ellos.
+    private decimal IvaCobrado => Datos.IvaTrasladadoEmitidos.Total - Datos.IvaRetenidoEmitidos.Total;
+
+    // IVA cobrado − IVA acreditable. Negativo = saldo a favor.
+    private decimal IvaPorPagar => IvaCobrado - Datos.IvaTrasladadoRecibidos.Total;
+
     // Un renglón por tipo, siempre en el orden Facturas, Nómina, Notas de crédito, Traslados, Pagos.
     // Los traslados no llevan importe.
     private sealed record Renglon(string Icono, string Nombre, string Fondo, string Claro, long Cantidad, decimal? Importe);
@@ -275,6 +333,26 @@
         new("ti-receipt-refund", "Notas de crédito", "bg-red", "bg-red-lt", notas, importeNotas),
         new("ti-truck", "Traslados", "bg-yellow", "bg-yellow-lt", traslados, null),
         new("ti-cash", "Pagos", "bg-purple", "bg-purple-lt", pagos, importePagos)
+    ];
+
+    private sealed record Impuesto(string Icono, string Nombre, string Claro, ImpuestoDashboardDto Importe);
+
+    private sealed record GrupoImpuestos(string Clave, string Color, List<Impuesto> Renglones);
+
+    private IEnumerable<GrupoImpuestos> Impuestos =>
+    [
+        new("EMITIDOS", "blue",
+        [
+            new("ti-receipt-tax", "IVA trasladado", "bg-blue-lt", Datos.IvaTrasladadoEmitidos),
+            new("ti-receipt-2", "IVA retenido", "bg-orange-lt", Datos.IvaRetenidoEmitidos),
+            new("ti-building-bank", "ISR retenido", "bg-purple-lt", Datos.IsrRetenidoEmitidos)
+        ]),
+        new("RECIBIDOS", "teal",
+        [
+            new("ti-receipt-tax", "IVA acreditable", "bg-teal-lt", Datos.IvaTrasladadoRecibidos),
+            new("ti-receipt-2", "IVA retenido", "bg-orange-lt", Datos.IvaRetenidoRecibidos),
+            new("ti-building-bank", "ISR retenido", "bg-purple-lt", Datos.IsrRetenidoRecibidos)
+        ])
     ];
 
     protected override void OnInitialized()

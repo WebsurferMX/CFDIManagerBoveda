@@ -654,13 +654,167 @@ public partial class PostgreSqlRepository
         cmd.Parameters.AddWithValue("@fecha_inicio", fechaInicio.Date);
         cmd.Parameters.AddWithValue("@fecha_fin_exclusiva", fechaFin.Date.AddDays(1));
 
+        DashboardDto dashboard;
+
+        using (var reader = cmd.ExecuteReader())
+        {
+            if (!reader.Read())
+            {
+                return new DashboardDto();
+            }
+
+            dashboard = LeerDashboard(reader);
+        }
+
+        LeerImpuestosDashboard(conn, dashboard, empresaId, fechaInicio, fechaFin);
+
+        return dashboard;
+    }
+
+    // Impuestos por flujo: facturas PUE menos notas de crédito, más los complementos de pago del periodo
+    // (las facturas PPD causan sus impuestos cuando se pagan, en el complemento).
+    private static void LeerImpuestosDashboard(
+        NpgsqlConnection conn,
+        DashboardDto dashboard,
+        long empresaId,
+        DateTime fechaInicio,
+        DateTime fechaFin)
+    {
+        LlenarImpuestosPagos(conn, empresaId, fechaInicio, fechaFin);
+
+        static string Suma(string clasificacion, string tipo, string impuesto, string alias) => $@"
+                COALESCE(SUM(CASE WHEN c.tipo_cfdi = 'E' THEN -ig.importe ELSE ig.importe END) FILTER (
+                    WHERE c.clasificacion = '{clasificacion}' AND ig.tipo = '{tipo}' AND ig.impuesto = '{impuesto}'), 0) AS {alias}";
+
+        static string SumaPagos(string clasificacion, string columna, string alias) => $@"
+                COALESCE(SUM({columna}) FILTER (WHERE clasificacion = '{clasificacion}'), 0) AS {alias}";
+
+        string sql = $@"
+            WITH facturas AS
+            (
+                SELECT
+                    {Suma("EMITIDO", "TRASLADO", "002", "iva_trasladado_emitidos")},
+                    {Suma("EMITIDO", "RETENCION", "002", "iva_retenido_emitidos")},
+                    {Suma("EMITIDO", "RETENCION", "001", "isr_retenido_emitidos")},
+                    {Suma("RECIBIDO", "TRASLADO", "002", "iva_trasladado_recibidos")},
+                    {Suma("RECIBIDO", "RETENCION", "002", "iva_retenido_recibidos")},
+                    {Suma("RECIBIDO", "RETENCION", "001", "isr_retenido_recibidos")}
+                FROM cfdi c
+                INNER JOIN cfdi_impuestos_globales ig
+                    ON ig.cfdi_id = c.cfdi_id
+                WHERE c.empresa_id = @empresa_id
+                  AND (c.tipo_cfdi = 'E' OR (c.tipo_cfdi = 'I' AND COALESCE(c.metodo_pago, '') <> 'PPD'))
+                  AND c.fecha_emision >= @fecha_inicio
+                  AND c.fecha_emision < @fecha_fin_exclusiva
+            ),
+            pagos AS
+            (
+                SELECT
+                    {SumaPagos("EMITIDO", "pago_iva_trasladado", "iva_trasladado_emitidos")},
+                    {SumaPagos("EMITIDO", "pago_iva_retenido", "iva_retenido_emitidos")},
+                    {SumaPagos("EMITIDO", "pago_isr_retenido", "isr_retenido_emitidos")},
+                    {SumaPagos("RECIBIDO", "pago_iva_trasladado", "iva_trasladado_recibidos")},
+                    {SumaPagos("RECIBIDO", "pago_iva_retenido", "iva_retenido_recibidos")},
+                    {SumaPagos("RECIBIDO", "pago_isr_retenido", "isr_retenido_recibidos")}
+                FROM cfdi
+                WHERE empresa_id = @empresa_id
+                  AND tipo_cfdi = 'P'
+                  AND fecha_emision >= @fecha_inicio
+                  AND fecha_emision < @fecha_fin_exclusiva
+            )
+            SELECT f.*, p.*
+            FROM facturas f, pagos p;";
+
+        using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("@empresa_id", empresaId);
+        cmd.Parameters.AddWithValue("@fecha_inicio", fechaInicio.Date);
+        cmd.Parameters.AddWithValue("@fecha_fin_exclusiva", fechaFin.Date.AddDays(1));
+
         using var reader = cmd.ExecuteReader();
 
         if (!reader.Read())
         {
-            return new DashboardDto();
+            return;
         }
 
+        // Columnas 0-5: facturas; 6-11: complementos de pago, en el mismo orden.
+        ImpuestoDashboardDto Leer(int i) => new()
+        {
+            Facturas = reader.GetDecimal(i),
+            Pagos = reader.GetDecimal(i + 6)
+        };
+
+        dashboard.IvaTrasladadoEmitidos = Leer(0);
+        dashboard.IvaRetenidoEmitidos = Leer(1);
+        dashboard.IsrRetenidoEmitidos = Leer(2);
+        dashboard.IvaTrasladadoRecibidos = Leer(3);
+        dashboard.IvaRetenidoRecibidos = Leer(4);
+        dashboard.IsrRetenidoRecibidos = Leer(5);
+    }
+
+    // Lee del XML los impuestos de los complementos de pago del periodo que todavía no los tienen.
+    private static void LlenarImpuestosPagos(
+        NpgsqlConnection conn,
+        long empresaId,
+        DateTime fechaInicio,
+        DateTime fechaFin)
+    {
+        var pendientes = new List<(long CfdiId, string Ruta)>();
+
+        using (var cmd = new NpgsqlCommand(@"
+            SELECT cfdi_id, COALESCE(ruta_xml, '')
+            FROM cfdi
+            WHERE empresa_id = @empresa_id
+              AND tipo_cfdi = 'P'
+              AND pago_iva_trasladado IS NULL
+              AND fecha_emision >= @fecha_inicio
+              AND fecha_emision < @fecha_fin_exclusiva;", conn))
+        {
+            cmd.Parameters.AddWithValue("@empresa_id", empresaId);
+            cmd.Parameters.AddWithValue("@fecha_inicio", fechaInicio.Date);
+            cmd.Parameters.AddWithValue("@fecha_fin_exclusiva", fechaFin.Date.AddDays(1));
+
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                pendientes.Add((reader.GetInt64(0), reader.GetString(1)));
+            }
+        }
+
+        foreach ((long cfdiId, string ruta) in pendientes)
+        {
+            if (!File.Exists(ruta))
+            {
+                continue;
+            }
+
+            (decimal Iva, decimal IvaRetenido, decimal IsrRetenido) impuestos;
+
+            try
+            {
+                impuestos = XmlCfdiParser.LeerImpuestosPagos(ruta);
+            }
+            catch
+            {
+                continue;
+            }
+
+            using var cmd = new NpgsqlCommand(@"
+                UPDATE cfdi
+                SET pago_iva_trasladado = @iva,
+                    pago_iva_retenido = @iva_retenido,
+                    pago_isr_retenido = @isr_retenido
+                WHERE cfdi_id = @cfdi_id;", conn);
+            cmd.Parameters.AddWithValue("@cfdi_id", cfdiId);
+            cmd.Parameters.AddWithValue("@iva", impuestos.Iva);
+            cmd.Parameters.AddWithValue("@iva_retenido", impuestos.IvaRetenido);
+            cmd.Parameters.AddWithValue("@isr_retenido", impuestos.IsrRetenido);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    private static DashboardDto LeerDashboard(NpgsqlDataReader reader)
+    {
         return new DashboardDto
         {
             TotalPagosEmitidos = Convert.ToDecimal(reader["total_pagos_emitidos"]),

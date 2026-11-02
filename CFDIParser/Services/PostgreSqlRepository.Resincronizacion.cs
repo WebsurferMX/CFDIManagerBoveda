@@ -54,7 +54,8 @@ public partial class PostgreSqlRepository
                 total_impuestos_trasladados = @total_impuestos_trasladados,
                 total_impuestos_retenidos = @total_impuestos_retenidos, fecha_timbrado = @fecha_timbrado,
                 rfc_prov_certif = @rfc_prov_certif, no_certificado_sat = @no_certificado_sat,
-                version_timbre = @version_timbre, sello_cfd = @sello_cfd, sello_sat = @sello_sat
+                version_timbre = @version_timbre, sello_cfd = @sello_cfd, sello_sat = @sello_sat,
+                pago_iva_trasladado = NULL, pago_iva_retenido = NULL, pago_isr_retenido = NULL
             WHERE cfdi_id = @cfdi_id;", conn, tx))
         {
             cmd.Parameters.AddWithValue("@cfdi_id", cfdiId);

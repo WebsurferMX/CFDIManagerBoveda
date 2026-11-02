@@ -300,6 +300,21 @@ public class XmlCfdiParser
             .Where(elemento => EsElemento(elemento, nombreLocal));
     }
 
+    // Impuestos del nodo Totales del complemento de pagos 2.0 (en MXN). Pagos 1.0 no los trae: regresa ceros.
+    public static (decimal Iva, decimal IvaRetenido, decimal IsrRetenido) LeerImpuestosPagos(string rutaXml)
+    {
+        XElement comprobante = XDocument.Load(rutaXml).Root
+            ?? throw new InvalidOperationException("El XML no tiene nodo raíz.");
+
+        XElement? totales = Descendiente(comprobante, "Totales");
+
+        decimal Valor(string atributo) => DecimalOpcional(Atributo(totales, atributo)) ?? 0m;
+
+        return (Valor("TotalTrasladosImpuestoIVA16") + Valor("TotalTrasladosImpuestoIVA8"),
+                Valor("TotalRetencionesIVA"),
+                Valor("TotalRetencionesISR"));
+    }
+
     private static XElement? Descendiente(
         XElement padre,
         string nombreLocal)
