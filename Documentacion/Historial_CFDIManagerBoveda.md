@@ -1,8 +1,8 @@
 # CFDIManagerBoveda: historial de implementación
 
-Cómo nació CFDIManagerBoveda y qué se le fue agregando, del 27 al 31 de octubre de 2026. Reconstruido de las sesiones
-de Claude Code de los dos equipos donde se trabajó (este equipo, usuario `websu`, y **ERNESTO-CGA**). Fechas y horas
-en hora local.
+Cómo nació CFDIManagerBoveda y qué se le fue agregando, del 27 de octubre al 2 de noviembre de 2026. Reconstruido de las
+sesiones de Claude Code de los equipos donde se trabajó (usuario `websu`, **ERNESTO-CGA** y, desde el 31/10,
+**CFDIManagerPC-CGA**) y de los commits en GitHub. Fechas y horas en hora local.
 
 Documentos de detalle en esta carpeta:
 
@@ -22,7 +22,9 @@ cfdi_manager                   réplica web de MiAdminXML
           \                          /
            CFDIManagerBoveda  (base cfdi_manager, XML en CFDIManager.Web\Storage\XML)
                      |
-           30/10: se trae a este equipo (CFDIManagerBoveda.rar) y se sigue aquí
+           30/10: se trae al equipo websu (CFDIManagerBoveda.rar)
+                     |
+           31/10: se copia con git a CFDIManagerPC-CGA, servidor (servicio de Windows, GitHub)
 ```
 
 - **CFDIManager** es la app original (Blazor Server .NET 10, PostgreSQL `cfdi_manager`, proyecto `CFDIParser`).
@@ -31,7 +33,7 @@ cfdi_manager                   réplica web de MiAdminXML
   reportes. Quedó como app anterior; ya no se le hacen cambios.
 - **CFDIManagerBoveda** es la app principal: un clon de CFDIManager al que se le llevó lo que solo tenía MiBovedaCFDI.
 
-## 1. Antecedentes en CFDIManager (este equipo, 27 y 28/10)
+## 1. Antecedentes en CFDIManager (equipo websu, 27 y 28/10)
 
 Sesiones en `.claude\projects\c--Users-websu-rea` y `c--Users-websu-Desktop-CFDIManager`. Todo quedó en commits del
 git de `Desktop\CFDIManager` y en su `CLAUDE.md`.
@@ -137,9 +139,9 @@ Sesión `dd64d403`.
   SAT Móvil, `SatMovilCliente.cs`); declaraciones mensuales (desde 2025) y anual con captcha
   (`PortalSatDeclaraciones.cs`). Opinión IMSS se carga en PDF. Archivos en `Storage\ArchivosSat\<empresa>\`.
 
-El 30/10 el proyecto se empaquetó (`CFDIManagerBoveda.rar`) y se trajo a este equipo.
+El 30/10 el proyecto se empaquetó (`CFDIManagerBoveda.rar`) y se trajo al equipo websu.
 
-## 6. En este equipo (30 y 31/10)
+## 6. En el equipo websu (30 y 31/10)
 
 Sesión `de4c4db4` de `.claude\projects\c--Users-websu-Desktop-CFDIManagerBoveda`.
 
@@ -157,20 +159,73 @@ Tablas nuevas de esta etapa: `usuarios`, `roles`, `usuario_roles`, `usuario_empr
 `configuracion_correo`, `correos_enviados`, `sat_metadatos`, `sat_metadatos_periodos`, `sat_cierres`. Todas se crean
 solas al arrancar.
 
+El 31/10 el proyecto se copió con su git a **CFDIManagerPC-CGA** (usuario de Windows `CFDI Manager`), que queda como
+servidor. Desde ahí se sigue en GitHub (`WebsurferMX/CFDIManagerBoveda`, rama `main`).
+
+## 7. Servidor CFDIManagerPC-CGA (31/10 al 2/11)
+
+### 31/10: servicio de Windows y cifrado
+
+| Tema | Qué se hizo | Commit |
+|---|---|---|
+| Usuarios | Catálogo arriba y formulario en tres columnas | `f4e0b0f` |
+| Estado SAT | Estado SAT desde metadatos, columna Última validación; Empresas ordenadas y tarjetas con profundidad | `0b4e1fc` |
+| Validación y sesión | Validación SAT en segundo plano por empresa (sigue aunque se cambie de pantalla). Cierre de sesión tras 30 min sin uso con aviso un minuto antes; "Recordarme" apagado por omisión. Icono de la pestaña | `7f0c5fe` |
+| Vista previa | PDF como imagen PNG generada del XML; recuadro **Relacionados** en ambas direcciones ("Sustituido por") | `ebd026f` |
+| PDF | Se quita "PDFs masivos"; lo reemplaza Descargar PDF (ZIP) | `9d91de2` |
+| Equipo nuevo | Script de diagnóstico: .NET, PostgreSQL, base, Storage y rutas de XML, con el SQL para corregirlas | `57dec70` |
+| Servicio de Windows | Servicio `CFDIManager` en `C:\CFDIManager`, puerto 5000, instalador `herramientas\Instalar-Servicio.ps1` (Firewall, contraseña de PostgreSQL y clave maestra en `appsettings.Production.json`) | `5362251` |
+| e.firma | En `Storage\Certificados\{RFC}\{RFC}.cer/.key` (se mueven solas al arrancar); contraseña cifrada con prefijo `dp:` | `5362251`, `0a2d01b` |
+| Llaves de cifrado | Tabla `proteccion_llaves`, cifrada con `CFDI_CLAVE_MAESTRA`: se leen en cualquier equipo con la misma clave | `5362251` |
+| Empresas | Columna CIEC con verificación por SAT Móvil; corrige el alta (error 42P08) | `5362251` |
+
+### 1/11: Herramientas, SAT y XML Azulejeras
+
+| Tema | Qué se hizo | Commit |
+|---|---|---|
+| Descargas SAT | Eliminar varias solicitudes o todas (los CFDI importados se conservan). Índice `cfdi (empresa_id, UPPER(uuid))`: el arranque bajó de 40 s a 0.06 s; con 40 s el servicio no alcanzaba a iniciar | `dd3748d` |
+| Herramientas (solo Administrador) | **Periodo de trabajo** (automático o mes fijo) con el que abren las pantallas. **Re-sincronizar con la bóveda** por empresa, en segundo plano: rehace los datos desde el XML, importa los que falten y retira los que ya no están | `447c580` |
+| Declaraciones SAT | Vuelve a obtener el captcha (mensual y anual) tras el cambio del login del SAT | `08fb72d` |
+| Descarga masiva | El rechazo 5002 ("solicitudes agotadas") se reintenta con la fecha inicial de 1 a 10 segundos antes | `dfbd0b4` |
+| Descarga automática | Interruptor general de pausa y tabla por empresa para encenderla o apagarla | `b202ec1` |
+| Empresa activa | Selector con buscador por RFC, nombre o razón social; teclas ↑ ↓ Enter Esc | `b202ec1` |
+| Administración de XML | Filtro **Relacionados** (los dos lados). Asistente **Renombrar XML's** (campos, orden, separador, ejemplo en vivo) que descarga un ZIP; los originales no se tocan | `b7c7739`, `8e45e07`, `5300e48` |
+| Carpeta Storage | Se define por equipo en Herramientas (o `AppSettings:CarpetaStorage`); valida, copia los datos y aplica al reiniciar | `5300e48` |
+| XML Azulejeras (Clientes) | Analizar emitidos por serie y tipo, generar las series a público general (la nómina nunca), **Revisar en SINUBE** y subir solo lo pendiente; anticipos en tanda aparte. Corrige que solo se leían 25 emitidos | `c3ddb0d`, `fa1e67f` |
+| Respaldo | Lunes a viernes, `pg_dump` + Storage en ZIP a la carpeta elegida (p. ej. OneDrive); conserva N diarios y el último día hábil del mes en Mensuales | `c3ddb0d` |
+| SINUBE | "Exportación a SINUBE" pasa a **Importación a SINUBE**; botón Revisar en SINUBE para clientes y proveedores e "Importar N" solo con los pendientes | `c3ddb0d`, `d515efd` |
+| Empresas | Columna Usuarios (solo Administrador), orden y búsqueda por usuario; reporte Excel "Empresas asignadas por usuario" | `d515efd`, `0e01aa3` |
+
+### 1 y 2/11: Resumen fiscal y diseño
+
+| Tema | Qué se hizo | Commit |
+|---|---|---|
+| Resumen fiscal | Tarjeta **Impuestos**: IVA trasladado/acreditable, IVA retenido e ISR retenido de emitidos y recibidos, por flujo (facturas PUE − notas de crédito + complementos de pago) | `d193559` |
+| Previo de IVA | IVA cobrado (trasladado − retenido por clientes) − IVA acreditable = **IVA por pagar** o **saldo a favor**; aparte, retenciones de IVA por enterar | `d193559` |
+| Base de datos | Columnas `pago_iva_trasladado`, `pago_iva_retenido`, `pago_isr_retenido` en `cfdi`, leídas del nodo Totales del complemento de pagos la primera vez que se consulta el periodo; la re-sincronización las limpia | `d193559` |
+| Letra | **Segoe UI** en toda la app (variables de Bootstrap y Tabler en `app.css`) | `01d98f9` |
+| Administración de XML | Totales como **KPI** siempre abajo en una fila, cada uno del ancho de su contenido. Nómina 1.1 (tarjeta y pestaña) solo si el filtro trae alguna. Detalle de hasta 3 partidas con scroll. Rejilla más ligera; Estado SAT y Tipo como pastillas de color; la última validación pasa al tooltip de Estado SAT | `6f8e227`, `01d98f9` |
+| Selector de empresa | La lista muestra los nombres completos | `6f8e227` |
+| Recarga | F5, reconexión fallida o URL escrita regresan siempre al **Resumen** | `759051d` |
+
+Tablas y columnas nuevas de esta etapa: `proteccion_llaves`, `configuracion_app` y las columnas `pago_*` de `cfdi`.
+Se crean solas al arrancar.
+
 ## Dónde está cada cosa
 
 | Qué | Dónde |
 |---|---|
-| Código | `Desktop\CFDIManagerBoveda` (`CFDIManager.Web` + `CFDIParser`). Sin git todavía. |
+| Código | GitHub `WebsurferMX/CFDIManagerBoveda`, rama `main`; en el servidor, `Desktop\CFDIManagerBoveda` (`CFDIManager.Web` + `CFDIParser`) |
+| App publicada | Servicio de Windows `CFDIManager` en `C:\CFDIManager`, puerto 5000. La contraseña de PostgreSQL y la clave maestra están en `C:\CFDIManager\appsettings.Production.json` (no se sobrescribe al actualizar) |
+| Acceso remoto | Tailscale (cuenta WebsurferMX): `http://100.104.146.61:5000`; el cliente debe estar en la misma red de Tailscale |
 | App original | `Desktop\CFDIManager`, con git y `CLAUDE.md` (hasta el 28/10) |
-| XML | `CFDIManager.Web\Storage\XML\<RFC>\Emitidos\|Recibidos\AAAA\MM` |
-| Llaves de cifrado (CIEC, SMTP, SINUBE) | `CFDIManager.Web\Storage\Llaves`, protegidas con DPAPI del usuario de Windows: en otro equipo o usuario hay que volver a capturar las contraseñas |
-| Sesiones de Claude Code de este equipo | `C:\Users\websu\.claude\projects\` |
-| Sesiones de ERNESTO-CGA | `C:\Users\Ernesto Hernández\.claude\projects\` (copia en `Desktop\projects.rar`) |
+| XML | `Storage\XML\<RFC>\Emitidos\|Recibidos\AAAA\MM`; la carpeta Storage se define en Herramientas |
+| Llaves de cifrado (CIEC, SMTP, SINUBE) | Tabla `proteccion_llaves`, cifradas con `CFDI_CLAVE_MAESTRA` (debe ser la misma en todos los equipos). Sin ella se usa `Storage\Llaves` con DPAPI y en otro equipo hay que volver a capturar las contraseñas |
+| e.firma | `Storage\Certificados\{RFC}\{RFC}.cer/.key` |
+| Sesiones de Claude Code | `websu`: `C:\Users\websu\.claude\projects\`; ERNESTO-CGA: `C:\Users\Ernesto Hernández\.claude\projects\` (copia en `Desktop\projects.rar`); servidor: `C:\Users\CFDI Manager\.claude\projects\` |
 
 ## Pendientes conocidos
 
-- Poner CFDIManagerBoveda en git (la carpeta no tiene repositorio).
 - Encender la descarga automática en AAL090714841 (hoy solo BTM y GUM la tienen).
 - Captcha de la CIEC y de declaraciones: hoy se escribe a mano.
 - SINUBE: marcar aparte el rechazo por folio duplicado (A-1 contra 1) para reenviarlo por "Clientes sin folio".
