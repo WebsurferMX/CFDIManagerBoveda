@@ -36,22 +36,34 @@ public class SinubeDatosService(SinubeService sinube, IHttpClientFactory http)
     /// UUID de las facturas de clientes (DbFactura) que ya están en SINUBE en esos meses (por fecha de factura).
     /// Una consulta por mes: así no se manda uno por uno lo que SINUBE ya tiene.
     /// </summary>
-    public async Task<HashSet<string>> UuidsFacturasClientesAsync(
+    public Task<HashSet<string>> UuidsFacturasClientesAsync(
         SinubeConfiguracionDto configuracion,
+        IEnumerable<DateTime> meses,
+        CancellationToken cancelacion = default) =>
+        UuidsEnSinubeAsync(configuracion, clientes: true, meses, cancelacion);
+
+    /// <summary>
+    /// UUID que SINUBE ya tiene en esos meses: facturas de clientes (DbFactura) o de proveedores
+    /// (DbFacturaProveedorDeXML), las mismas entidades que la Conciliación.
+    /// </summary>
+    public async Task<HashSet<string>> UuidsEnSinubeAsync(
+        SinubeConfiguracionDto configuracion,
+        bool clientes,
         IEnumerable<DateTime> meses,
         CancellationToken cancelacion = default)
     {
         var uuids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         string empresa = configuracion.Empresa.Replace("'", "");
+        (string entidad, string campo) = clientes ? ("DbFactura", "uuid") : ("DbFacturaProveedorDeXML", "UUID");
 
         foreach (int periodo in meses.Select(m => m.Year * 100 + m.Month).Distinct())
         {
             List<FilaSinube> filas = await ConsultarAsync(
-                configuracion, $"SELECT uuid FROM DbFactura WHERE empresa = '{empresa}' AND mes = {periodo}", cancelacion);
+                configuracion, $"SELECT {campo} FROM {entidad} WHERE empresa = '{empresa}' AND mes = {periodo}", cancelacion);
 
             foreach (FilaSinube fila in filas)
             {
-                if (fila.Texto("uuid") is { Length: > 0 } uuid)
+                if (fila.Texto(campo) is { Length: > 0 } uuid)
                     uuids.Add(uuid.Trim());
             }
         }

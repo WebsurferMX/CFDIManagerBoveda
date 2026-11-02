@@ -8,6 +8,7 @@
 @using CFDIManager.Web.Services.Sinube
 
 @inject SinubeService Sinube
+@inject SinubeDatosService DatosSinube
 @inject PostgreSqlRepository Repo
 @inject EmpresaContext EmpresaContext
 @inject RutaXmlService Rutas
@@ -110,7 +111,7 @@
                 <div class="panel-grid">
                     <div class="field">
                         <label>Periodo</label>
-                        <select class="form-select" @bind="PeriodoTexto" disabled="@Enviando">
+                        <select class="form-select" @bind="PeriodoTexto" @bind:after="LimpiarRevision" disabled="@Enviando">
                             @if (Periodos.Count == 0)
                             {
                                 <option value="">Sin XML en @(Clientes ? "Emitidos" : "Recibidos")</option>
@@ -168,7 +169,7 @@
 
                 <div class="panel-actions">
                     <label class="reenviar">
-                        <input type="checkbox" @bind="Reenviar" disabled="@Enviando" /> Reenviar los que SINUBE ya aceptó
+                        <input type="checkbox" @bind="Reenviar" @bind:after="LimpiarRevision" disabled="@Enviando" /> Reenviar los que SINUBE ya aceptó
                     </label>
 
                     @if (Enviando)
@@ -178,10 +179,27 @@
                         </button>
                     }
 
-                    <button type="button" class="primary-button" @onclick="EnviarAsync" disabled="@(!PuedeEnviar)">
+                    <button type="button" class="secondary-button" @onclick="RevisarSinube"
+                            disabled="@(Enviando || Revisando || FaltaConfiguracion is not null || PeriodoTexto == "")">
+                        @if (Revisando)
+                        {
+                            <span class="spinner-border spinner-border-sm"></span> <span>Revisando…</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-search"></i> <span>Revisar en SINUBE</span>
+                        }
+                    </button>
+
+                    <button type="button" class="primary-button" @onclick="EnviarAsync"
+                            disabled="@(!PuedeEnviar || Revisando || Revision is { PorSubir.Count: 0 })">
                         @if (Enviando)
                         {
                             <i class="bi bi-hourglass-split"></i> <span>Enviando @Procesados de @Total…</span>
+                        }
+                        else if (Revision is not null)
+                        {
+                            <i class="bi bi-cloud-arrow-up-fill"></i> <span>Importar @Revision.PorSubir.Count.ToString("N0") a SINUBE</span>
                         }
                         else
                         {
@@ -189,6 +207,16 @@
                         }
                     </button>
                 </div>
+
+                @if (Revision is not null && Resultados.Count == 0)
+                {
+                    <div class="row g-2 mt-1">
+                        <TarjetaTotal Titulo="XML del periodo" Valor="@Revision.Archivos.ToString("N0")" Icono="bi-files" />
+                        <TarjetaTotal Titulo="Ya en SINUBE" Valor="@Revision.EnSinube.ToString("N0")" Icono="bi-cloud-check" Color="info" />
+                        <TarjetaTotal Titulo="Enviados antes" Valor="@Revision.EnviadosAntes.ToString("N0")" Icono="bi-clock-history" />
+                        <TarjetaTotal Titulo="Por subir" Valor="@Revision.PorSubir.Count.ToString("N0")" Icono="bi-cloud-arrow-up" Color="primary" />
+                    </div>
+                }
 
                 @if (Total > 0)
                 {
@@ -526,6 +554,7 @@
 
     private void Cargar()
     {
+        Revision = null;
         Resultados = [];
         Error = null;
         Total = Procesados = 0;
@@ -553,12 +582,85 @@
         PeriodoTexto = Periodos.Count > 0 ? Periodos[0].ToString("yyyy-MM") : "";
     }
 
+    /// <summary>Lo que ya tiene SINUBE del periodo y lo ya enviado desde la app; el resto queda por subir.</summary>
+    private sealed class RevisionSinube
+    {
+        public int Archivos { get; init; }
+        public HashSet<string> YaEnSinube { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+        public int EnSinube { get; init; }
+        public int EnviadosAntes { get; init; }
+        public List<string> PorSubir { get; init; } = [];
+    }
+
+    private RevisionSinube? Revision;
+    private bool Revisando;
+
+    private void LimpiarRevision() => Revision = null;
+
+    private async Task RevisarSinube()
+    {
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa || Config is null || !TryPeriodo(PeriodoTexto, out DateTime periodo))
+            return;
+
+        Error = null;
+        Resultados = [];
+        Total = Procesados = 0;
+        Revision = null;
+        Revisando = true;
+
+        try
+        {
+            bool clientes = Clientes;
+            List<string> archivos = Sinube.Archivos(empresa, clientes, periodo);
+            HashSet<string> enSinube = await DatosSinube.UuidsEnSinubeAsync(Config, clientes, [periodo]);
+            HashSet<string> enviados = Reenviar ? [] : Sinube.UuidsEnviados(empresa, clientes);
+            Dictionary<string, string> uuids = await Task.Run(() => archivos.ToDictionary(a => a, UuidDeArchivo));
+
+            Revision = new RevisionSinube
+            {
+                Archivos = archivos.Count,
+                YaEnSinube = enSinube,
+                EnSinube = archivos.Count(a => enSinube.Contains(uuids[a])),
+                EnviadosAntes = archivos.Count(a => !enSinube.Contains(uuids[a]) && enviados.Contains(uuids[a])),
+                PorSubir = archivos.Where(a => !enSinube.Contains(uuids[a]) && !enviados.Contains(uuids[a])).ToList()
+            };
+        }
+        catch (Exception ex)
+        {
+            Error = $"No se pudo consultar SINUBE: {ex.Message}";
+        }
+        finally
+        {
+            Revisando = false;
+        }
+    }
+
+    /// <summary>Los XML de la bóveda se llaman {UUID}.xml; si no, se lee del timbre.</summary>
+    private static string UuidDeArchivo(string archivo)
+    {
+        string nombre = Path.GetFileNameWithoutExtension(archivo);
+
+        if (Guid.TryParse(nombre, out _))
+            return nombre;
+
+        try
+        {
+            return System.Xml.Linq.XDocument.Load(archivo).Descendants()
+                .FirstOrDefault(e => e.Name.LocalName == "TimbreFiscalDigital")?.Attribute("UUID")?.Value ?? nombre;
+        }
+        catch (Exception)
+        {
+            return nombre;
+        }
+    }
+
     private void CambiarTab(string tab)
     {
         if (Enviando || Tab == tab)
             return;
 
         Tab = tab;
+        Revision = null;
         Resultados = [];
         Error = null;
         Total = Procesados = 0;
@@ -580,7 +682,11 @@
         Error = null;
         Resultados = [];
         Procesados = 0;
-        Total = Sinube.Archivos(empresa, Clientes, periodo).Count;
+
+        // Revisado en SINUBE: solo los pendientes; sin revisar, toda la carpeta del periodo.
+        List<string> archivos = Revision?.PorSubir ?? Sinube.Archivos(empresa, Clientes, periodo);
+        IReadOnlySet<string>? yaEnSinube = Revision?.YaEnSinube;
+        Total = archivos.Count;
 
         if (Total == 0)
         {
@@ -621,11 +727,11 @@
 
         try
         {
-            await Task.Run(() => Sinube.EnviarAsync(
+            await Task.Run(() => Sinube.EnviarArchivosAsync(
                 empresa,
                 Config,
                 clientes,
-                periodo,
+                archivos,
                 tipos,
                 Reenviar,
                 EnviarConIeps,
@@ -636,7 +742,8 @@
                     StateHasChanged();
                 }),
                 Cancelacion.Token,
-                sinFolio));
+                sinFolio,
+                yaEnSinube));
         }
         catch (OperationCanceledException)
         {
