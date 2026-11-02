@@ -147,7 +147,7 @@
                     <input id="buscar-empresa"
                            @bind="Busqueda"
                            @bind:event="oninput"
-                           placeholder="RFC o razón social" />
+                           placeholder="@(PuedeDarDeAlta ? "RFC, razón social o usuario" : "RFC o razón social")" />
                 </div>
             </div>
 
@@ -183,7 +183,11 @@
                                 <th>CIEC</th>
                                 @if (PuedeDarDeAlta)
                                 {
-                                    <th>Usuarios</th>
+                                    <th>
+                                        <button type="button" class="orden @(OrdenEmpresas == "usuario" ? "activo" : "")" @onclick='() => Ordenar("usuario")'>
+                                            Usuarios <i class="ti @IconoOrden("usuario")"></i>
+                                        </button>
+                                    </th>
                                 }
                                 <th>Estado</th>
                                 <th class="text-end">Acciones</th>
@@ -600,9 +604,15 @@
                 string.IsNullOrWhiteSpace(Busqueda) ||
                 empresa.Rfc.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
                 empresa.RazonSocial.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
-                empresa.NombreCorto.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase)));
+                empresa.NombreCorto.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                Asignados(empresa).Any(u =>
+                    u.Usuario.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase) ||
+                    u.NombreCompleto.Contains(Busqueda.Trim(), StringComparison.OrdinalIgnoreCase))));
 
-    // Por omisión en orden alfabético por empresa; clic en RFC o Empresa cambia el orden.
+    private List<AsignacionEmpresaDto> Asignados(EmpresaDto empresa) =>
+        UsuariosAsignados.TryGetValue(empresa.EmpresaId, out List<AsignacionEmpresaDto>? usuarios) ? usuarios : [];
+
+    // Por omisión en orden alfabético por empresa; clic en RFC, Empresa o Usuarios cambia el orden.
     private string OrdenEmpresas = "empresa";
     private bool OrdenDescendente;
 
@@ -610,6 +620,17 @@
 
     private List<EmpresaDto> Ordenadas(IEnumerable<EmpresaDto> empresas)
     {
+        if (OrdenEmpresas == "usuario")
+        {
+            // Por usuario asignado; las empresas sin usuarios siempre al final, por nombre.
+            Func<EmpresaDto, string> usuarios = e => string.Join(", ", Asignados(e).Select(u => u.Usuario));
+            IOrderedEnumerable<EmpresaDto> conUsuarios = empresas.OrderBy(e => Asignados(e).Count == 0);
+
+            return (OrdenDescendente ? conUsuarios.ThenByDescending(usuarios, Alfabetico) : conUsuarios.ThenBy(usuarios, Alfabetico))
+                .ThenBy(e => e.NombreParaMostrar, Alfabetico)
+                .ToList();
+        }
+
         Func<EmpresaDto, string> clave = OrdenEmpresas == "rfc" ? e => e.Rfc : e => e.NombreParaMostrar;
         return (OrdenDescendente ? empresas.OrderByDescending(clave, Alfabetico) : empresas.OrderBy(clave, Alfabetico)).ToList();
     }
