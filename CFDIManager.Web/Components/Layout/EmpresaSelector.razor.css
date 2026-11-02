@@ -56,7 +56,10 @@
     position: absolute;
     top: calc(100% + .25rem);
     left: 0;
-    right: 0;
+    /* Más ancho que el botón para que se lean los nombres completos. */
+    width: max-content;
+    min-width: 100%;
+    max-width: min(44rem, calc(100vw - 2rem));
     z-index: 1100;
     padding: .4rem;
     border: 1px solid #cbd5e1;
@@ -101,10 +104,9 @@
     color: #475569;
 }
 
+/* Nombre completo; si no cabe ni en el ancho máximo, pasa al siguiente renglón. */
 .empresa-combo-panel li .nombre {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
 }
 
 .empresa-combo-panel li.resaltada {

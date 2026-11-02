@@ -6,7 +6,15 @@
     grid-template-columns: minmax(0, 1fr) 240px;
     /* Alto de la ventana menos la barra superior de la app y su margen. */
     height: calc(100vh - 6.5rem);
+    font-family: "Segoe UI", system-ui, sans-serif;
     font-size: .82rem;
+}
+
+/* Bootstrap fija la letra de botones y campos; que también tomen Segoe UI. */
+.admin-xml button,
+.admin-xml input,
+.admin-xml select {
+    font-family: inherit;
 }
 
 .principal {
@@ -253,6 +261,12 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
     font-size: .8rem;
 }
 
+/* Rejilla principal: letra más chica y sin negrita. */
+.rejilla tbody td {
+    font-size: .74rem;
+    font-weight: 400;
+}
+
 th,
 td {
     white-space: nowrap;
@@ -384,35 +398,90 @@ td.sel { width: 30px; }
 
 .detalle-cuerpo { flex: 1; min-height: 0; overflow: auto; }
 
-/* Todos los tipos caben sin scroll en el alto de .detalles. */
-.totales { overflow: auto; }
-
-.totales .list-group { height: 100%; }
-
-.totales .total {
+/* Totales por tipo como KPI (2 × 3) y el total de archivos abajo; caben en el alto de .detalles. */
+.totales {
     display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    min-height: 0;
+}
+
+.kpis {
+    display: grid;
     flex: 1;
+    grid-template-columns: 1fr 1fr;
+    grid-auto-rows: 1fr;
+    gap: .4rem;
+    min-height: 0;
+}
+
+.kpi {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+    padding: .3rem .55rem;
+    border: 1px solid var(--bs-border-color);
+    border-left: 3px solid var(--tono);
+    border-radius: var(--bs-border-radius);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--tono) 10%, var(--bs-body-bg)) 0%, var(--bs-body-bg) 70%);
+    box-shadow: 0 .1rem .3rem rgb(0 0 0 / 8%);
+}
+
+.kpi .ic {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 1.7rem;
+    height: 1.7rem;
+    border-radius: 50%;
+    background: var(--tono-fondo);
+    color: var(--tono);
+    font-size: .85rem;
+}
+
+.kpi-texto { min-width: 0; }
+
+.kpi-titulo {
+    overflow: hidden;
+    color: var(--bs-secondary-color);
+    font-size: .66rem;
+    font-weight: 600;
+    letter-spacing: .03em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.kpi-titulo .cantidad {
+    margin-left: .15rem;
+    padding: 0 .3rem;
+    border-radius: 1rem;
+    background: var(--tono-fondo);
+    color: var(--tono-texto);
+}
+
+.kpi-valor {
+    color: var(--tono-texto, var(--bs-emphasis-color));
+    font-size: .9rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.kpi-archivos {
+    display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: .6rem;
-    padding: .2rem .9rem;
-    font-size: .82rem;
-}
-
-.totales .total > span { color: var(--tono-texto, var(--bs-body-color)); font-weight: 600; }
-.totales .punto { margin-right: .45rem; color: var(--tono); font-size: .5rem; vertical-align: middle; }
-
-.totales .total b {
-    color: var(--tono-texto, var(--bs-emphasis-color));
-    font-size: .92rem;
-    font-variant-numeric: tabular-nums;
-}
-
-.totales .total.archivos {
+    padding: .3rem .7rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
     background: var(--bs-tertiary-bg);
+    font-weight: 600;
 }
 
-.totales .total.archivos b { font-size: 1.05rem; }
+.kpi-archivos b { font-size: 1rem; font-variant-numeric: tabular-nums; }
 
 /* ---------- panel de herramientas ---------- */
 

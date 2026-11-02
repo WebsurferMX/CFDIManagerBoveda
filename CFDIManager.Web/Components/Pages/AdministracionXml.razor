@@ -207,7 +207,7 @@
                                     </td>
                                     @foreach (Columna c in ColumnasVisibles)
                                     {
-                                        <td class="@(c.Numero ? "num" : "") @c.Clase(x)">@c.Valor(x)</td>
+                                        <td class="@(c.Numero ? "num" : "") @c.Clase(x)" title="@c.Ayuda(x)">@c.Valor(x)</td>
                                     }
                                 </tr>
                             }
@@ -407,30 +407,33 @@
                         </div>
                     }
 
-                    <div class="card shadow-sm totales">
+                    <div class="totales">
                         @if (Totales is { } t)
                         {
-                            <ul class="list-group list-group-flush">
-                                @foreach (var (titulo, cantidad, total, tono) in new[]
+                            <div class="kpis">
+                                @foreach (var (titulo, cantidad, total, tono, icono) in new[]
                                 {
-                                    ("Facturas", t.Facturas.Cantidad, t.Facturas.Total, "azul"),
-                                    ("Nómina 1.1", t.Nominas11.Cantidad, t.Nominas11.Total, "verde"),
-                                    ("Nómina 1.2", t.Nominas12.Cantidad, t.Nominas12.Total, "verde"),
-                                    ("Notas de crédito", t.NotasCredito.Cantidad, t.NotasCredito.Total, "mal"),
-                                    ("Traslados", t.Traslados.Cantidad, t.Traslados.Total, "ambar"),
-                                    ("Pagos", t.Pagos.Cantidad, t.Pagos.Total, "morado")
+                                    ("Facturas", t.Facturas.Cantidad, t.Facturas.Total, "azul", "bi-receipt"),
+                                    ("Nómina 1.1", t.Nominas11.Cantidad, t.Nominas11.Total, "verde", "bi-people"),
+                                    ("Nómina 1.2", t.Nominas12.Cantidad, t.Nominas12.Total, "verde", "bi-people"),
+                                    ("Notas de crédito", t.NotasCredito.Cantidad, t.NotasCredito.Total, "mal", "bi-arrow-counterclockwise"),
+                                    ("Traslados", t.Traslados.Cantidad, t.Traslados.Total, "ambar", "bi-truck"),
+                                    ("Pagos", t.Pagos.Cantidad, t.Pagos.Total, "morado", "bi-cash-coin")
                                 })
                                 {
-                                    <li class="list-group-item total tono-@tono">
-                                        <span><i class="bi bi-circle-fill punto"></i>@titulo <small class="text-body-secondary">(@cantidad.ToString("N0"))</small></span>
-                                        <b>$@total.ToString("N2")</b>
-                                    </li>
+                                    <div class="kpi tono-@tono">
+                                        <span class="ic"><i class="bi @icono"></i></span>
+                                        <div class="kpi-texto">
+                                            <div class="kpi-titulo">@titulo <span class="cantidad">@cantidad.ToString("N0")</span></div>
+                                            <div class="kpi-valor">$@total.ToString("N2")</div>
+                                        </div>
+                                    </div>
                                 }
-                                <li class="list-group-item total archivos">
-                                    <span>Total archivos XML</span>
-                                    <b>@t.Archivos.ToString("N0")</b>
-                                </li>
-                            </ul>
+                            </div>
+                            <div class="kpi-archivos">
+                                <span><i class="bi bi-files me-1"></i>Total archivos XML</span>
+                                <b>@t.Archivos.ToString("N0")</b>
+                            </div>
                         }
                     </div>
                 </div>
@@ -797,9 +800,12 @@
     };
 
     // ---------- columnas ----------
-    private sealed record Columna(string Clave, string Titulo, Func<AdminXmlFilaDto, string> Valor, bool Numero = false, Func<AdminXmlFilaDto, string>? ClaseFn = null, string[]? Pestanas = null)
+    private sealed record Columna(string Clave, string Titulo, Func<AdminXmlFilaDto, string> Valor, bool Numero = false, Func<AdminXmlFilaDto, string>? ClaseFn = null, string[]? Pestanas = null, Func<AdminXmlFilaDto, string>? AyudaFn = null)
     {
         public string Clase(AdminXmlFilaDto x) => ClaseFn?.Invoke(x) ?? "";
+
+        // Tooltip de la celda; null deja el de la fila (Ctrl + clic…).
+        public string? Ayuda(AdminXmlFilaDto x) => AyudaFn?.Invoke(x);
     }
 
     private static string N(decimal? v) => v is decimal d ? d.ToString("N2") : "";
@@ -813,8 +819,8 @@
         new("serie", "Serie", x => x.Serie),
         new("folio", "Folio", x => x.Folio),
         new("uuid", "UUID", x => x.Uuid, ClaseFn: _ => "uuid"),
-        new("estado_sat", "Estado SAT", x => TextoEstadoSat(x.EstadoSat), ClaseFn: x => x.EstadoSat.Equals("Cancelado", StringComparison.OrdinalIgnoreCase) ? "mal" : x.EstadoSat.Equals("Vigente", StringComparison.OrdinalIgnoreCase) ? "ok" : ""),
-        new("validacion", "Últ. validación", x => x.FechaValidacionSat is DateTime v ? v.ToString("dd/MM/yyyy HH:mm") + (x.OrigenValidacionSat == "Metadatos SAT" ? " · metadatos" : "") : "Nunca"),
+        new("estado_sat", "Estado SAT", x => TextoEstadoSat(x.EstadoSat), ClaseFn: x => x.EstadoSat.Equals("Cancelado", StringComparison.OrdinalIgnoreCase) ? "mal" : x.EstadoSat.Equals("Vigente", StringComparison.OrdinalIgnoreCase) ? "ok" : "",
+            AyudaFn: x => "Última validación: " + (x.FechaValidacionSat is DateTime v ? v.ToString("dd/MM/yyyy HH:mm") + (x.OrigenValidacionSat == "Metadatos SAT" ? " · metadatos" : "") : "Nunca")),
         new("version", "Versión", x => x.Version),
         new("tipo", "Tipo", x => NombreTipo(x.TipoCfdi)),
         new("fecha", "Fecha emisión", x => x.FechaEmision.ToString("dd/MM/yyyy")),
