@@ -6,15 +6,7 @@
     grid-template-columns: minmax(0, 1fr) 240px;
     /* Alto de la ventana menos la barra superior de la app y su margen. */
     height: calc(100vh - 6.5rem);
-    font-family: "Segoe UI", system-ui, sans-serif;
     font-size: .82rem;
-}
-
-/* Bootstrap fija la letra de botones y campos; que también tomen Segoe UI. */
-.admin-xml button,
-.admin-xml input,
-.admin-xml select {
-    font-family: inherit;
 }
 
 .principal {
@@ -261,10 +253,29 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
     font-size: .8rem;
 }
 
-/* Rejilla principal: letra más chica y sin negrita. */
+/* Rejilla principal: filas limpias sin cebra, letra chica sin negrita, hover suave. */
+.rejilla .table {
+    --bs-table-hover-bg: color-mix(in srgb, var(--bs-primary) 7%, transparent);
+    --bs-table-border-color: var(--bs-border-color-translucent);
+}
+
 .rejilla tbody td {
+    padding: .3rem .55rem;
     font-size: .74rem;
     font-weight: 400;
+}
+
+/* Estado SAT y Tipo como pastillas del color de su tono. */
+.rejilla td.pastilla > span {
+    display: inline-block;
+    padding: .05rem .5rem;
+    border: 1px solid var(--tono-borde);
+    border-radius: 1rem;
+    background: var(--tono-fondo);
+    color: var(--tono-texto);
+    font-size: .68rem;
+    font-weight: 600;
+    line-height: 1.35;
 }
 
 th,
@@ -279,8 +290,15 @@ td {
     z-index: 1;
     background: var(--bs-tertiary-bg);
     color: var(--bs-secondary-color);
-    font-size: .7rem;
+    font-size: .66rem;
     font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.rejilla thead th {
+    padding: .45rem .55rem;
+    border-bottom: 1px solid var(--bs-border-color);
 }
 
 th.ordenable { cursor: pointer; user-select: none; }
@@ -289,22 +307,22 @@ th.ordenada { color: var(--bs-primary); }
 th.ordenable .bi { margin-left: 2px; font-size: .62rem; opacity: .35; }
 th.ordenada .bi { opacity: 1; }
 
-/* Líneas verticales tenues entre columnas, además de las horizontales de Bootstrap. */
-.rejilla thead th + th,
-.rejilla tbody td + td {
+/* Línea vertical tenue solo en el encabezado; las filas quedan limpias. */
+.rejilla thead th + th {
     border-left: 1px solid var(--bs-border-color-translucent);
 }
 
-/* Fila elegida: azul sólido (Bootstrap pinta las celdas con estas variables). */
+/* Fila elegida: fondo azul claro con barra azul a la izquierda (Bootstrap pinta las celdas con estas variables). */
 .rejilla tbody tr { cursor: default; }
 
 .rejilla tbody tr.activa > td {
-    --bs-table-bg-state: var(--bs-primary);
-    --bs-table-color-state: #fff;
+    --bs-table-bg-state: var(--bs-primary-bg-subtle);
+    --bs-table-color-state: var(--bs-emphasis-color);
 }
 
-.rejilla tbody tr.activa > td.ok,
-.rejilla tbody tr.activa > td.mal { color: #fff; }
+.rejilla tbody tr.activa > td:first-child {
+    box-shadow: inset 3px 0 0 var(--bs-primary);
+}
 
 td.num,
 th.num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -338,13 +356,17 @@ td.sel { width: 30px; }
 
 .detalles {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 360px;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
     gap: .6rem;
-    height: 240px;
-    min-height: 0;
+    flex: 0 0 auto;
 }
 
-.detalles.con-relacionados { grid-template-columns: minmax(0, 1fr) 320px 360px; }
+/* El detalle crece con las partidas: encabezado + hasta 3 renglones, después scroll. */
+.detalles .detalle-cuerpo { max-height: 6.4rem; }
+.detalles .relacionados { max-height: 8.5rem; }
+
+.detalles.con-relacionados { grid-template-columns: minmax(0, 1fr) 360px; }
 
 .relacionados {
     display: flex;
@@ -398,35 +420,36 @@ td.sel { width: 30px; }
 
 .detalle-cuerpo { flex: 1; min-height: 0; overflow: auto; }
 
-/* Totales por tipo como KPI (2 × 3) y el total de archivos abajo; caben en el alto de .detalles. */
-.totales {
-    display: flex;
-    flex-direction: column;
-    gap: .4rem;
-    min-height: 0;
-}
-
+/* Totales por tipo como KPI en una fila al pie de la pantalla (6 tipos + archivos XML). */
+/* Cada KPI toma el ancho de su contenido (nunca se corta) y reparte el sobrante;
+   si no caben en una fila, pasan a la siguiente. */
 .kpis {
-    display: grid;
-    flex: 1;
-    grid-template-columns: 1fr 1fr;
-    grid-auto-rows: 1fr;
-    gap: .4rem;
-    min-height: 0;
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    gap: .5rem;
 }
 
+.kpis .kpi { flex: 1 1 auto; }
+
+/* Degradado del color del tipo desde la esquina, borde del mismo tono y sombra marcada. */
 .kpi {
     display: flex;
     align-items: center;
     gap: .5rem;
-    min-width: 0;
-    padding: .3rem .55rem;
-    border: 1px solid var(--bs-border-color);
+    padding: .35rem .6rem;
+    border: 1px solid color-mix(in srgb, var(--tono) 35%, var(--bs-border-color));
     border-left: 3px solid var(--tono);
-    border-radius: var(--bs-border-radius);
-    background: linear-gradient(135deg, color-mix(in srgb, var(--tono) 10%, var(--bs-body-bg)) 0%, var(--bs-body-bg) 70%);
-    box-shadow: 0 .1rem .3rem rgb(0 0 0 / 8%);
+    border-radius: .6rem;
+    background: linear-gradient(135deg, color-mix(in srgb, var(--tono) 26%, var(--bs-body-bg)) 0%, var(--bs-body-bg) 75%);
+    box-shadow: 0 .35rem .9rem rgb(0 0 0 / 18%), 0 .1rem .25rem rgb(0 0 0 / 12%), inset 0 1px 0 rgb(255 255 255 / 6%);
 }
+
+.kpi.tono-todos {
+    background: linear-gradient(135deg, color-mix(in srgb, var(--tono) 40%, var(--bs-body-bg)) 0%, var(--bs-body-bg) 80%);
+}
+
+.kpi .ic { border: 1px solid color-mix(in srgb, var(--tono) 45%, transparent); }
 
 .kpi .ic {
     display: inline-flex;
@@ -441,15 +464,11 @@ td.sel { width: 30px; }
     font-size: .85rem;
 }
 
-.kpi-texto { min-width: 0; }
-
 .kpi-titulo {
-    overflow: hidden;
     color: var(--bs-secondary-color);
     font-size: .66rem;
     font-weight: 600;
-    letter-spacing: .03em;
-    text-overflow: ellipsis;
+    letter-spacing: .02em;
     text-transform: uppercase;
     white-space: nowrap;
 }
@@ -469,19 +488,6 @@ td.sel { width: 30px; }
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
-
-.kpi-archivos {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: .3rem .7rem;
-    border: 1px solid var(--bs-border-color);
-    border-radius: var(--bs-border-radius);
-    background: var(--bs-tertiary-bg);
-    font-weight: 600;
-}
-
-.kpi-archivos b { font-size: 1rem; font-variant-numeric: tabular-nums; }
 
 /* ---------- panel de herramientas ---------- */
 

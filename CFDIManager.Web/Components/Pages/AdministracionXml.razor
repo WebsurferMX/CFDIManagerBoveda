@@ -175,6 +175,12 @@
                     <div class="pestanas">
                         @foreach (var (clave, titulo, cantidad) in Pestanas)
                         {
+                            // Igual que la tarjeta: Nómina 1.1 solo si el filtro trae alguna (o si es la pestaña abierta).
+                            if (clave == "nomina11" && cantidad == 0 && Pestana != clave)
+                            {
+                                continue;
+                            }
+
                             <button type="button" class="pestana tono-@ColorPestana(clave) @(Pestana == clave ? "activa" : "")" @onclick="() => CambiarPestana(clave)">
                                 @titulo <span class="badge rounded-pill cantidad">@cantidad.ToString("N0")</span>
                             </button>
@@ -183,7 +189,7 @@
                 </div>
 
                 <div class="rejilla">
-                    <table class="table table-sm table-hover table-striped align-middle mb-0">
+                    <table class="table table-sm table-hover align-middle mb-0">
                         <thead>
                             <tr>
                                 <th class="sel"><input class="form-check-input" type="checkbox" checked="@TodoElFiltro" @onchange="MarcarTodoElFiltro" title="Seleccionar todo el filtro (todas las páginas)" /></th>
@@ -207,7 +213,7 @@
                                     </td>
                                     @foreach (Columna c in ColumnasVisibles)
                                     {
-                                        <td class="@(c.Numero ? "num" : "") @c.Clase(x)" title="@c.Ayuda(x)">@c.Valor(x)</td>
+                                        <td class="@(c.Numero ? "num" : "") @c.Clase(x)" title="@c.Ayuda(x)"><span>@c.Valor(x)</span></td>
                                     }
                                 </tr>
                             }
@@ -406,35 +412,43 @@
                             </ul>
                         </div>
                     }
+                </div>
+            }
 
-                    <div class="totales">
-                        @if (Totales is { } t)
+            @* Totales por tipo: siempre abajo, en una fila, con o sin detalles. *@
+            @if (Totales is { } t)
+            {
+                <div class="kpis">
+                    @foreach (var (titulo, cantidad, total, tono, icono) in new[]
+                    {
+                        ("Facturas", t.Facturas.Cantidad, t.Facturas.Total, "azul", "bi-receipt"),
+                        ("Nómina 1.1", t.Nominas11.Cantidad, t.Nominas11.Total, "verde", "bi-people"),
+                        ("Nómina 1.2", t.Nominas12.Cantidad, t.Nominas12.Total, "verde", "bi-people"),
+                        ("Notas de crédito", t.NotasCredito.Cantidad, t.NotasCredito.Total, "mal", "bi-arrow-counterclockwise"),
+                        ("Traslados", t.Traslados.Cantidad, t.Traslados.Total, "ambar", "bi-truck"),
+                        ("Pagos", t.Pagos.Cantidad, t.Pagos.Total, "morado", "bi-cash-coin")
+                    })
+                    {
+                        // Nómina 1.1 dejó de emitirse el 1 de abril de 2017: solo se muestra si el filtro trae alguna.
+                        if (titulo == "Nómina 1.1" && cantidad == 0)
                         {
-                            <div class="kpis">
-                                @foreach (var (titulo, cantidad, total, tono, icono) in new[]
-                                {
-                                    ("Facturas", t.Facturas.Cantidad, t.Facturas.Total, "azul", "bi-receipt"),
-                                    ("Nómina 1.1", t.Nominas11.Cantidad, t.Nominas11.Total, "verde", "bi-people"),
-                                    ("Nómina 1.2", t.Nominas12.Cantidad, t.Nominas12.Total, "verde", "bi-people"),
-                                    ("Notas de crédito", t.NotasCredito.Cantidad, t.NotasCredito.Total, "mal", "bi-arrow-counterclockwise"),
-                                    ("Traslados", t.Traslados.Cantidad, t.Traslados.Total, "ambar", "bi-truck"),
-                                    ("Pagos", t.Pagos.Cantidad, t.Pagos.Total, "morado", "bi-cash-coin")
-                                })
-                                {
-                                    <div class="kpi tono-@tono">
-                                        <span class="ic"><i class="bi @icono"></i></span>
-                                        <div class="kpi-texto">
-                                            <div class="kpi-titulo">@titulo <span class="cantidad">@cantidad.ToString("N0")</span></div>
-                                            <div class="kpi-valor">$@total.ToString("N2")</div>
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-                            <div class="kpi-archivos">
-                                <span><i class="bi bi-files me-1"></i>Total archivos XML</span>
-                                <b>@t.Archivos.ToString("N0")</b>
-                            </div>
+                            continue;
                         }
+
+                        <div class="kpi tono-@tono">
+                            <span class="ic"><i class="bi @icono"></i></span>
+                            <div class="kpi-texto">
+                                <div class="kpi-titulo">@titulo <span class="cantidad">@cantidad.ToString("N0")</span></div>
+                                <div class="kpi-valor">$@total.ToString("N2")</div>
+                            </div>
+                        </div>
+                    }
+                    <div class="kpi tono-todos">
+                        <span class="ic"><i class="bi bi-files"></i></span>
+                        <div class="kpi-texto">
+                            <div class="kpi-titulo">Archivos XML</div>
+                            <div class="kpi-valor">@t.Archivos.ToString("N0")</div>
+                        </div>
                     </div>
                 </div>
             }
@@ -819,10 +833,13 @@
         new("serie", "Serie", x => x.Serie),
         new("folio", "Folio", x => x.Folio),
         new("uuid", "UUID", x => x.Uuid, ClaseFn: _ => "uuid"),
-        new("estado_sat", "Estado SAT", x => TextoEstadoSat(x.EstadoSat), ClaseFn: x => x.EstadoSat.Equals("Cancelado", StringComparison.OrdinalIgnoreCase) ? "mal" : x.EstadoSat.Equals("Vigente", StringComparison.OrdinalIgnoreCase) ? "ok" : "",
+        new("estado_sat", "Estado SAT", x => TextoEstadoSat(x.EstadoSat), ClaseFn: x => "pastilla " + (x.EstadoSat.Equals("Cancelado", StringComparison.OrdinalIgnoreCase) ? "tono-mal" : x.EstadoSat.Equals("Vigente", StringComparison.OrdinalIgnoreCase) ? "tono-verde" : "tono-todos"),
             AyudaFn: x => "Última validación: " + (x.FechaValidacionSat is DateTime v ? v.ToString("dd/MM/yyyy HH:mm") + (x.OrigenValidacionSat == "Metadatos SAT" ? " · metadatos" : "") : "Nunca")),
         new("version", "Versión", x => x.Version),
-        new("tipo", "Tipo", x => NombreTipo(x.TipoCfdi)),
+        new("tipo", "Tipo", x => NombreTipo(x.TipoCfdi), ClaseFn: x => "pastilla tono-" + x.TipoCfdi switch
+        {
+            "I" => "azul", "E" => "mal", "T" => "ambar", "P" => "morado", "N" => "verde", _ => "todos"
+        }),
         new("fecha", "Fecha emisión", x => x.FechaEmision.ToString("dd/MM/yyyy")),
         new("timbrado", "Fecha timbrado", x => x.FechaTimbrado?.ToString("dd/MM/yyyy HH:mm:ss") ?? ""),
         new("rfc_emisor", "RFC emisor", x => x.RfcEmisor),

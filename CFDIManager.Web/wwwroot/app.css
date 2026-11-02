@@ -1,5 +1,15 @@
+/* Segoe UI (la letra de Windows) en toda la app; fuera de Windows, la del sistema.
+   html:root gana a los :root de Bootstrap y Tabler aunque se carguen después. */
+html:root {
+    --app-font: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+    --bs-body-font-family: var(--app-font);
+    --bs-font-sans-serif: var(--app-font);
+    --tblr-font-sans-serif: var(--app-font);
+    --tblr-body-font-family: var(--app-font);
+}
+
 html, body {
-    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-family: var(--app-font);
 }
 
 a, .btn-link {
