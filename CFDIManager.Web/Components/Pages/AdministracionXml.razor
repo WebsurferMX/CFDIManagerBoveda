@@ -287,6 +287,45 @@
                 </div>
             </div>
 
+            @* Detalle a la izquierda y totales por tipo a la derecha en 2 columnas; sin detalle, los totales en una fila. *@
+            <div class="zona-inferior @(MostrarDetalles ? "" : "sin-detalles")">
+            @if (Totales is { } t)
+            {
+                <div class="kpis">
+                    @foreach (var (titulo, cantidad, total, tono, icono) in new[]
+                    {
+                        ("Facturas", t.Facturas.Cantidad, t.Facturas.Total, "azul", "bi-receipt"),
+                        ("Nómina 1.1", t.Nominas11.Cantidad, t.Nominas11.Total, "verde", "bi-people"),
+                        ("Nómina 1.2", t.Nominas12.Cantidad, t.Nominas12.Total, "verde", "bi-people"),
+                        ("Notas de crédito", t.NotasCredito.Cantidad, t.NotasCredito.Total, "mal", "bi-arrow-counterclockwise"),
+                        ("Traslados", t.Traslados.Cantidad, t.Traslados.Total, "ambar", "bi-truck"),
+                        ("Pagos", t.Pagos.Cantidad, t.Pagos.Total, "morado", "bi-cash-coin")
+                    })
+                    {
+                        // Nómina 1.1 dejó de emitirse el 1 de abril de 2017: solo se muestra si el filtro trae alguna.
+                        if (titulo == "Nómina 1.1" && cantidad == 0)
+                        {
+                            continue;
+                        }
+
+                        <div class="kpi tono-@tono" title="@titulo: @cantidad.ToString("N0") · $@total.ToString("N2")">
+                            <span class="ic"><i class="bi @icono"></i></span>
+                            <div class="kpi-texto">
+                                <div class="kpi-titulo">@titulo <span class="cantidad">@cantidad.ToString("N0")</span></div>
+                                <div class="kpi-valor">$@total.ToString("N2")</div>
+                            </div>
+                        </div>
+                    }
+                    <div class="kpi tono-todos" title="Archivos XML: @t.Archivos.ToString("N0")">
+                        <span class="ic"><i class="bi bi-files"></i></span>
+                        <div class="kpi-texto">
+                            <div class="kpi-titulo">Archivos XML</div>
+                            <div class="kpi-valor">@t.Archivos.ToString("N0")</div>
+                        </div>
+                    </div>
+                </div>
+            }
+
             @if (MostrarDetalles)
             {
                 <div class="detalles @(Relacionados.Count > 0 ? "con-relacionados" : "")">
@@ -414,44 +453,7 @@
                     }
                 </div>
             }
-
-            @* Totales por tipo: siempre abajo, en una fila, con o sin detalles. *@
-            @if (Totales is { } t)
-            {
-                <div class="kpis">
-                    @foreach (var (titulo, cantidad, total, tono, icono) in new[]
-                    {
-                        ("Facturas", t.Facturas.Cantidad, t.Facturas.Total, "azul", "bi-receipt"),
-                        ("Nómina 1.1", t.Nominas11.Cantidad, t.Nominas11.Total, "verde", "bi-people"),
-                        ("Nómina 1.2", t.Nominas12.Cantidad, t.Nominas12.Total, "verde", "bi-people"),
-                        ("Notas de crédito", t.NotasCredito.Cantidad, t.NotasCredito.Total, "mal", "bi-arrow-counterclockwise"),
-                        ("Traslados", t.Traslados.Cantidad, t.Traslados.Total, "ambar", "bi-truck"),
-                        ("Pagos", t.Pagos.Cantidad, t.Pagos.Total, "morado", "bi-cash-coin")
-                    })
-                    {
-                        // Nómina 1.1 dejó de emitirse el 1 de abril de 2017: solo se muestra si el filtro trae alguna.
-                        if (titulo == "Nómina 1.1" && cantidad == 0)
-                        {
-                            continue;
-                        }
-
-                        <div class="kpi tono-@tono">
-                            <span class="ic"><i class="bi @icono"></i></span>
-                            <div class="kpi-texto">
-                                <div class="kpi-titulo">@titulo <span class="cantidad">@cantidad.ToString("N0")</span></div>
-                                <div class="kpi-valor">$@total.ToString("N2")</div>
-                            </div>
-                        </div>
-                    }
-                    <div class="kpi tono-todos">
-                        <span class="ic"><i class="bi bi-files"></i></span>
-                        <div class="kpi-texto">
-                            <div class="kpi-titulo">Archivos XML</div>
-                            <div class="kpi-valor">@t.Archivos.ToString("N0")</div>
-                        </div>
-                    </div>
-                </div>
-            }
+            </div>
         </section>
 
         <aside class="herramientas">

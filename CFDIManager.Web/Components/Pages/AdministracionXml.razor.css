@@ -420,29 +420,51 @@ td.sel { width: 30px; }
 
 .detalle-cuerpo { flex: 1; min-height: 0; overflow: auto; }
 
-/* Totales por tipo como KPI en una fila al pie de la pantalla (6 tipos + archivos XML). */
-/* Cada KPI toma el ancho de su contenido (nunca se corta) y reparte el sobrante;
-   si no caben en una fila, pasan a la siguiente. */
-.kpis {
-    display: flex;
+/* Detalle a la izquierda y totales por tipo (6 tipos + archivos XML) a la derecha, en 2 columnas compactas.
+   Sin detalle, los totales van en una sola fila que se desplaza de lado si no cabe. */
+.zona-inferior {
+    display: grid;
     flex: 0 0 auto;
-    flex-wrap: wrap;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
     gap: .5rem;
 }
 
-.kpis .kpi { flex: 1 1 auto; }
+.zona-inferior > .detalles { grid-column: 1; grid-row: 1; min-width: 0; }
 
-/* Degradado del color del tipo desde la esquina, borde del mismo tono y sombra marcada. */
+.zona-inferior > .kpis {
+    display: grid;
+    grid-column: 2;
+    grid-row: 1;
+    grid-template-columns: repeat(2, minmax(8.5rem, 10.5rem));
+    gap: .35rem;
+}
+
+.zona-inferior.sin-detalles { grid-template-columns: minmax(0, 1fr); }
+
+.zona-inferior.sin-detalles > .kpis {
+    display: flex;
+    grid-column: 1;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.zona-inferior.sin-detalles > .kpis .kpi { flex: 1 1 0; min-width: 8.5rem; }
+
+.kpi-texto { min-width: 0; }
+
+/* Degradado del color del tipo desde la esquina, borde del mismo tono y sombra ligera. */
 .kpi {
     display: flex;
     align-items: center;
-    gap: .5rem;
-    padding: .35rem .6rem;
+    gap: .4rem;
+    padding: .2rem .5rem;
     border: 1px solid color-mix(in srgb, var(--tono) 35%, var(--bs-border-color));
     border-left: 3px solid var(--tono);
-    border-radius: .6rem;
+    border-radius: .5rem;
     background: linear-gradient(135deg, color-mix(in srgb, var(--tono) 26%, var(--bs-body-bg)) 0%, var(--bs-body-bg) 75%);
-    box-shadow: 0 .35rem .9rem rgb(0 0 0 / 18%), 0 .1rem .25rem rgb(0 0 0 / 12%), inset 0 1px 0 rgb(255 255 255 / 6%);
+    box-shadow: 0 .2rem .5rem rgb(0 0 0 / 14%), inset 0 1px 0 rgb(255 255 255 / 6%);
 }
 
 .kpi.tono-todos {
@@ -456,19 +478,21 @@ td.sel { width: 30px; }
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
-    width: 1.7rem;
-    height: 1.7rem;
+    width: 1.35rem;
+    height: 1.35rem;
     border-radius: 50%;
     background: var(--tono-fondo);
     color: var(--tono);
-    font-size: .85rem;
+    font-size: .7rem;
 }
 
 .kpi-titulo {
+    overflow: hidden;
     color: var(--bs-secondary-color);
-    font-size: .66rem;
+    font-size: .6rem;
     font-weight: 600;
     letter-spacing: .02em;
+    text-overflow: ellipsis;
     text-transform: uppercase;
     white-space: nowrap;
 }
@@ -482,8 +506,10 @@ td.sel { width: 30px; }
 }
 
 .kpi-valor {
+    overflow: hidden;
+    text-overflow: ellipsis;
     color: var(--tono-texto, var(--bs-emphasis-color));
-    font-size: .9rem;
+    font-size: .78rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
@@ -606,6 +632,12 @@ td.sel { width: 30px; }
     .detalles,
     .detalles.con-relacionados { grid-template-columns: 1fr; height: auto; }
     .aviso { right: 16px; }
+}
+
+/* Pantalla angosta: los totales bajan debajo del detalle, en 3 columnas. */
+@media (max-width: 900px) {
+    .zona-inferior { grid-template-columns: minmax(0, 1fr); }
+    .zona-inferior > .kpis { grid-column: 1; grid-row: 2; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); }
 }
 
 /* El morado no tiene variables propias en Bootstrap 5.3: tonos para el modo oscuro. */
