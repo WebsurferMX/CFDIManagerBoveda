@@ -196,14 +196,37 @@ public class AdministracionXmlService
             return (bytes, nombre);
         }
 
-        if (reporte != "general")
+        // Un solo mes (sin acumular) da "ENE 2026"; varios meses o acumulado, el año.
+        int? mesFiltro = f.Ids.Count == 0 && f.Meses.Count == 1 && !f.Acumular ? f.Meses[0] : null;
+
+        // Agrupado por receptor de emitidos y por emisor de recibidos: la hoja agrupada como tabla, con su dashboard
+        // (ventas por receptor o cuentas por pagar) que lee solo de esa tabla.
+        if (reporte is "agrupado:receptor" or "agrupado:emisor")
+        {
+            bool recibidos = reporte == "agrupado:emisor";
+            List<AdminXmlFilaDto> seleccion = _repo.ObtenerSeleccionAdministracionXml(SinPestana(f));
+
+            if (seleccion.Count > 0 && seleccion.All(x => (x.Clasificacion == "RECIBIDO") == recibidos))
+            {
+                var filtro = new ReporteGeneral.Filtro(empresa.Rfc, recibidos ? "R" : "E", f.Ids.Count > 0 ? null : f.Anio, mesFiltro);
+                (byte[] agrupado, _) = recibidos ? ReporteGeneral.CrearPorEmisor(seleccion, filtro) : ReporteGeneral.CrearPorReceptor(seleccion, filtro);
+                return (agrupado, NombreReporte(empresa, f, reporte));
+            }
+        }
+
+        bool general = reporte == "general";
+
+        if (!general && reporte != "conceptos" && !reporte.StartsWith("agrupado:"))
         {
             return (GenerarExcel(f, reporte), NombreReporte(empresa, f, reporte));
         }
 
+        // Todos los reportes llevan al frente el dashboard (ventas por cliente en emitidos, cuentas por pagar en
+        // recibidos) con las hojas Factura, NCredito y Pago de las que leen sus fórmulas. En los reportes que no son el
+        // general el dashboard toma todo el filtro, sin importar la pestaña abierta.
         var entradas = new List<ReporteGeneral.Entrada>();
 
-        foreach (AdminXmlFilaDto x in _repo.ObtenerSeleccionAdministracionXml(f))
+        foreach (AdminXmlFilaDto x in _repo.ObtenerSeleccionAdministracionXml(general ? f : SinPestana(f)))
         {
             XDocument xml;
 
@@ -232,14 +255,43 @@ public class AdministracionXmlService
         int? mes = f.Ids.Count == 0 && f.Meses.Count == 1 && !f.Acumular ? f.Meses[0] : null;
         string? direccion = f.Ids.Count > 0 ? null : f.Clasificacion == "RECIBIDO" ? "R" : "E";
 
-        return ReporteGeneral.Crear(entradas, new ReporteGeneral.Filtro(empresa.Rfc, direccion, f.Ids.Count > 0 ? null : f.Anio, mes));
+        // Una selección con emitidos y recibidos mezclados no lleva dashboard.
+        ReporteGeneral.Tablero tablero =
+            entradas.Count > 0 && entradas.All(x => x.Fila.Direccion == "R") ? ReporteGeneral.Tablero.CuentasPorPagar
+            : ReporteGeneral.Tablero.VentasCompacto;
+
+        (byte[] libro, string archivo) = ReporteGeneral.Crear(
+            entradas, new ReporteGeneral.Filtro(empresa.Rfc, direccion, f.Ids.Count > 0 ? null : f.Anio, mes), tablero,
+            general ? null : hojas => AgregarHojas(hojas, f, reporte));
+
+        return (libro, general ? archivo : NombreReporte(empresa, f, reporte));
     }
 
     /// <summary>reporte: general (una hoja por tipo), conceptos o agrupado:{emisor|receptor|mes|uso|metodo|tipo}.</summary>
     public byte[] GenerarExcel(AdminXmlFiltroDto f, string reporte)
     {
         using var libro = new XLWorkbook();
+        AgregarHojas(libro, f, reporte);
 
+        if (!libro.Worksheets.Any())
+        {
+            libro.AddWorksheet("Sin datos").Cell(1, 1).Value = "No hay CFDI para el filtro seleccionado";
+        }
+
+        using var memoria = new MemoryStream();
+        libro.SaveAs(memoria);
+        return memoria.ToArray();
+    }
+
+    private static AdminXmlFiltroDto SinPestana(AdminXmlFiltroDto f) => new()
+    {
+        EmpresaId = f.EmpresaId, Clasificacion = f.Clasificacion, Anio = f.Anio, Meses = f.Meses, Dias = f.Dias,
+        Acumular = f.Acumular, Busqueda = f.Busqueda, Filtrar = f.Filtrar, Ids = f.Ids
+    };
+
+    /// <summary>Hojas propias del reporte (conceptos, agrupado o una por tipo) en un libro existente.</summary>
+    private void AgregarHojas(XLWorkbook libro, AdminXmlFiltroDto f, string reporte)
+    {
         if (reporte.StartsWith("agrupado:"))
         {
             HojaAgrupada(libro, f, reporte["agrupado:".Length..]);
@@ -300,15 +352,6 @@ public class AdministracionXmlService
                     }));
             }
         }
-
-        if (!libro.Worksheets.Any())
-        {
-            libro.AddWorksheet("Sin datos").Cell(1, 1).Value = "No hay CFDI para el filtro seleccionado";
-        }
-
-        using var memoria = new MemoryStream();
-        libro.SaveAs(memoria);
-        return memoria.ToArray();
     }
 
     /// <summary>Guarda el reporte en Storage\Reportes\{RFC} y regresa la ruta con el contenido para descargarlo también.</summary>
@@ -336,11 +379,7 @@ public class AdministracionXmlService
     /// </summary>
     private void HojaAgrupada(XLWorkbook libro, AdminXmlFiltroDto f, string por)
     {
-        var sinPestana = new AdminXmlFiltroDto
-        {
-            EmpresaId = f.EmpresaId, Clasificacion = f.Clasificacion, Anio = f.Anio, Meses = f.Meses, Dias = f.Dias,
-            Acumular = f.Acumular, Busqueda = f.Busqueda, Filtrar = f.Filtrar, Ids = f.Ids
-        };
+        AdminXmlFiltroDto sinPestana = SinPestana(f);
 
         Func<AdminXmlFilaDto, string> clave = por switch
         {

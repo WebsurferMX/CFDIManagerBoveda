@@ -150,14 +150,19 @@
                     <select id="tipo-reporte" class="form-select form-select-sm" @bind="TipoReporte">
                         <option value="general">Reporte general (por tipo)</option>
                         <option value="conceptos">Conceptos</option>
-                        <option value="agrupado:emisor">Agrupado por emisor</option>
-                        <option value="agrupado:receptor">Agrupado por receptor</option>
+                        @if (Clasificacion == "RECIBIDO")
+                        {
+                            <option value="agrupado:emisor">Agrupado por emisor</option>
+                        }
+                        else
+                        {
+                            <option value="agrupado:receptor">Agrupado por receptor</option>
+                        }
                         <option value="agrupado:mes">Agrupado por mes</option>
                         <option value="agrupado:uso">Uso CFDI</option>
                         <option value="agrupado:metodo">Método de pago</option>
                         <option value="agrupado:tipo">Tipo</option>
-                        <option value="pareto">Análisis 80-20 (Pareto) con dashboard</option>
-                    </select>
+                        <option value="pareto">Análisis 80-20 (Pareto) con dashboard</option>                    </select>
                 </div>
                 <div class="progreso progress" role="progressbar" aria-label="Progreso del proceso">
                     <div class="progress-bar @(EnProceso ? "progress-bar-striped progress-bar-animated" : "")"
@@ -1164,6 +1169,13 @@
     private Task CambiarClasificacion(string c)
     {
         Clasificacion = c;
+
+        // Por emisor solo aplica a recibidos y por receptor a emitidos.
+        if (TipoReporte is "agrupado:emisor" or "agrupado:receptor")
+        {
+            TipoReporte = c == "RECIBIDO" ? "agrupado:emisor" : "agrupado:receptor";
+        }
+
         return CargarOpciones();
     }
 

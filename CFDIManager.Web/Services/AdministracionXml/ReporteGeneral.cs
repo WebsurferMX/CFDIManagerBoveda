@@ -11,8 +11,14 @@ namespace CFDIManager.Web.Services.AdministracionXml;
 /// Reporte general con el formato de "RFC Emitidas MES AÑO.xlsx": hojas Factura, NCredito, Traslado, Pago y Nomina
 /// (columnas de MiAdminXML) y, para CFDI emitidos, el dashboard compacto de ventas por cliente con su hoja Resumen Clientes.
 /// </summary>
-public static class ReporteGeneral
+public static partial class ReporteGeneral
 {
+    /// <summary>
+    /// Dashboard del libro: Ventas (reporte general de emitidos), VentasCompacto (ventas por cliente en una pantalla)
+    /// o CuentasPorPagar (proveedores: facturado, notas de crédito, pagado y saldo).
+    /// </summary>
+    public enum Tablero { Ventas, VentasCompacto, CuentasPorPagar }
+
     /// <summary>Datos del CFDI que el reporte no lee del XML. Direccion: E (emitido) o R (recibido).</summary>
     public sealed record Origen(string Rfc, string Direccion, string Ruta, DateTimeOffset? Fecha);
 
@@ -27,34 +33,56 @@ public static class ReporteGeneral
     private const string Moneda = "\"$\"#,##0.00;\\(\"$\"#,##0.00\\);\\-";
     private const string PublicoGeneral = "XAXX010101000";
 
-    public static (byte[] Bytes, string Nombre) Crear(IReadOnlyList<Entrada> entradas, Filtro filtro)
+    /// <summary>
+    /// <paramref name="hojasReporte"/>: agrega las hojas propias de otro reporte (conceptos, agrupado…); quedan al
+    /// frente, después del dashboard, y las hojas por tipo al final como fuente de sus fórmulas.
+    /// </summary>
+    public static (byte[] Bytes, string Nombre) Crear(
+        IReadOnlyList<Entrada> entradas, Filtro filtro, Tablero tablero = Tablero.Ventas, Action<XLWorkbook>? hojasReporte = null)
     {
         var leidos = entradas.Select(x => new Leido(x)).ToList();
+        var recibidas = leidos.Count > 0 && leidos.All(x => x.E.Fila.Direccion == "R");
+        var cxp = tablero == Tablero.CuentasPorPagar && recibidas;
         using var wb = new XLWorkbook();
         wb.Style.Font.FontName = "Segoe UI";
         var conDatos = new HashSet<string>();
         foreach (var hoja in Hojas)
         {
             var filas = leidos.Where(x => x.Tipo == hoja.Tipo).SelectMany(x => hoja.Tipo == "P" ? FilasPago(x) : [new Fila(x)]).ToList();
-            // Factura y NCredito siempre existen cuando hay dashboard: sus fórmulas usan Table13 y Table1.
-            if (filas.Count == 0 && hoja.Tipo is not ("I" or "E")) continue;
+            // Factura y NCredito siempre existen cuando hay dashboard: sus fórmulas usan Table13 y Table1 (y TablePago en CxP).
+            if (filas.Count == 0 && hoja.Tipo is not ("I" or "E") && !(cxp && hoja.Tipo == "P")) continue;
             EscribirHoja(wb, hoja, filas);
             if (filas.Count > 0) conDatos.Add(hoja.Nombre);
+        }
+
+        if (hojasReporte is not null)
+        {
+            var antes = wb.Worksheets.Count;
+            hojasReporte(wb);
+            var propias = wb.Worksheets.Skip(antes).ToList();
+            for (var i = 0; i < propias.Count; i++) propias[i].Position = i + 1;
         }
 
         var emitidas = leidos.Count > 0 && leidos.All(x => x.E.Fila.Direccion == "E");
         var direccion = filtro.Direccion ?? (leidos.Select(x => x.E.Fila.Direccion).Distinct().SingleOrDefault());
         var rfc = filtro.Rfc?.Trim().ToUpperInvariant() ?? leidos.Select(x => x.E.Fila.Rfc).Distinct().SingleOrDefault() ?? "Todos";
         var (periodo, periodoCorto) = Periodo(filtro, leidos);
-        var clientes = emitidas ? Clientes(leidos) : [];
+        var clientes = emitidas && tablero != Tablero.CuentasPorPagar ? Clientes(leidos) : [];
         Dashboard? dashboard = null;
+        var conTablero = false;
         if (clientes.Count > 0)
         {
-            var resumen = EscribirResumen(wb, clientes, periodo);
-            dashboard = EscribirDashboard(wb, clientes, rfc, periodo, resumen);
+            var resumen = EscribirResumen(wb, clientes, periodo, Fuente.General);
+            dashboard = EscribirDashboard(wb, clientes, rfc, periodo, resumen, Fuente.General, tablero == Tablero.VentasCompacto);
+            conTablero = true;
+        }
+        else if (cxp && Proveedores(leidos) is { Count: > 0 } proveedores)
+        {
+            EscribirDashboardCxp(wb, proveedores, rfc, periodo, FuenteCxp.General);
+            conTablero = true;
         }
         foreach (var name in new[] { "Factura", "NCredito" })
-            if (dashboard is null && !conDatos.Contains(name) && wb.Worksheets.TryGetWorksheet(name, out var vacia)) vacia.Delete();
+            if (!conTablero && !conDatos.Contains(name) && wb.Worksheets.TryGetWorksheet(name, out var vacia)) vacia.Delete();
         if (!wb.Worksheets.Any())
             wb.Worksheets.Add("Sin datos").Cell(1, 1).Value = "No hay CFDI para el filtro seleccionado";
         wb.Worksheets.First().SetTabActive().Select();
@@ -279,7 +307,49 @@ public static class ReporteGeneral
 
     private sealed record Cliente(string Rfc, string Nombre, decimal Facturado, decimal Neto);
     private sealed record Resumen(int Ultima, int TopGrafico);
-    private sealed record Dashboard(int TopGrafico);
+    private sealed record Dashboard(int TopGrafico, Fuente Fuente);
+
+    /// <summary>
+    /// De dónde leen sus fórmulas el resumen y el dashboard de ventas: las hojas Factura (Table13) y NCredito (Table1)
+    /// del reporte general, o una sola tabla con facturas y notas (p. ej. Por Receptor) distinguidas por su Tipo, con
+    /// las notas en negativo. Uno/Varios nombran a la contraparte (CLIENTE, RECEPTOR).
+    /// </summary>
+    private sealed record Fuente(
+        string Facturas, string Notas, string? TipoFactura, bool NotasNegativas, bool FechaComoFecha,
+        string HojaResumen, string TablaResumen, string Uno, string Varios, string Iva, string Origen)
+    {
+        public static readonly Fuente General = new("Table13", "Table1", null, false, false,
+            "Resumen Clientes", "TblClientes", "CLIENTE", "clientes", "IVA 16%", "hojas Factura y NCredito");
+
+        public string Signo => NotasNegativas ? "-" : "";
+
+        // criterios: ",rango,valor" adicionales para SUMIFS/COUNTIFS.
+        public string SumaFacturas(string criterios = "") => TipoFactura is null
+            ? criterios == "" ? $"SUM({Facturas}[Total])" : $"SUMIFS({Facturas}[Total]{criterios})"
+            : $"SUMIFS({Facturas}[Total],{Facturas}[Tipo],\"{TipoFactura}\"{criterios})";
+
+        public string CuentaFacturas(string criterios = "") => TipoFactura is null
+            ? criterios == "" ? $"COUNTA({Facturas}[UUID])" : $"COUNTIFS({criterios[1..]})"
+            : $"COUNTIFS({Facturas}[Tipo],\"{TipoFactura}\"{criterios})";
+
+        public string SumaNotas(string criterios = "") => $"{Signo}SUMIFS({Notas}[Total],{Notas}[Tipo],\"NotaCredito\"{criterios})";
+
+        public string CuentaNotas(string criterios = "") => $"COUNTIFS({Notas}[Tipo],\"NotaCredito\"{criterios})";
+
+        public string DeFactura(string rfc) => $",{Facturas}[RFC Receptor],{rfc}";
+
+        public string DeNota(string rfc) => $",{Notas}[RFC Receptor],{rfc}";
+
+        public string FiltroFacturas(string rfc) => TipoFactura is null
+            ? $"{Facturas}[RFC Receptor]={rfc}"
+            : $"({Facturas}[RFC Receptor]={rfc})*({Facturas}[Tipo]=\"{TipoFactura}\")";
+
+        public string FiltroNotas(string rfc) => $"({Notas}[RFC Receptor]={rfc})*({Notas}[Tipo]=\"NotaCredito\")";
+
+        public string Cancelados => TipoFactura is null
+            ? $"COUNTIF({Facturas}[Estado SAT],\"Cancelado\")"
+            : $"COUNTIFS({Facturas}[Estado SAT],\"Cancelado\",{Facturas}[Tipo],\"{TipoFactura}\")";
+    }
 
     private static List<Cliente> Clientes(List<Leido> leidos)
     {
@@ -294,21 +364,21 @@ public static class ReporteGeneral
         }).OrderByDescending(x => x.Facturado).ThenByDescending(x => x.Neto).ThenBy(x => x.Nombre, StringComparer.Ordinal).ToList();
     }
 
-    private static Resumen EscribirResumen(XLWorkbook wb, List<Cliente> clientes, string periodo)
+    private static Resumen EscribirResumen(XLWorkbook wb, List<Cliente> clientes, string periodo, Fuente fu)
     {
-        var ws = wb.Worksheets.Add("Resumen Clientes", 1);
+        var ws = wb.Worksheets.Add(fu.HojaResumen, 1);
         ws.SetTabColor(XLColor.FromHtml("#0084BE"));
         ws.ShowGridLines = false;
         double[] anchos = [20.29, 48.86, 12.57, 20.29, 12.57, 20.29, 20.29, 13.57, 20.29, 16.43];
         for (var i = 0; i < anchos.Length; i++) ws.Column(i + 1).Width = anchos[i];
 
         var titulo = ws.Range("A2:J2").Merge();
-        ws.Cell("A2").Value = $"RESUMEN DE VENTAS POR CLIENTE · CFDI EMITIDOS {periodo}";
+        ws.Cell("A2").Value = $"RESUMEN DE VENTAS POR {fu.Uno} · CFDI EMITIDOS {periodo}";
         titulo.Style.Fill.SetBackgroundColor(Color("005A80")).Font.SetBold().Font.SetFontSize(14).Font.SetFontColor(XLColor.White)
             .Alignment.SetIndent(1).Alignment.SetVertical(XLAlignmentVerticalValues.Center);
         ws.Row(2).Height = 26.1;
 
-        string[] encabezados = ["RFC RECEPTOR", "CLIENTE", "FACTURAS", "FACTURADO", "NOTAS NC", "NC APLICADAS", "VENTA NETA", "% PART.", "TICKET PROM.", "ESTADO"];
+        string[] encabezados = ["RFC RECEPTOR", fu.Uno, "FACTURAS", "FACTURADO", "NOTAS NC", "NC APLICADAS", "VENTA NETA", "% PART.", "TICKET PROM.", "ESTADO"];
         for (var i = 0; i < encabezados.Length; i++) ws.Cell(4, i + 1).Value = encabezados[i];
         var ultima = 4 + clientes.Count;
         for (var i = 0; i < clientes.Count; i++)
@@ -316,29 +386,29 @@ public static class ReporteGeneral
             var r = 5 + i;
             ws.Cell(r, 1).Value = clientes[i].Rfc;
             ws.Cell(r, 2).Value = clientes[i].Nombre;
-            ws.Cell(r, 3).FormulaA1 = $"COUNTIFS(Table13[RFC Receptor],$A{r})";
-            ws.Cell(r, 4).FormulaA1 = $"SUMIFS(Table13[Total],Table13[RFC Receptor],$A{r})";
+            ws.Cell(r, 3).FormulaA1 = fu.CuentaFacturas(fu.DeFactura($"$A{r}"));
+            ws.Cell(r, 4).FormulaA1 = fu.SumaFacturas(fu.DeFactura($"$A{r}"));
             // NCredito puede traer facturas mezcladas; solo cuentan los renglones Tipo = NotaCredito.
-            ws.Cell(r, 5).FormulaA1 = $"COUNTIFS(Table1[RFC Receptor],$A{r},Table1[Tipo],\"NotaCredito\")";
-            ws.Cell(r, 6).FormulaA1 = $"SUMIFS(Table1[Total],Table1[RFC Receptor],$A{r},Table1[Tipo],\"NotaCredito\")";
+            ws.Cell(r, 5).FormulaA1 = fu.CuentaNotas(fu.DeNota($"$A{r}"));
+            ws.Cell(r, 6).FormulaA1 = fu.SumaNotas(fu.DeNota($"$A{r}"));
             ws.Cell(r, 7).FormulaA1 = $"D{r}-F{r}";
-            ws.Cell(r, 8).FormulaA1 = $"IFERROR(D{r}/SUM(Table13[Total]),0)";
+            ws.Cell(r, 8).FormulaA1 = $"IFERROR(D{r}/{fu.SumaFacturas()},0)";
             ws.Cell(r, 9).FormulaA1 = $"IFERROR(D{r}/C{r},0)";
             ws.Cell(r, 10).FormulaA1 = $"IF(F{r}>0,\"CON NC\",IF(D{r}>0,\"SIN NC\",\"SOLO NC\"))";
             // Datos auxiliares del gráfico: venta neta sin público en general y su top 10.
             ws.Cell(r, 27).FormulaA1 = $"IF($A{r}=\"{PublicoGeneral}\",\"\",$G{r})";
         }
 
-        var tabla = ws.Range(4, 1, ultima, 10).CreateTable("TblClientes");
+        var tabla = ws.Range(4, 1, ultima, 10).CreateTable(fu.TablaResumen);
         tabla.Theme = XLTableTheme.TableStyleMedium2;
         tabla.ShowRowStripes = true;
         tabla.ShowTotalsRow = true;
         tabla.Field("RFC RECEPTOR").TotalsRowLabel = "TOTAL";
-        tabla.Field("CLIENTE").TotalsRowFormulaA1 = "SUBTOTAL(103,TblClientes[CLIENTE])&\" clientes\"";
+        tabla.Field(fu.Uno).TotalsRowFormulaA1 = $"SUBTOTAL(103,{fu.TablaResumen}[{fu.Uno}])&\" {fu.Varios}\"";
         foreach (var campo in new[] { "FACTURAS", "FACTURADO", "NOTAS NC", "NC APLICADAS", "VENTA NETA", "% PART." })
             tabla.Field(campo).TotalsRowFunction = XLTotalsRowFunction.Sum;
         tabla.Field("TICKET PROM.").TotalsRowFormulaA1 = $"IFERROR(D{ultima + 1}/C{ultima + 1},0)";
-        tabla.Field("ESTADO").TotalsRowFormulaA1 = "SUBTOTAL(103,TblClientes[ESTADO])&\" filas\"";
+        tabla.Field("ESTADO").TotalsRowFormulaA1 = $"SUBTOTAL(103,{fu.TablaResumen}[ESTADO])&\" filas\"";
 
         foreach (var col in new[] { 4, 6, 7, 9 }) ws.Range(5, col, ultima + 1, col).Style.NumberFormat.Format = Moneda;
         ws.Range(5, 8, ultima + 1, 8).Style.NumberFormat.Format = "0.0%";
@@ -358,7 +428,7 @@ public static class ReporteGeneral
         ws.Cell("AA1").Value = "Datos auxiliares del gráfico del Dashboard (no borrar)";
         ws.Cell("AA1").Style.Font.SetFontSize(8).Font.SetFontColor(Color("808080"));
         ws.Cell("AA4").Value = "VENTA NETA SIN PÚBLICO GENERAL";
-        ws.Cell("AC4").Value = "CLIENTE";
+        ws.Cell("AC4").Value = fu.Uno;
         ws.Cell("AD4").Value = "VENTA NETA";
         for (var i = 0; i < top; i++)
         {
@@ -376,43 +446,54 @@ public static class ReporteGeneral
 
     // ---------- Dashboard ----------
 
-    private static Dashboard EscribirDashboard(XLWorkbook wb, List<Cliente> clientes, string rfc, string periodo, Resumen resumen)
+    /// <summary>
+    /// <paramref name="compacto"/>: variante que cabe en pantalla sin scroll (~920 pt de ancho): grupos de 72 pt,
+    /// separadoras de 12 pt, KPIs de 52 pt de alto y letra más chica (skill dashboard-ventas-cfdi-compacto).
+    /// </summary>
+    private static Dashboard EscribirDashboard(
+        XLWorkbook wb, List<Cliente> clientes, string rfc, string periodo, Resumen resumen, Fuente fu, bool compacto = false)
     {
         var ws = wb.Worksheets.Add("Dashboard", 1);
         ws.SetTabColor(XLColor.FromHtml("#0B2E4F"));
         ws.ShowGridLines = false;
-        ws.Style.Font.FontName = "Calibri";
+        ws.Style.Font.FontName = compacto ? "Segoe UI" : "Calibri";
         var u = resumen.Ultima;
-        string Rc(string col) => $"'Resumen Clientes'!${col}$5:${col}${u}";
+        string Rc(string col) => $"'{fu.HojaResumen}'!${col}$5:${col}${u}";
+        var uno = fu.Uno.ToLowerInvariant();
 
-        ws.Column(1).Width = 2;
-        ws.Column(17).Width = 2;
-        foreach (var c in new[] { 5, 9, 13 }) ws.Column(c).Width = 2.29;
-        foreach (var inicio in Grupos) ws.Columns(inicio, inicio + 2).Width = 17.43;
-        (int Fila, double Alto)[] altos = [(1, 16.5), (2, 40), (3, 20.1), (4, 5.1), (5, 10), (6, 18), (7, 30), (8, 16), (9, 7), (10, 12), (11, 22), (12, 18), (13, 24), (28, 12), (29, 22), (30, 18)];
+        ws.Column(1).Width = compacto ? Ancho(10) : 2;
+        ws.Column(17).Width = compacto ? Ancho(10) : 2;
+        foreach (var c in new[] { 5, 9, 13 }) ws.Column(c).Width = compacto ? Ancho(12) : 2.29;
+        foreach (var inicio in Grupos) ws.Columns(inicio, inicio + 2).Width = compacto ? Ancho(72) : 17.43;
+        (int Fila, double Alto)[] altos = compacto
+            ? [(1, 8), (2, 32), (3, 18), (4, 5), (5, 10), (6, 14), (7, 22), (8, 12), (9, 4), (10, 8), (11, 18), (12, 15), (13, 18), (28, 8), (29, 18), (30, 15)]
+            : [(1, 16.5), (2, 40), (3, 20.1), (4, 5.1), (5, 10), (6, 18), (7, 30), (8, 16), (9, 7), (10, 12), (11, 22), (12, 18), (13, 24), (28, 12), (29, 22), (30, 18)];
         foreach (var (fila, alto) in altos) ws.Row(fila).Height = alto;
-        for (var r = 14; r <= 27; r++) ws.Row(r).Height = r is >= 15 and <= 19 ? 19 : 16;
-        for (var r = 31; r <= 45; r++) ws.Row(r).Height = 15;
+        for (var r = 14; r <= 27; r++) ws.Row(r).Height = compacto ? (r is >= 15 and <= 19 ? 16 : 14) : (r is >= 15 and <= 19 ? 19 : 16);
+        for (var r = 31; r <= 45; r++) ws.Row(r).Height = compacto ? 13 : 15;
+        (double Titulo, double Subtitulo, double Etiqueta, double Valor, double Pie, double Fila, double Banda) letra = compacto
+            ? (15, 9, 8, 13, 7.5, 8.5, 9)
+            : (20, 10, 9, 20, 9, 9, 11);
 
         // Celda auxiliar con el RFC del cliente elegido en el dropdown.
-        ws.Cell("R1").Value = "RFC auxiliar del cliente seleccionado (celda de apoyo del dropdown)";
+        ws.Cell("R1").Value = $"RFC auxiliar del {uno} seleccionado (celda de apoyo del dropdown)";
         ws.Cell("R1").Style.Font.SetFontSize(8).Font.SetFontColor(Color("808080"));
         ws.Cell("R2").FormulaA1 = $"IFERROR(INDEX({Rc("A")},MATCH($J$13,{Rc("B")},0)),\"\")";
         ws.Cell("R2").Style.Font.SetFontColor(Color("808080"));
 
-        Banda(ws, "B2:P2", $"DASHBOARD DE VENTAS POR CLIENTE · CFDI EMITIDOS {periodo}", "003A55", 20, bold: true);
-        Banda(ws, "B3:P3", null, "0084BE", 10, bold: false);
-        ws.Cell("B3").FormulaA1 = $"\"Emisor {rfc} · \"&COUNTA(Table13[UUID])&\" facturas · \"&COUNTIFS(Table1[Tipo],\"NotaCredito\")&\" notas de crédito · \"&COUNTA(TblClientes[RFC RECEPTOR])&\" clientes · fuente: hojas Factura y NCredito\"";
+        Banda(ws, "B2:P2", $"DASHBOARD DE VENTAS POR {fu.Uno} · CFDI EMITIDOS {periodo}", compacto ? "0B2E4F" : "003A55", letra.Titulo, bold: true);
+        Banda(ws, "B3:P3", null, "0084BE", letra.Subtitulo, bold: false);
+        ws.Cell("B3").FormulaA1 = $"\"Emisor {rfc} · \"&{fu.CuentaFacturas()}&\" facturas · \"&{fu.CuentaNotas()}&\" notas de crédito · \"&COUNTA({fu.TablaResumen}[RFC RECEPTOR])&\" {fu.Varios} · fuente: {fu.Origen}\"";
         string[] franja = ["003A55", "C00000", "0084BE", "00B0F0"];
         for (var g = 0; g < 4; g++) ws.Range(4, Grupos[g], 4, Grupos[g] + 2).Style.Fill.BackgroundColor = Color(franja[g]);
 
-        var cancelados = "IF(COUNTIF(Table13[Estado SAT],\"Cancelado\")>0,\" · \"&COUNTIF(Table13[Estado SAT],\"Cancelado\")&\" cancelados\",\"\")";
+        var cancelados = $"IF({fu.Cancelados}>0,\" · \"&{fu.Cancelados}&\" cancelados\",\"\")";
         var tarjetas = new (string Titulo, string Valor, string Subtitulo, string[] Tonos, bool Dinero)[]
         {
-            ("TOTAL FACTURADO", "SUM(Table13[Total])", $"COUNTA(Table13[UUID])&\" CFDI de ingreso\"&{cancelados}", ["003A55", "00587F", "0084BE", "00B0F0"], true),
-            ("NOTAS DE CRÉDITO APLICADAS", "SUMIFS(Table1[Total],Table1[Tipo],\"NotaCredito\")", "IFERROR(TEXT(F7/B7,\"0.0%\"),\"0.0%\")&\" del facturado · \"&COUNTIFS(Table1[Tipo],\"NotaCredito\")&\" NC\"", ["7F0000", "A80000", "C00000", "E06666"], true),
+            ("TOTAL FACTURADO", fu.SumaFacturas(), $"{fu.CuentaFacturas()}&\" CFDI de ingreso\"&{cancelados}", ["003A55", "00587F", "0084BE", "00B0F0"], true),
+            ("NOTAS DE CRÉDITO APLICADAS", fu.SumaNotas(), $"IFERROR(TEXT(F7/B7,\"0.0%\"),\"0.0%\")&\" del facturado · \"&{fu.CuentaNotas()}&\" NC\"", ["7F0000", "A80000", "C00000", "E06666"], true),
             ("VENTA NETA", "B7-F7", "\"Facturado menos notas de crédito\"", ["00587F", "0084BE", "00A0DC", "66CFF7"], true),
-            ("CLIENTES CON VENTA", $"COUNTIF({Rc("D")},\">0\")", "\"Ticket promedio \"&TEXT(IFERROR(B7/COUNTA(Table13[UUID]),0),\"$#,##0.00\")", ["0084BE", "00A0DC", "00B0F0", "8FDCF9"], false),
+            ($"{fu.Varios.ToUpperInvariant()} CON VENTA", $"COUNTIF({Rc("D")},\">0\")", $"\"Ticket promedio \"&TEXT(IFERROR(B7/{fu.CuentaFacturas()},0),\"$#,##0.00\")", ["0084BE", "00A0DC", "00B0F0", "8FDCF9"], false),
         };
         for (var g = 0; g < 4; g++)
         {
@@ -425,34 +506,34 @@ public static class ReporteGeneral
             }
             var col = Grupos[g];
             ws.Cell(6, col).Value = t.Titulo;
-            ws.Cell(6, col).Style.Font.SetBold().Font.SetFontSize(9);
+            ws.Cell(6, col).Style.Font.SetBold().Font.SetFontSize(letra.Etiqueta);
             ws.Cell(7, col).FormulaA1 = t.Valor;
-            ws.Cell(7, col).Style.Font.SetBold().Font.SetFontSize(20);
+            ws.Cell(7, col).Style.Font.SetBold().Font.SetFontSize(letra.Valor);
             if (t.Dinero) ws.Cell(7, col).Style.NumberFormat.Format = Moneda;
             ws.Cell(8, col).FormulaA1 = t.Subtitulo;
-            ws.Cell(8, col).Style.Font.SetFontSize(9);
+            ws.Cell(8, col).Style.Font.SetFontSize(letra.Pie);
         }
 
         // Top 15 clientes por facturación.
-        Banda(ws, "B11:H11", "TOP 15 CLIENTES POR FACTURACIÓN", "003A55", 11, bold: true);
-        Banda(ws, "J11:P11", "ESTADO DE CUENTA POR CLIENTE", "00587F", 11, bold: true);
-        Encabezado(ws, "B12:D12", "CLIENTE", indent: true);
+        Banda(ws, "B11:H11", $"TOP 15 {fu.Varios.ToUpperInvariant()} POR FACTURACIÓN", "003A55", letra.Banda, bold: true);
+        Banda(ws, "J11:P11", $"ESTADO DE CUENTA POR {fu.Uno}", "00587F", letra.Banda, bold: true);
+        Encabezado(ws, "B12:D12", fu.Uno, indent: true);
         Encabezado(ws, "F12", "FACTURADO");
         Encabezado(ws, "G12", "NC APLICADAS");
         Encabezado(ws, "H12", "VENTA NETA");
-        Encabezado(ws, "J12:L12", "SELECCIONA CLIENTE", indent: true);
+        Encabezado(ws, "J12:L12", $"SELECCIONA {fu.Uno}", indent: true);
         Encabezado(ws, "N12:P12", "RFC", indent: true);
         for (var r = 13; r <= 27; r++)
         {
             // autoFill no funciona sobre celdas combinadas: una fórmula por fila.
             ws.Range(r, 2, r, 4).Merge();
             ws.Cell(r, 2).FormulaA1 = $"IFERROR(INDEX({Rc("B")},ROW()-12),\"\")";
-            ws.Cell(r, 2).Style.Font.SetFontSize(9).Alignment.SetIndent(1);
+            ws.Cell(r, 2).Style.Font.SetFontSize(letra.Fila).Alignment.SetIndent(1);
             (int Col, string Fuente)[] importes = [(6, "D"), (7, "F"), (8, "G")];
             foreach (var (c, fuente) in importes)
             {
                 ws.Cell(r, c).FormulaA1 = $"IFERROR(INDEX({Rc(fuente)},ROW()-12),\"\")";
-                ws.Cell(r, c).Style.Font.SetFontName("Segoe UI").Font.SetFontSize(9).NumberFormat.Format = Moneda;
+                ws.Cell(r, c).Style.Font.SetFontName("Segoe UI").Font.SetFontSize(letra.Fila).NumberFormat.Format = Moneda;
             }
         }
         ws.Range("B13:D27").AddConditionalFormat().WhenIsTrue("MOD(ROW(),2)=0").Fill.SetBackgroundColor(Color("F2F9FD"));
@@ -462,48 +543,48 @@ public static class ReporteGeneral
         ws.Range("H13:H27").AddConditionalFormat().ColorScale()
             .LowestValue(Color("F2F9FD")).Midpoint(XLCFContentType.Percentile, 50, Color("9BDCF8")).HighestValue(Color("0084BE"));
 
-        // Estado de cuenta: dropdown con los nombres de Resumen Clientes.
+        // Estado de cuenta: dropdown con los nombres de la hoja de resumen.
         var selector = ws.Range("J13:L13").Merge();
         ws.Cell("J13").Value = clientes[0].Nombre;
-        selector.Style.Fill.SetBackgroundColor(Color("FFF7D6")).Font.SetBold().Font.SetFontSize(11).Font.SetFontColor(Color("003A55"))
+        selector.Style.Fill.SetBackgroundColor(Color("FFF7D6")).Font.SetBold().Font.SetFontSize(compacto ? 9 : 11).Font.SetFontColor(Color("003A55"))
             .Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center).Alignment.SetVertical(XLAlignmentVerticalValues.Center);
         selector.CreateDataValidation().List(Rc("B"), true);
         var rfcCliente = ws.Range("N13:P13").Merge();
         ws.Cell("N13").FormulaA1 = "$R$2";
-        rfcCliente.Style.Fill.SetBackgroundColor(Color("EDF6FB")).Font.SetFontSize(11).Font.SetFontColor(Color("003A55"))
+        rfcCliente.Style.Fill.SetBackgroundColor(Color("EDF6FB")).Font.SetFontSize(compacto ? 9 : 11).Font.SetFontColor(Color("003A55"))
             .Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center).Alignment.SetVertical(XLAlignmentVerticalValues.Center);
         var mini = new (string Titulo, string Tono, bool LetraOscura, string Formula, bool Dinero)[]
         {
-            ("FACTURADO AL CLIENTE", "003A55", false, "IFERROR(SUMIFS(Table13[Total],Table13[RFC Receptor],$R$2),0)", true),
-            ("NOTAS DE CRÉDITO", "A80000", false, "IFERROR(SUMIFS(Table1[Total],Table1[RFC Receptor],$R$2,Table1[Tipo],\"NotaCredito\"),0)", true),
+            ($"FACTURADO AL {fu.Uno}", "003A55", false, $"IFERROR({fu.SumaFacturas(fu.DeFactura("$R$2"))},0)", true),
+            ("NOTAS DE CRÉDITO", "A80000", false, $"IFERROR({fu.SumaNotas(fu.DeNota("$R$2"))},0)", true),
             ("VENTA NETA", "0084BE", false, "N15-N16", true),
-            ("FACTURAS / NC EMITIDAS", "00A0DC", false, "COUNTIFS(Table13[RFC Receptor],$R$2)&\" / \"&COUNTIFS(Table1[RFC Receptor],$R$2,Table1[Tipo],\"NotaCredito\")", false),
-            ("TICKET PROMEDIO", "66CFF7", true, "IFERROR(N15/COUNTIFS(Table13[RFC Receptor],$R$2),0)", true),
+            ("FACTURAS / NC EMITIDAS", "00A0DC", false, $"{fu.CuentaFacturas(fu.DeFactura("$R$2"))}&\" / \"&{fu.CuentaNotas(fu.DeNota("$R$2"))}", false),
+            ("TICKET PROMEDIO", "66CFF7", true, $"IFERROR(N15/{fu.CuentaFacturas(fu.DeFactura("$R$2"))},0)", true),
         };
         for (var i = 0; i < mini.Length; i++)
         {
             var r = 15 + i;
             var etiqueta = ws.Range(r, 10, r, 12).Merge();
             ws.Cell(r, 10).Value = mini[i].Titulo;
-            etiqueta.Style.Fill.SetBackgroundColor(Color(mini[i].Tono)).Font.SetBold().Font.SetFontSize(9)
+            etiqueta.Style.Fill.SetBackgroundColor(Color(mini[i].Tono)).Font.SetBold().Font.SetFontSize(compacto ? 8 : 9)
                 .Font.SetFontColor(mini[i].LetraOscura ? Color("003A55") : XLColor.White)
                 .Alignment.SetIndent(1).Alignment.SetVertical(XLAlignmentVerticalValues.Center);
             var valor = ws.Range(r, 14, r, 16).Merge();
             ws.Cell(r, 14).FormulaA1 = mini[i].Formula;
-            valor.Style.Fill.SetBackgroundColor(Color("F5F9FC")).Font.SetBold().Font.SetFontSize(11).Font.SetFontColor(Color("003A55"))
+            valor.Style.Fill.SetBackgroundColor(Color("F5F9FC")).Font.SetBold().Font.SetFontSize(compacto ? 9 : 11).Font.SetFontColor(Color("003A55"))
                 .Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center).Alignment.SetVertical(XLAlignmentVerticalValues.Center);
             if (mini[i].Dinero) valor.Style.NumberFormat.Format = Moneda;
         }
 
         // Detalle del cliente: una fórmula FILTER por columna; un FILTER multicolumna escribiría sobre las separadoras.
-        Banda(ws, "B29:H29", "FACTURAS DEL CLIENTE SELECCIONADO (primeras 15)", "0084BE", 11, bold: true);
-        Banda(ws, "J29:P29", "NOTAS DE CRÉDITO DEL CLIENTE SELECCIONADO (primeras 15)", "A80000", 11, bold: true);
+        Banda(ws, "B29:H29", $"FACTURAS DEL {fu.Uno} SELECCIONADO (primeras 15)", "0084BE", letra.Banda, bold: true);
+        Banda(ws, "J29:P29", $"NOTAS DE CRÉDITO DEL {fu.Uno} SELECCIONADO (primeras 15)", "A80000", letra.Banda, bold: true);
         (int Desfase, string Titulo, string Campo, bool Dinero)[] detalle =
-            [(0, "FECHA", "Fecha Emision", false), (1, "FOLIO", "Folio", false), (2, "UUID", "UUID", false), (4, "SUBTOTAL", "SubTotal", true), (5, "IVA 16%", "IVA 16%", true), (6, "TOTAL", "Total", true)];
-        foreach (var (inicio, tabla, condicion) in new[]
+            [(0, "FECHA", "Fecha Emision", false), (1, "FOLIO", "Folio", false), (2, "UUID", "UUID", false), (4, "SUBTOTAL", "SubTotal", true), (5, "IVA 16%", fu.Iva, true), (6, "TOTAL", "Total", true)];
+        foreach (var (inicio, tabla, condicion, signo) in new[]
                  {
-                     (2, "Table13", "Table13[RFC Receptor]=$R$2"),
-                     (10, "Table1", "(Table1[RFC Receptor]=$R$2)*(Table1[Tipo]=\"NotaCredito\")"),
+                     (2, fu.Facturas, fu.FiltroFacturas("$R$2"), ""),
+                     (10, fu.Notas, fu.FiltroNotas("$R$2"), fu.Signo),
                  })
         {
             foreach (var (desfase, titulo, campo, dinero) in detalle)
@@ -513,10 +594,11 @@ public static class ReporteGeneral
                 for (var r = 31; r <= 45; r++)
                 {
                     var celda = ws.Cell(r, col);
-                    celda.FormulaA1 = $"IFERROR(INDEX(_xlfn._xlws.FILTER({tabla}[{campo}],{condicion}),ROW()-30),\"\")";
+                    celda.FormulaA1 = $"IFERROR({(dinero ? signo : "")}INDEX(_xlfn._xlws.FILTER({tabla}[{campo}],{condicion}),ROW()-30),\"\")";
                     celda.Style.Font.SetFontName("Segoe UI").Font.SetFontSize(8);
                     if (dinero) celda.Style.NumberFormat.Format = Moneda;
                     else celda.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+                    if (campo == "Fecha Emision" && fu.FechaComoFecha) celda.Style.NumberFormat.Format = "dd/mm/yyyy";
                 }
             }
         }
@@ -524,13 +606,17 @@ public static class ReporteGeneral
             ws.Range(rango).AddConditionalFormat().WhenIsTrue("MOD(ROW(),2)=1").Fill.SetBackgroundColor(Color("F7F7F7"));
 
         var nota = ws.Range("B47:P47").Merge();
-        ws.Cell("B47").Value = $"Generado por CFDI Manager el {DateTime.Now:dd/MM/yyyy HH:mm} · Las notas de crédito solo cuentan los renglones con Tipo = NotaCredito de la hoja NCredito.";
+        ws.Cell("B47").Value = $"Generado por CFDI Manager el {DateTime.Now:dd/MM/yyyy HH:mm} · Fuente: {fu.Origen} · " +
+                               "Las notas de crédito solo cuentan los renglones con Tipo = NotaCredito.";
         nota.Style.Font.SetFontSize(8).Font.SetFontColor(Color("808080"));
 
-        return new Dashboard(resumen.TopGrafico);
+        return new Dashboard(resumen.TopGrafico, fu);
     }
 
     private static readonly int[] Grupos = [2, 6, 10, 14];
+
+    /// <summary>Puntos a ancho de columna de Excel (caracteres de la fuente estándar: 7 px + 5 px de margen).</summary>
+    private static double Ancho(double puntos) => Math.Round(Math.Max(0, (puntos * 96 / 72 - 5) / 7), 2);
 
     private static void Banda(IXLWorksheet ws, string rango, string? texto, string fondo, double tamano, bool bold)
     {
@@ -553,12 +639,15 @@ public static class ReporteGeneral
 
     private static XLColor Color(string hex) => XLColor.FromHtml("#" + hex);
 
-    private static (string Largo, string Corto) Periodo(Filtro filtro, List<Leido> leidos)
+    private static (string Largo, string Corto) Periodo(Filtro filtro, List<Leido> leidos) =>
+        Periodo(filtro, leidos.Select(x => x.E.Fila.Fecha).OfType<DateTimeOffset>());
+
+    private static (string Largo, string Corto) Periodo(Filtro filtro, IEnumerable<DateTimeOffset> deCfdi)
     {
         if (filtro.Anio is int anio && filtro.Mes is int mes and >= 1 and <= 12)
             return ($"{Meses[mes - 1]} {anio}", $"{Meses[mes - 1][..3]} {anio}");
         if (filtro.Anio is int soloAnio) return ($"{soloAnio}", $"{soloAnio}");
-        var fechas = leidos.Select(x => x.E.Fila.Fecha).OfType<DateTimeOffset>().ToList();
+        var fechas = deCfdi.ToList();
         if (fechas.Count == 0) return ("", DateTime.Now.ToString("yyyyMMdd", Inv));
         var (min, max) = (fechas.Min(), fechas.Max());
         string Mes(DateTimeOffset d) => $"{Meses[d.Month - 1][..3]} {d.Year}";
@@ -580,7 +669,8 @@ public static class ReporteGeneral
         var dash = Hoja("Dashboard");
         var dibujo = dash.AddNewPart<DrawingsPart>();
         var grafico = dibujo.AddNewPart<ChartPart>();
-        Escribir(grafico, GraficoXml(4 + dashboard.TopGrafico));
+        var fu = dashboard.Fuente;
+        Escribir(grafico, GraficoXml(4 + dashboard.TopGrafico, fu.HojaResumen, fu.Varios));
         Escribir(dibujo, $"""
             <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
             <xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>9</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>20</xdr:row><xdr:rowOff>38100</xdr:rowOff></xdr:from><xdr:to><xdr:col>16</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>27</xdr:row><xdr:rowOff>139700</xdr:rowOff></xdr:to>
@@ -590,9 +680,9 @@ public static class ReporteGeneral
             """);
         InsertarDibujo(dash, dash.GetIdOfPart(dibujo));
 
-        // Segmentaciones de ESTADO y FACTURAS sobre TblClientes, a la derecha de la tabla (columnas L a S).
-        var resumen = Hoja("Resumen Clientes");
-        var tabla = resumen.TableDefinitionParts.Single(x => x.Table!.Name == "TblClientes").Table!;
+        // Segmentaciones de ESTADO y FACTURAS sobre la tabla de resumen, a la derecha de la tabla (columnas L a S).
+        var resumen = Hoja(fu.HojaResumen);
+        var tabla = resumen.TableDefinitionParts.Single(x => x.Table!.Name == fu.TablaResumen).Table!;
         var cacheIds = new List<string>();
         foreach (var (nombre, columna) in new[] { ("ESTADO", 10), ("FACTURAS", 3) })
         {
@@ -632,10 +722,10 @@ public static class ReporteGeneral
     private static string AnclaSegmentacion(int id, string nombre, int colDesde, int colHasta, int filaDesde, int filaHasta) => $"""
         <xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>{colDesde}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>{filaDesde}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>{colHasta}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>{filaHasta}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
         <mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice xmlns:sle15="http://schemas.microsoft.com/office/drawing/2012/slicer" Requires="sle15"><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="{id}" name="{nombre}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="http://schemas.microsoft.com/office/drawing/2010/slicer"><sle:slicer xmlns:sle="http://schemas.microsoft.com/office/drawing/2010/slicer" name="{nombre}"/></a:graphicData></a:graphic></xdr:graphicFrame></mc:Choice>
-        <mc:Fallback><xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="0" name=""/><xdr:cNvSpPr><a:spLocks noTextEdit="1"/></xdr:cNvSpPr></xdr:nvSpPr><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1828800" cy="1828800"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr><xdr:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="es-MX" sz="1100"/><a:t>Segmentación de datos: requiere Excel 2013 o posterior.</a:t></a:r></a:p></xdr:txBody></xdr:sp></mc:Fallback></mc:AlternateContent><xdr:clientData/></xdr:twoCellAnchor>
+        <mc:Fallback><xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="{id + 100}" name=""/><xdr:cNvSpPr><a:spLocks noTextEdit="1"/></xdr:cNvSpPr></xdr:nvSpPr><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1828800" cy="1828800"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr><xdr:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="es-MX" sz="1100"/><a:t>Segmentación de datos: requiere Excel 2013 o posterior.</a:t></a:r></a:p></xdr:txBody></xdr:sp></mc:Fallback></mc:AlternateContent><xdr:clientData/></xdr:twoCellAnchor>
         """;
 
-    private static string GraficoXml(int ultimaFila)
+    private static string GraficoXml(int ultimaFila, string hojaResumen, string varios)
     {
         const string ejeTexto = """<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="800"><a:solidFill><a:srgbClr val="595959"/></a:solidFill></a:defRPr></a:pPr><a:endParaRPr lang="es-MX"/></a:p></c:txPr>""";
         const string linea = """<c:spPr><a:ln w="9525"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:ln></c:spPr>""";
@@ -643,15 +733,15 @@ public static class ReporteGeneral
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
             <c:roundedCorners val="0"/>
             <c:chart>
-            <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000" b="1"><a:solidFill><a:srgbClr val="003A55"/></a:solidFill></a:defRPr></a:pPr><a:r><a:rPr lang="es-MX" sz="1000" b="1"><a:solidFill><a:srgbClr val="003A55"/></a:solidFill></a:rPr><a:t>Top 10 clientes por venta neta (sin público general)</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>
+            <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000" b="1"><a:solidFill><a:srgbClr val="003A55"/></a:solidFill></a:defRPr></a:pPr><a:r><a:rPr lang="es-MX" sz="1000" b="1"><a:solidFill><a:srgbClr val="003A55"/></a:solidFill></a:rPr><a:t>Top 10 {varios} por venta neta (sin público general)</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>
             <c:autoTitleDeleted val="0"/>
             <c:plotArea><c:layout/>
             <c:barChart><c:barDir val="bar"/><c:grouping val="clustered"/><c:varyColors val="0"/>
-            <c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:strRef><c:f>'Resumen Clientes'!$AD$4</c:f></c:strRef></c:tx>
+            <c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:strRef><c:f>'{hojaResumen}'!$AD$4</c:f></c:strRef></c:tx>
             <c:spPr><a:solidFill><a:srgbClr val="00A0DC"/></a:solidFill></c:spPr><c:invertIfNegative val="0"/>
             <c:dLbls><c:numFmt formatCode="&quot;$&quot;#,##0" sourceLinked="0"/><c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr><c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="700"><a:solidFill><a:srgbClr val="003A55"/></a:solidFill></a:defRPr></a:pPr><a:endParaRPr lang="es-MX"/></a:p></c:txPr><c:dLblPos val="outEnd"/><c:showLegendKey val="0"/><c:showVal val="1"/><c:showCatName val="0"/><c:showSerName val="0"/><c:showPercent val="0"/><c:showBubbleSize val="0"/></c:dLbls>
-            <c:cat><c:strRef><c:f>'Resumen Clientes'!$AC$5:$AC${ultimaFila}</c:f></c:strRef></c:cat>
-            <c:val><c:numRef><c:f>'Resumen Clientes'!$AD$5:$AD${ultimaFila}</c:f></c:numRef></c:val>
+            <c:cat><c:strRef><c:f>'{hojaResumen}'!$AC$5:$AC${ultimaFila}</c:f></c:strRef></c:cat>
+            <c:val><c:numRef><c:f>'{hojaResumen}'!$AD$5:$AD${ultimaFila}</c:f></c:numRef></c:val>
             </c:ser>
             <c:gapWidth val="60"/><c:axId val="1461061312"/><c:axId val="929409583"/></c:barChart>
             <c:catAx><c:axId val="1461061312"/><c:scaling><c:orientation val="maxMin"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/>{linea}{ejeTexto}<c:crossAx val="929409583"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:tickLblSkip val="1"/><c:noMultiLvlLbl val="0"/></c:catAx>
