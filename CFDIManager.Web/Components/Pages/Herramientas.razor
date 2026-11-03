@@ -19,6 +19,7 @@
 @inject CFDIManager.Web.Services.Sat.EstadoDescargaAutomaticaSat DescargaSat
 @inject IConfiguration Configuracion
 @inject RespaldoService Respaldos
+@inject NavigationManager Navegacion
 
 <PageTitle>Herramientas</PageTitle>
 
@@ -560,9 +561,9 @@
     {
         Periodo.Guardar(Automatico ? null : new DateTime(AnioElegido, MesElegido, 1));
 
-        Exito = Automatico
-            ? "Listo: las pantallas abren con el mes en curso."
-            : $"Listo: las pantallas abren en {NombreMes(Periodo.Inicio)}. Los usuarios lo verán al abrir o recargar cada pantalla.";
+        // Se recarga la app completa: todas las pantallas (y sus filtros) toman el periodo nuevo. Los demás usuarios
+        // lo toman al abrir cada pantalla; no se les recarga para no cortar lo que estén haciendo (p. ej. un envío).
+        Navegacion.NavigateTo(Navegacion.Uri, forceLoad: true);
     }
 
     private static string NombreMes(DateTime fecha) => fecha.ToString("MMMM yyyy", Mx);

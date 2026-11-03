@@ -6,6 +6,7 @@
 @inject ArchivosSatService Archivos
 @inject DescargaArchivosSatService Descarga
 @inject DiotBovedaService DiotBoveda
+@inject CFDIManager.Web.Services.PeriodoTrabajoService PeriodoTrabajo
 @inject IJSRuntime JS
 
 @* Acuses de la empresa por ejercicio: declaraciones mensuales y anual, y DIOT, cada una en su tarjeta. *@
@@ -351,7 +352,7 @@
     private string ErrorDiot = "";
 
     private IEnumerable<int> Ejercicios =>
-        Enumerable.Range(DateTime.Today.Year - 5, 6).Concat(Lista.Select(d => d.Ejercicio)).Distinct().OrderDescending();
+        Enumerable.Range(DateTime.Today.Year - 5, 6).Append(PeriodoTrabajo.Anio).Concat(Lista.Select(d => d.Ejercicio)).Distinct().OrderDescending();
 
     private List<DeclaracionSatDto> Declaraciones =>
         Lista.Where(d => d.Tipo != "DIOT" && d.Ejercicio == Ejercicio).OrderBy(d => d.Tipo == "ANUAL" ? 13 : d.Periodo).ToList();
@@ -388,6 +389,10 @@
             return;
 
         EmpresaCargada = EmpresaId;
+
+        // Las dos tarjetas abren en el periodo de trabajo (Herramientas).
+        Ejercicio = EjercicioDiot = PeriodoTrabajo.Anio;
+        Periodo = PeriodoDiot = PeriodoTrabajo.Mes;
         Error = "";
         ErrorDiot = "";
         if (EmpresaId > 0)

@@ -10,6 +10,7 @@
 @inject CierreMesSatService Cierres
 @inject PostgreSqlRepository Repo
 @inject IConfiguration Configuracion
+@inject PeriodoTrabajoService PeriodoTrabajo
 
 @* Cierre de mes: metadatos del SAT + XML faltantes. Lo lanza la descarga automática los primeros días
    del mes; aquí se ve el historial y se puede ejecutar a mano para cualquier mes. *@
@@ -136,6 +137,13 @@
 
     protected override void OnInitialized()
     {
+        // Con un mes fijo de trabajo (Herramientas) se cierra ese mes; en automático, el anterior.
+        if (PeriodoTrabajo.MesFijo is DateTime fijo)
+        {
+            Anio = fijo.Year;
+            NumeroMes = fijo.Month;
+        }
+
         Cierres.Cambio += Refrescar;
         EmpresaContext.OnChange += Refrescar;
         Cargar();

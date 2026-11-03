@@ -22,6 +22,7 @@
 @inject SatMovilCliente SatMovil
 @inject ReporteAsignacionesService ReporteAsignaciones
 @inject IJSRuntime JS
+@implements IDisposable
 
 
 
@@ -668,7 +669,35 @@
     {
         EmpresasPermitidas = await Acceso.ObtenerIdsPermitidosAsync();
         CargarEmpresas();
+        SeleccionarActiva();
+        EmpresaContext.OnChange += EmpresaCambio;
     }
+
+    /// <summary>
+    /// El detalle (General, Datos fiscales, Accesos SAT, Declaraciones…) abre con la empresa activa del encabezado.
+    /// No reemplaza un alta en captura.
+    /// </summary>
+    private void SeleccionarActiva()
+    {
+        if (!EmpresaContext.TieneEmpresaActiva || (Modelo.EmpresaId == 0 && TabActiva != "Lista"))
+            return;
+
+        if (ListaEmpresas.FirstOrDefault(e => e.EmpresaId == EmpresaContext.EmpresaId) is EmpresaDto activa && Modelo.EmpresaId != activa.EmpresaId)
+        {
+            LimpiarMensajes();
+            Modelo = CopiarEmpresa(activa);
+            TieneCiec = !string.IsNullOrEmpty(Repo.ObtenerEmpresaSat(activa.EmpresaId)?.SatPassword);
+        }
+    }
+
+    private void EmpresaCambio() =>
+        _ = InvokeAsync(() =>
+        {
+            SeleccionarActiva();
+            StateHasChanged();
+        });
+
+    public void Dispose() => EmpresaContext.OnChange -= EmpresaCambio;
 
     private void CargarEmpresas()
     {
