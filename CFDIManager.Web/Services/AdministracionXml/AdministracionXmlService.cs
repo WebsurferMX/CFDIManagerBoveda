@@ -214,6 +214,22 @@ public class AdministracionXmlService
             }
         }
 
+        // Conceptos: la hoja Conceptos como tabla, su resumen por clave SAT y un dashboard que lee solo de ellas.
+        if (reporte == "conceptos")
+        {
+            var partidas = new List<ReporteGeneral.Partida>();
+
+            foreach (AdminXmlFilaDto x in _repo.ObtenerSeleccionAdministracionXml(f))
+            {
+                partidas.AddRange(_repo.ObtenerConceptosCfdi(f.EmpresaId, x.CfdiId).Select(k => new ReporteGeneral.Partida(x, k)));
+            }
+
+            string? lado = f.Ids.Count > 0 ? null : f.Clasificacion == "RECIBIDO" ? "R" : "E";
+            (byte[] conceptos, _) = ReporteGeneral.CrearConceptos(
+                partidas, new ReporteGeneral.Filtro(empresa.Rfc, lado, f.Ids.Count > 0 ? null : f.Anio, mesFiltro));
+            return (conceptos, NombreReporte(empresa, f, reporte));
+        }
+
         // Agrupado por mes: la hoja Por Mes como tabla con el dashboard de tendencia mensual.
         if (reporte == "agrupado:mes")
         {

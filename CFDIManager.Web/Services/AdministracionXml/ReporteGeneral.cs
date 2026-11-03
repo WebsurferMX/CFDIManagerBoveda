@@ -665,20 +665,8 @@ public static partial class ReporteGeneral
         WorksheetPart Hoja(string nombre) =>
             (WorksheetPart)wbPart.GetPartById(wbPart.Workbook.Sheets!.Elements<S.Sheet>().Single(x => x.Name == nombre).Id!);
 
-        // Gráfico de barras de venta neta por cliente en el hueco del bloque derecho.
-        var dash = Hoja("Dashboard");
-        var dibujo = dash.AddNewPart<DrawingsPart>();
-        var grafico = dibujo.AddNewPart<ChartPart>();
         var fu = dashboard.Fuente;
-        Escribir(grafico, GraficoXml(4 + dashboard.TopGrafico, fu.HojaResumen, fu.Varios));
-        Escribir(dibujo, $"""
-            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
-            <xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>9</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>20</xdr:row><xdr:rowOff>38100</xdr:rowOff></xdr:from><xdr:to><xdr:col>16</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>27</xdr:row><xdr:rowOff>139700</xdr:rowOff></xdr:to>
-            <xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="g_top10"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>
-            <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="{dibujo.GetIdOfPart(grafico)}"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>
-            </xdr:wsDr>
-            """);
-        InsertarDibujo(dash, dash.GetIdOfPart(dibujo));
+        GraficoTop(wbPart, Hoja("Dashboard"), 4 + dashboard.TopGrafico, fu.HojaResumen, $"Top 10 {fu.Varios} por venta neta (sin público general)");
 
         // Segmentaciones de ESTADO y FACTURAS sobre la tabla de resumen, a la derecha de la tabla (columnas L a S).
         var resumen = Hoja(fu.HojaResumen);
@@ -692,6 +680,27 @@ public static partial class ReporteGeneral
                 """);
             cacheIds.Add(wbPart.GetIdOfPart(cache));
         }
+        AgregarSegmentaciones(wbPart, resumen, cacheIds);
+    }
+
+    /// <summary>Gráfico de barras del top 10 (columnas AC/AD de la hoja de resumen) en el hueco J21:P28 del dashboard.</summary>
+    private static void GraficoTop(WorkbookPart wbPart, WorksheetPart dash, int ultimaFila, string hojaResumen, string titulo)
+    {
+        var dibujo = dash.AddNewPart<DrawingsPart>();
+        var grafico = dibujo.AddNewPart<ChartPart>();
+        Escribir(grafico, GraficoXml(ultimaFila, hojaResumen, titulo));
+        Escribir(dibujo, $"""
+            <xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+            <xdr:twoCellAnchor editAs="oneCell"><xdr:from><xdr:col>9</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>20</xdr:row><xdr:rowOff>38100</xdr:rowOff></xdr:from><xdr:to><xdr:col>16</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>27</xdr:row><xdr:rowOff>139700</xdr:rowOff></xdr:to>
+            <xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="g_top10"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm>
+            <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="{dibujo.GetIdOfPart(grafico)}"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>
+            </xdr:wsDr>
+            """);
+        InsertarDibujo(dash, dash.GetIdOfPart(dibujo));
+    }
+
+    private static void AgregarSegmentaciones(WorkbookPart wbPart, WorksheetPart resumen, List<string> cacheIds)
+    {
         var segmentaciones = resumen.AddNewPart<SlicersPart>();
         Escribir(segmentaciones, """
             <slicers xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" mc:Ignorable="x" xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><slicer name="slcEstado" cache="Slicer_ESTADO" caption="ESTADO" rowHeight="241300"/><slicer name="slcFacturas" cache="Slicer_FACTURAS" caption="FACTURAS" rowHeight="241300"/></slicers>
@@ -725,7 +734,7 @@ public static partial class ReporteGeneral
         <mc:Fallback><xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="{id + 100}" name=""/><xdr:cNvSpPr><a:spLocks noTextEdit="1"/></xdr:cNvSpPr></xdr:nvSpPr><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1828800" cy="1828800"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr><xdr:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="es-MX" sz="1100"/><a:t>Segmentación de datos: requiere Excel 2013 o posterior.</a:t></a:r></a:p></xdr:txBody></xdr:sp></mc:Fallback></mc:AlternateContent><xdr:clientData/></xdr:twoCellAnchor>
         """;
 
-    private static string GraficoXml(int ultimaFila, string hojaResumen, string varios)
+    private static string GraficoXml(int ultimaFila, string hojaResumen, string titulo)
     {
         const string ejeTexto = """<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="800"><a:solidFill><a:srgbClr val="595959"/></a:solidFill></a:defRPr></a:pPr><a:endParaRPr lang="es-MX"/></a:p></c:txPr>""";
         const string linea = """<c:spPr><a:ln w="9525"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:ln></c:spPr>""";
@@ -733,7 +742,7 @@ public static partial class ReporteGeneral
             <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
             <c:roundedCorners val="0"/>
             <c:chart>
-            <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000" b="1"><a:solidFill><a:srgbClr val="003A55"/></a:solidFill></a:defRPr></a:pPr><a:r><a:rPr lang="es-MX" sz="1000" b="1"><a:solidFill><a:srgbClr val="003A55"/></a:solidFill></a:rPr><a:t>Top 10 {varios} por venta neta (sin público general)</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>
+            <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1000" b="1"><a:solidFill><a:srgbClr val="003A55"/></a:solidFill></a:defRPr></a:pPr><a:r><a:rPr lang="es-MX" sz="1000" b="1"><a:solidFill><a:srgbClr val="003A55"/></a:solidFill></a:rPr><a:t>{titulo}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>
             <c:autoTitleDeleted val="0"/>
             <c:plotArea><c:layout/>
             <c:barChart><c:barDir val="bar"/><c:grouping val="clustered"/><c:varyColors val="0"/>
