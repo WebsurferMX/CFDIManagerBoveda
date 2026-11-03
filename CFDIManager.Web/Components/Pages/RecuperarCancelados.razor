@@ -1,0 +1,275 @@
+@page "/recuperar-cancelados"
+@attribute [Authorize(Policy = "Tarea:recuperar-cancelados")]
+@implements IDisposable
+
+@using System.Globalization
+@using CFDIManager.Web.Services
+@using CFDIManager.Web.Services.Sat
+@using CFDIParser.Models
+
+@inject EmpresaContext EmpresaContext
+@inject RecuperarCanceladosService Recuperacion
+@inject PeriodoTrabajoService Periodo
+@inject IJSRuntime JS
+
+<PageTitle>Recuperar cancelados</PageTitle>
+
+<div class="recuperar-page d-flex flex-column gap-3 pb-4">
+    <header>
+        <span class="eyebrow">SAT</span>
+        <h1 class="h2 mb-0">Recuperar cancelados</h1>
+    </header>
+
+    @if (!EmpresaContext.TieneEmpresaActiva)
+    {
+        <div class="alert alert-warning mb-0">Selecciona una empresa activa.</div>
+    }
+    else
+    {
+        @if (!string.IsNullOrEmpty(Error))
+        {
+            <div class="alert alert-danger alert-dismissible d-flex align-items-center gap-2 mb-0" role="alert">
+                <i class="bi bi-exclamation-octagon-fill fs-5"></i>
+                <span>@Error</span>
+                <button type="button" class="btn-close" @onclick="() => Error = null"></button>
+            </div>
+        }
+
+        <div class="card shadow-sm">
+            <div class="card-body d-flex flex-wrap align-items-end gap-3">
+                <div>
+                    <label class="form-label small fw-semibold mb-1" for="anio">Año</label>
+                    <select id="anio" class="form-select" @bind="Anio" @bind:after="Cargar" disabled="@Cargando">
+                        @for (int a = DateTime.Today.Year; a >= DateTime.Today.Year - 6; a--)
+                        {
+                            <option value="@a">@a</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label small fw-semibold mb-1" for="mes">Mes</label>
+                    <select id="mes" class="form-select" @bind="Mes" @bind:after="Cargar" disabled="@Cargando">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <option value="@m">@m.ToString("00") · @Mx.DateTimeFormat.GetMonthName(m)</option>
+                        }
+                    </select>
+                </div>
+
+                <label class="btn btn-primary d-inline-flex align-items-center gap-2 mb-0 @(Cargando ? "disabled" : "")">
+                    @if (Cargando)
+                    {
+                        <span class="spinner-border spinner-border-sm"></span>
+                        <span>Cargando…</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-upload"></i>
+                        <span>Cargar XML o ZIP</span>
+                    }
+                    <InputFile @key="_inputKey" class="d-none" multiple accept=".xml,.zip" OnChange="CargarArchivos" disabled="@Cargando" />
+                </label>
+
+                <button type="button" class="btn btn-outline-success ms-auto" @onclick="DescargarExcel" disabled="@(Faltantes == 0)">
+                    <i class="bi bi-file-earmark-excel me-1"></i>Excel de faltantes
+                </button>
+            </div>
+        </div>
+
+        @if (SinMetadatos)
+        {
+            <div class="alert alert-warning d-flex align-items-center gap-2 mb-0">
+                <i class="bi bi-cloud-slash fs-5"></i>
+                <span>
+                    No hay metadatos de recibidos de @Anio@Mes.ToString("00").
+                    Ejecuta el cierre del mes en <a href="sat-descargas" class="alert-link">Descargas SAT</a>.
+                </span>
+            </div>
+        }
+
+        <div class="row g-3">
+            <TarjetaTotal Titulo="Cancelados en el SAT" Valor="@Filas.Count.ToString("N0")" Icono="bi-x-octagon" Color="secondary" />
+            <TarjetaTotal Titulo="XML en bóveda" Valor="@((Filas.Count - Faltantes).ToString("N0"))" Icono="bi-check2-circle" Color="success" />
+            <TarjetaTotal Titulo="Faltan XML" Valor="@Faltantes.ToString("N0")" Icono="bi-file-earmark-excel" Color="danger" />
+            <TarjetaTotal Titulo="Monto faltante" Valor="@Filas.Where(f => !f.EnBoveda).Sum(f => f.Monto).ToString("C2", Mx)" Icono="bi-cash-stack" Color="warning" />
+        </div>
+
+        @if (UltimaCarga is { Count: > 0 })
+        {
+            <div class="card shadow-sm">
+                <div class="card-header d-flex flex-wrap align-items-center gap-2">
+                    <span class="fw-semibold">Última carga</span>
+                    @foreach (var grupo in UltimaCarga.GroupBy(r => r.Estatus))
+                    {
+                        <span class="badge rounded-pill bg-@ColorEstatus(grupo.Key)-subtle text-@ColorEstatus(grupo.Key)-emphasis border border-@ColorEstatus(grupo.Key)-subtle">
+                            @grupo.Key: @grupo.Count()
+                        </span>
+                    }
+                    <button type="button" class="btn-close ms-auto" aria-label="Cerrar" @onclick="() => UltimaCarga = null"></button>
+                </div>
+                <div class="table-responsive carga">
+                    <table class="table table-sm align-middle mb-0 tabla">
+                        <thead>
+                            <tr><th>Archivo</th><th>UUID</th><th>Resultado</th><th>Detalle</th></tr>
+                        </thead>
+                        <tbody>
+                            @foreach (RecuperacionArchivo r in UltimaCarga)
+                            {
+                                <tr>
+                                    <td class="archivo" title="@r.Archivo">@r.Archivo</td>
+                                    <td class="font-monospace">@r.Uuid</td>
+                                    <td><span class="badge bg-@ColorEstatus(r.Estatus)-subtle text-@ColorEstatus(r.Estatus)-emphasis">@r.Estatus</span></td>
+                                    <td class="text-body-secondary">@r.Detalle</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <div class="card shadow-sm">
+            <div class="card-header d-flex flex-wrap align-items-center gap-2">
+                <div class="btn-group btn-group-sm" role="group" aria-label="Filtro">
+                    <button type="button" class="btn @(Filtro == "faltan" ? "btn-primary" : "btn-outline-secondary")" @onclick='() => Filtro = "faltan"'>Faltan XML</button>
+                    <button type="button" class="btn @(Filtro == "boveda" ? "btn-primary" : "btn-outline-secondary")" @onclick='() => Filtro = "boveda"'>En bóveda</button>
+                    <button type="button" class="btn @(Filtro == "todos" ? "btn-primary" : "btn-outline-secondary")" @onclick='() => Filtro = "todos"'>Todos</button>
+                </div>
+                <span class="small text-body-secondary ms-auto">@Visibles.Count() de @Filas.Count</span>
+            </div>
+            <div class="table-responsive tabla-contenedor">
+                <table class="table table-sm table-hover align-middle mb-0 tabla">
+                    <thead>
+                        <tr>
+                            <th>RFC emisor</th>
+                            <th>Emisor</th>
+                            <th>Fecha emisión</th>
+                            <th class="text-end">Monto</th>
+                            <th>Tipo</th>
+                            <th>Cancelado</th>
+                            <th>XML</th>
+                            <th>UUID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (CanceladoSatDto c in Visibles)
+                        {
+                            <tr>
+                                <td>@c.RfcEmisor</td>
+                                <td class="emisor" title="@c.NombreEmisor">@c.NombreEmisor</td>
+                                <td>@c.FechaEmision.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="text-end">@c.Monto.ToString("N2")</td>
+                                <td>@c.Efecto</td>
+                                <td>@c.FechaCancelacion?.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td>
+                                    @if (c.EnBoveda)
+                                    {
+                                        <span class="badge bg-success-subtle text-success-emphasis">En bóveda</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger-subtle text-danger-emphasis">Falta</span>
+                                    }
+                                </td>
+                                <td class="font-monospace">@c.Uuid</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly CultureInfo Mx = new("es-MX");
+
+    private int Anio;
+    private int Mes;
+    private List<CanceladoSatDto> Filas = new();
+    private bool SinMetadatos;
+    private string Filtro = "faltan";
+    private bool Cargando;
+    private string? Error;
+    private List<RecuperacionArchivo>? UltimaCarga;
+    private Guid _inputKey = Guid.NewGuid();
+
+    private int Faltantes => Filas.Count(f => !f.EnBoveda);
+
+    private IEnumerable<CanceladoSatDto> Visibles => Filtro switch
+    {
+        "faltan" => Filas.Where(f => !f.EnBoveda),
+        "boveda" => Filas.Where(f => f.EnBoveda),
+        _ => Filas
+    };
+
+    protected override void OnInitialized()
+    {
+        Anio = Periodo.Anio;
+        Mes = Periodo.Mes;
+        EmpresaContext.OnChange += EmpresaCambio;
+        Cargar();
+    }
+
+    private void Cargar()
+    {
+        if (!EmpresaContext.TieneEmpresaActiva)
+        {
+            Filas = new();
+            SinMetadatos = false;
+            return;
+        }
+
+        Filas = Recuperacion.Listar(EmpresaContext.EmpresaId, Anio, Mes);
+        SinMetadatos = Recuperacion.Metadatos(EmpresaContext.EmpresaId, Anio, Mes) is null;
+    }
+
+    private void EmpresaCambio() => InvokeAsync(() =>
+    {
+        UltimaCarga = null;
+        Cargar();
+        StateHasChanged();
+    });
+
+    private async Task CargarArchivos(InputFileChangeEventArgs e)
+    {
+        Error = null;
+        Cargando = true;
+
+        try
+        {
+            UltimaCarga = await Recuperacion.CargarAsync(EmpresaContext.EmpresaActiva!, e.GetMultipleFiles(5000));
+            Cargar();
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Cargando = false;
+            _inputKey = Guid.NewGuid();
+        }
+    }
+
+    private async Task DescargarExcel()
+    {
+        byte[] contenido = Recuperacion.GenerarExcel(EmpresaContext.EmpresaActiva!, Anio, Mes, Filas.Where(f => !f.EnBoveda));
+        await JS.InvokeVoidAsync("descargarArchivoBase64", $"Cancelados_sin_XML_{EmpresaContext.Rfc}_{Anio}{Mes:00}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Convert.ToBase64String(contenido));
+    }
+
+    private static string ColorEstatus(string estatus) => estatus switch
+    {
+        RecuperarCanceladosService.Recuperado => "success",
+        RecuperarCanceladosService.YaEstaba => "secondary",
+        RecuperarCanceladosService.NoEnLista => "warning",
+        _ => "danger"
+    };
+
+    public void Dispose()
+    {
+        EmpresaContext.OnChange -= EmpresaCambio;
+    }
+}

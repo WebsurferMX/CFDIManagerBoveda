@@ -13,6 +13,7 @@
 @inject EmpresaContext EmpresaContext
 @inject RutaXmlService Rutas
 @inject IJSRuntime JS
+@inject PeriodoTrabajoService Periodo
 
 <PageTitle>Importación a SINUBE</PageTitle>
 
@@ -210,11 +211,8 @@
 
                 @if (Revision is not null && Resultados.Count == 0)
                 {
-                    <div class="row g-2 mt-1">
-                        <TarjetaTotal Titulo="XML del periodo" Valor="@Revision.Archivos.ToString("N0")" Icono="bi-files" />
-                        <TarjetaTotal Titulo="Ya en SINUBE" Valor="@Revision.EnSinube.ToString("N0")" Icono="bi-cloud-check" Color="info" />
-                        <TarjetaTotal Titulo="Enviados antes" Valor="@Revision.EnviadosAntes.ToString("N0")" Icono="bi-clock-history" />
-                        <TarjetaTotal Titulo="Por subir" Valor="@Revision.PorSubir.Count.ToString("N0")" Icono="bi-cloud-arrow-up" Color="primary" />
+                    <div class="row row-cols-2 row-cols-md-5 g-2 mt-1">
+                        @TarjetasRevision(Revision)
                     </div>
                 }
 
@@ -236,13 +234,14 @@
 
             @if (Resultados.Count > 0)
             {
-                <section class="summary-grid">
-                    <article class="summary-card ok"><span>Insertados</span><strong>@Contar("OK")</strong></article>
-                    <article class="summary-card exists"><span>Ya existían</span><strong>@Contar("EXISTE")</strong></article>
-                    <article class="summary-card skipped"><span>Omitidos</span><strong>@Contar("OMITIDO")</strong></article>
-                    <article class="summary-card warn"><span>IEPS</span><strong>@Contar("IEPS")</strong></article>
-                    <article class="summary-card error"><span>Errores / inválidos</span><strong>@(Contar("ERROR") + Contar("INVALIDO"))</strong></article>
-                </section>
+                <div class="row row-cols-2 row-cols-md-3 row-cols-xl-6 g-2">
+                    <TarjetaTotal Ancho="col" Titulo="Insertados" Valor="@Contar("OK").ToString("N0")" Icono="bi-check2-circle" Color="success" />
+                    <TarjetaTotal Ancho="col" Titulo="Ya existían" Valor="@Contar("EXISTE").ToString("N0")" Icono="bi-cloud-check" Color="info" />
+                    <TarjetaTotal Ancho="col" Titulo="Omitidos" Valor="@Contar("OMITIDO").ToString("N0")" Icono="bi-skip-forward" />
+                    <TarjetaTotal Ancho="col" Titulo="Nómina (no se sube)" Valor="@Contar("NOMINA").ToString("N0")" Icono="bi-people" Color="primary" />
+                    <TarjetaTotal Ancho="col" Titulo="IEPS" Valor="@Contar("IEPS").ToString("N0")" Icono="bi-exclamation-triangle" Color="warning" />
+                    <TarjetaTotal Ancho="col" Titulo="Errores / inválidos" Valor="@((Contar("ERROR") + Contar("INVALIDO")).ToString("N0"))" Icono="bi-x-octagon" Color="danger" />
+                </div>
 
                 <section class="results-card">
                     <header class="results-heading">
@@ -290,6 +289,25 @@
                         </table>
                     </div>
                 </section>
+
+                @if (RevisandoFinal || Revision is not null)
+                {
+                    <section class="panel-card">
+                        <h2 class="d-flex align-items-center gap-2">
+                            <i class="bi bi-cloud-check"></i> Así quedó en SINUBE
+                            @if (RevisandoFinal)
+                            {
+                                <span class="spinner-border spinner-border-sm text-secondary"></span>
+                            }
+                        </h2>
+                        @if (Revision is not null)
+                        {
+                            <div class="row row-cols-2 row-cols-md-5 g-2">
+                                @TarjetasRevision(Revision)
+                            </div>
+                        }
+                    </section>
+                }
             }
         }
         else
@@ -579,7 +597,10 @@
     private void CargarPeriodos()
     {
         Periodos = EmpresaContext.EmpresaActiva is EmpresaDto empresa ? Sinube.Periodos(empresa, Clientes) : [];
-        PeriodoTexto = Periodos.Count > 0 ? Periodos[0].ToString("yyyy-MM") : "";
+        // Abre en el periodo de trabajo (como las demás pantallas) si tiene carpeta; si no, en el más reciente.
+        DateTime trabajo = Periodo.Inicio;
+        PeriodoTexto = Periodos.Count == 0 ? ""
+            : (Periodos.Any(p => p.Year == trabajo.Year && p.Month == trabajo.Month) ? trabajo : Periodos[0]).ToString("yyyy-MM");
     }
 
     /// <summary>Lo que ya tiene SINUBE del periodo y lo ya enviado desde la app; el resto queda por subir.</summary>
@@ -589,13 +610,32 @@
         public HashSet<string> YaEnSinube { get; init; } = new(StringComparer.OrdinalIgnoreCase);
         public int EnSinube { get; init; }
         public int EnviadosAntes { get; init; }
+
+        /// <summary>Recibos de nómina del periodo (clientes): SINUBE no los importa.</summary>
+        public int Nomina { get; init; }
+
         public List<string> PorSubir { get; init; } = [];
     }
 
     private RevisionSinube? Revision;
     private bool Revisando;
 
+    // Revisión que se hace sola al terminar un envío (abajo, "Así quedó en SINUBE").
+    private bool RevisandoFinal;
+
     private void LimpiarRevision() => Revision = null;
+
+    private RenderFragment TarjetasRevision(RevisionSinube r) =>
+        @<text>
+            <TarjetaTotal Ancho="col" Titulo="XML del periodo" Valor="@r.Archivos.ToString("N0")" Icono="bi-files" />
+            <TarjetaTotal Ancho="col" Titulo="Ya en SINUBE" Valor="@r.EnSinube.ToString("N0")" Icono="bi-cloud-check" Color="info" />
+            <TarjetaTotal Ancho="col" Titulo="Enviados antes" Valor="@r.EnviadosAntes.ToString("N0")" Icono="bi-clock-history" />
+            @if (r.Nomina > 0)
+            {
+                <TarjetaTotal Ancho="col" Titulo="Nómina (no se sube)" Valor="@r.Nomina.ToString("N0")" Icono="bi-people" Color="primary" />
+            }
+            <TarjetaTotal Ancho="col" Titulo="Por subir" Valor="@r.PorSubir.Count.ToString("N0")" Icono="bi-cloud-arrow-up" Color="@(r.PorSubir.Count > 0 ? "warning" : "success")" />
+        </text>;
 
     private async Task RevisarSinube()
     {
@@ -610,20 +650,7 @@
 
         try
         {
-            bool clientes = Clientes;
-            List<string> archivos = Sinube.Archivos(empresa, clientes, periodo);
-            HashSet<string> enSinube = await DatosSinube.UuidsEnSinubeAsync(Config, clientes, [periodo]);
-            HashSet<string> enviados = Reenviar ? [] : Sinube.UuidsEnviados(empresa, clientes);
-            Dictionary<string, string> uuids = await Task.Run(() => archivos.ToDictionary(a => a, UuidDeArchivo));
-
-            Revision = new RevisionSinube
-            {
-                Archivos = archivos.Count,
-                YaEnSinube = enSinube,
-                EnSinube = archivos.Count(a => enSinube.Contains(uuids[a])),
-                EnviadosAntes = archivos.Count(a => !enSinube.Contains(uuids[a]) && enviados.Contains(uuids[a])),
-                PorSubir = archivos.Where(a => !enSinube.Contains(uuids[a]) && !enviados.Contains(uuids[a])).ToList()
-            };
+            Revision = await ConsultarRevisionAsync(empresa, Config, Clientes, periodo);
         }
         catch (Exception ex)
         {
@@ -635,23 +662,66 @@
         }
     }
 
-    /// <summary>Los XML de la bóveda se llaman {UUID}.xml; si no, se lee del timbre.</summary>
-    private static string UuidDeArchivo(string archivo)
+    private async Task<RevisionSinube> ConsultarRevisionAsync(EmpresaDto empresa, SinubeConfiguracionDto config, bool clientes, DateTime periodo)
+    {
+        List<string> archivos = Sinube.Archivos(empresa, clientes, periodo);
+        HashSet<string> enSinube = await DatosSinube.UuidsEnSinubeAsync(config, clientes, [periodo]);
+        HashSet<string> enviados = Reenviar ? [] : Sinube.UuidsEnviados(empresa, clientes);
+        Dictionary<string, (string Uuid, string Tipo)> datos = await Task.Run(() => archivos.ToDictionary(a => a, DatosDeArchivo));
+
+        // SINUBE no importa nómina: en clientes se cuenta aparte y no queda por subir.
+        bool EsNomina(string a) => clientes && datos[a].Tipo == "N";
+        List<string> facturas = archivos.Where(a => !EsNomina(a)).ToList();
+
+        return new RevisionSinube
+        {
+            Archivos = archivos.Count,
+            YaEnSinube = enSinube,
+            Nomina = archivos.Count - facturas.Count,
+            EnSinube = facturas.Count(a => enSinube.Contains(datos[a].Uuid)),
+            EnviadosAntes = facturas.Count(a => !enSinube.Contains(datos[a].Uuid) && enviados.Contains(datos[a].Uuid)),
+            PorSubir = facturas.Where(a => !enSinube.Contains(datos[a].Uuid) && !enviados.Contains(datos[a].Uuid)).ToList()
+        };
+    }
+
+    /// <summary>
+    /// UUID y TipoDeComprobante del XML, leídos en streaming (el atributo está en la raíz y el timbre al final).
+    /// Los XML de la bóveda se llaman {UUID}.xml: entonces basta con la raíz.
+    /// </summary>
+    private static (string Uuid, string Tipo) DatosDeArchivo(string archivo)
     {
         string nombre = Path.GetFileNameWithoutExtension(archivo);
-
-        if (Guid.TryParse(nombre, out _))
-            return nombre;
+        bool nombreEsUuid = Guid.TryParse(nombre, out _);
+        string tipo = "";
 
         try
         {
-            return System.Xml.Linq.XDocument.Load(archivo).Descendants()
-                .FirstOrDefault(e => e.Name.LocalName == "TimbreFiscalDigital")?.Attribute("UUID")?.Value ?? nombre;
+            using var lector = System.Xml.XmlReader.Create(archivo);
+
+            while (lector.Read())
+            {
+                if (lector.NodeType != System.Xml.XmlNodeType.Element)
+                    continue;
+
+                if (lector.LocalName == "Comprobante")
+                {
+                    tipo = (lector.GetAttribute("TipoDeComprobante") ?? "").ToUpperInvariant();
+
+                    if (nombreEsUuid)
+                        break;
+                }
+                else if (lector.LocalName == "TimbreFiscalDigital")
+                {
+                    return (lector.GetAttribute("UUID") ?? nombre, tipo);
+                }
+            }
         }
         catch (Exception)
         {
-            return nombre;
+            // Un XML ilegible se queda con el nombre; el envío lo marcará como inválido.
         }
+
+        return (nombre, tipo);
     }
 
     private void CambiarTab(string tab)
@@ -724,6 +794,7 @@
         Enviando = true;
         Cancelacion = new CancellationTokenSource();
         bool clientes = Clientes;
+        bool terminado = false;
 
         try
         {
@@ -744,6 +815,8 @@
                 Cancelacion.Token,
                 sinFolio,
                 yaEnSinube));
+
+            terminado = true;
         }
         catch (OperationCanceledException)
         {
@@ -758,6 +831,31 @@
             Enviando = false;
             Cancelacion?.Dispose();
             Cancelacion = null;
+            await InvokeAsync(StateHasChanged);
+        }
+
+        if (terminado)
+            await RevisarAlTerminarAsync(empresa, Config, clientes, periodo);
+    }
+
+    /// <summary>Vuelve a consultar SINUBE para ver cómo quedó el periodo; los resultados del envío se conservan.</summary>
+    private async Task RevisarAlTerminarAsync(EmpresaDto empresa, SinubeConfiguracionDto config, bool clientes, DateTime periodo)
+    {
+        Revision = null;
+        RevisandoFinal = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            Revision = await ConsultarRevisionAsync(empresa, config, clientes, periodo);
+        }
+        catch (Exception ex)
+        {
+            Error = $"Se envió, pero no se pudo volver a consultar SINUBE: {ex.Message}";
+        }
+        finally
+        {
+            RevisandoFinal = false;
             await InvokeAsync(StateHasChanged);
         }
     }
@@ -797,7 +895,7 @@
     {
         "OK" => "ok",
         "EXISTE" => "exists",
-        "OMITIDO" => "skipped",
+        "OMITIDO" or "NOMINA" => "skipped",
         "IEPS" => "warn",
         _ => "error"
     };

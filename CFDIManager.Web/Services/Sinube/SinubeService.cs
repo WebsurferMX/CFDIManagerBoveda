@@ -368,6 +368,14 @@ public class SinubeService
                 if (string.IsNullOrEmpty(envio.Uuid))
                     envio.Uuid = Path.GetFileNameWithoutExtension(archivo).ToUpperInvariant();
 
+                if (clientes && envio.TipoComprobante == "N")
+                {
+                    envio.Estatus = "NOMINA";
+                    envio.Mensaje = "Recibo de nómina: SINUBE no lo importa.";
+                    await progreso(envio, i + 1, archivos.Count);
+                    continue;
+                }
+
                 if (tiposComprobante is not null && !tiposComprobante.Contains(envio.TipoComprobante))
                 {
                     envio.Estatus = "OMITIDO";
@@ -503,8 +511,20 @@ public class SinubeService
                 throw new CfdiInvalidoException("El CFDI no está timbrado.");
         }
 
-        if (Hijo(complemento, "Nomina") is not null)
-            throw new CfdiInvalidoException("Este CFDI es de un recibo de nómina. No se puede importar.");
+        // SINUBE no importa nómina: se identifica para omitirla en vez de contarla como inválida.
+        if (Hijo(complemento, "Nomina") is not null || Atributo(comprobante, "TipoDeComprobante") == "N")
+        {
+            return new SinubeEnvioDto
+            {
+                Uuid = Uuid(comprobante),
+                Serie = Atributo(comprobante, "Serie"),
+                Folio = Atributo(comprobante, "Folio"),
+                Rfc = Atributo(receptor, "Rfc"),
+                Nombre = Atributo(receptor, "Nombre"),
+                TipoComprobante = "N",
+                FechaCfdi = fecha
+            };
+        }
 
         if (!configuracion.Empresa.StartsWith(rfcEmisor, StringComparison.OrdinalIgnoreCase))
             throw new CfdiInvalidoException("El RFC del archivo no coincide con el configurado en Herramientas → Acceso a SINUBE.");

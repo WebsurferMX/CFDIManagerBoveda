@@ -26,6 +26,12 @@ public class SatMetadatoDto
     public DateTime? FechaCancelacion { get; set; }
 }
 
+/// <summary>Recibido cancelado en los metadatos del SAT y si su XML ya está en la bóveda.</summary>
+public class CanceladoSatDto : SatMetadatoDto
+{
+    public bool EnBoveda { get; set; }
+}
+
 /// <summary>Resultado del cierre de mes de una empresa (metadatos + descarga de XML faltantes).</summary>
 public class SatCierreDto
 {

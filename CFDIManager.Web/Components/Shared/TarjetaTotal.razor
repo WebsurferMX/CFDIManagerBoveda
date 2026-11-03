@@ -1,15 +1,15 @@
-@* Tarjeta de un total (Bootstrap): ícono, título, valor y detalle opcional. *@
+@* Tarjeta de un total (Bootstrap): ícono, título, valor y detalle opcional, con degradado del color. *@
 
 <div class="@Ancho">
-    <div class="card h-100 border-@Color-subtle shadow-sm">
-        <div class="card-body py-2 d-flex align-items-center gap-3">
-            <div class="rounded-3 bg-@Color-subtle text-@Color-emphasis d-flex align-items-center justify-content-center"
-                 style="width: 2.5rem; height: 2.5rem">
-                <i class="bi @Icono fs-5"></i>
+    <div class="card h-100 border-@Color-subtle bg-@Color-subtle bg-gradient shadow-sm">
+        <div class="card-body py-2 px-3 d-flex align-items-center gap-2">
+            <div class="rounded-circle bg-body text-@Color-emphasis border border-@Color-subtle d-flex align-items-center justify-content-center flex-shrink-0"
+                 style="width: 2rem; height: 2rem">
+                <i class="bi @Icono"></i>
             </div>
             <div class="min-w-0">
-                <div class="small text-body-secondary">@Titulo</div>
-                <div class="fs-5 fw-semibold text-@Color-emphasis">@Valor</div>
+                <div class="small text-@Color-emphasis text-uppercase fw-semibold lh-sm" style="font-size: .68rem">@Titulo</div>
+                <div class="fw-bold text-@Color-emphasis lh-sm">@Valor</div>
                 @if (!string.IsNullOrEmpty(Detalle))
                 {
                     <div class="small text-body-secondary text-truncate" title="@Detalle">@Detalle</div>

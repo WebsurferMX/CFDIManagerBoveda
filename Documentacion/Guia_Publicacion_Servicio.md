@@ -23,7 +23,8 @@ Los scripts están en `herramientas\` dentro del repositorio.
 
 1. Trae el código que vas a publicar (`git pull`) o termina tus cambios. Lo que se publica es lo que hay en la carpeta,
    esté o no en GitHub.
-2. Desde la carpeta del proyecto, en PowerShell (no hace falta abrirla como administrador):
+2. Desde la carpeta raíz del proyecto (`Desktop\CFDIManagerBoveda`, la que contiene `herramientas`; no desde
+   `CFDIManager.Web`), en PowerShell (no hace falta abrirla como administrador):
 
    ```powershell
    pwsh -File .\herramientas\Actualizar-Servicio.ps1

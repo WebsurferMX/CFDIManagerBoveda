@@ -1,0 +1,53 @@
+/* Las tablas son anchas: que hagan scroll dentro de su tarjeta en vez de ensanchar la página. */
+.recuperar-page,
+.recuperar-page > .card {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.eyebrow {
+    color: #0891b2;
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .12em;
+}
+
+.tabla-contenedor {
+    max-height: calc(100vh - 24rem);
+    min-height: 220px;
+}
+
+.carga {
+    max-height: 14rem;
+}
+
+.tabla {
+    font-size: .8rem;
+}
+
+.tabla thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.tabla td {
+    white-space: nowrap;
+}
+
+.tabla .emisor,
+.tabla .archivo {
+    max-width: 280px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+html[data-theme="dark"] .eyebrow {
+    color: #a0e6f7;
+}

@@ -37,6 +37,7 @@ public static class Tareas
         new("efos", "EFOS / EDOS", "Consulta", "bi-shield-exclamation", "efos", Todos, CoincidenciaExacta: true),
         new("xml-azulejeras", "XML Azulejeras (Clientes)","Utilerías", "bi-file-earmark-zip-fill", "utilerias/xmlazulejeras", Todos),
         new("descargas-sat", "Descargas SAT", "Operación", "bi-cloud-arrow-down-fill", "sat-descargas", Operativos),
+        new("recuperar-cancelados", "Recuperar cancelados", "Operación", "bi-file-earmark-x-fill", "recuperar-cancelados", Operativos),
         new("empresas", "Empresas", "Configuración", "bi-building", "configuracion/empresas", [Roles.Administrador, Roles.Supervisor]),
         new("usuarios", "Usuarios", "Configuración", "bi-people-fill", "configuracion/usuarios", [Roles.Administrador]),
         new("correo", "Correo", "Configuración", "bi-envelope-at-fill", "configuracion/correo", [Roles.Administrador]),
