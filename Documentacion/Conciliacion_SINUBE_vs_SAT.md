@@ -107,7 +107,7 @@ El SAT no entrega el XML de un recibido ya cancelado, así que hay que descargar
 
 | Capa | Qué hace | Configuración (`appsettings.json`, sección `DescargaAutomaticaSat`) |
 |---|---|---|
-| Horarios + ventana móvil | En cada horario pide XML emitidos y recibidos de los últimos días hasta ese momento (atrapa lo que el SAT publica con retraso). Una vez por horario; sobrevive reinicios (se busca en las solicitudes con `Origen = "Ventana"`). | `Horarios` ("07:00,21:00"), `VentanaDias` (3) |
+| Horarios + ventana móvil | En cada horario pide XML emitidos y recibidos de los últimos días hasta ese momento (atrapa lo que el SAT publica con retraso). Una vez por horario; sobrevive reinicios (se busca en las solicitudes con `Origen = "Ventana"`). | `Horarios` ("07:00,10:00,13:00,16:00,19:00,22:00" desde el 2/11/2026; antes "07:00,21:00"), `VentanaDias` (3) |
 | Solo lo nuevo | Las descargas automáticas omiten sin abrir los UUID que ya están en la bóveda (`DescargarAsync(..., soloNuevos: true)`, un solo query, sin distinguir mayúsculas). | — |
 | Cierre de mes | Días 1 a N: metadatos del mes anterior, descarga de XML faltantes y registro en `sat_cierres`; aviso por correo a los administradores. También manual en Descargas SAT → Cierre de mes. | `DiasCierre` (3) |
 | Interruptor | Apaga el servicio en una instancia (p. ej. una segunda que comparte la base). | `Habilitada` (true) |

@@ -120,7 +120,16 @@
     private string? Mensaje;
 
     private int DiasCierre => Configuracion.GetValue("DescargaAutomaticaSat:DiasCierre", 3);
-    private string Horarios => (Configuracion["DescargaAutomaticaSat:Horarios"] ?? "07:00,21:00").Replace(",", " y ");
+    // "07:00, 10:00 y 13:00"
+    private string Horarios
+    {
+        get
+        {
+            string[] h = (Configuracion["DescargaAutomaticaSat:Horarios"] ?? "07:00,21:00")
+                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+            return h.Length <= 1 ? string.Join("", h) : string.Join(", ", h[..^1]) + " y " + h[^1];
+        }
+    }
 
     private bool EnCurso => EmpresaContext.TieneEmpresaActiva && Cierres.EnCurso.ContainsKey(EmpresaContext.EmpresaId);
     private string Avance => Cierres.EnCurso.TryGetValue(EmpresaContext.EmpresaId, out string? a) ? a : "";
