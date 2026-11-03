@@ -648,7 +648,7 @@
         /// </summary>
         public List<string> YaExistenSinConfirmar { get; init; } = [];
 
-        /// <summary>Pagos de clientes en SINUBE (DbDeposito) por "SERIE|FOLIO" → UUID, para el envío.</summary>
+        /// <summary>Pagos de clientes en SINUBE (DbRecepcionPagosXML) por "SERIE|FOLIO" → UUID, para el envío.</summary>
         public Dictionary<string, string>? PagosEnSinube { get; init; }
 
         public List<string> PorSubir { get; init; } = [];
@@ -762,7 +762,7 @@
         bool EsNomina(string a) => clientes && datos[a].Tipo == "N";
         List<string> facturas = archivos.Where(a => !EsNomina(a)).ToList();
 
-        // Los pagos de clientes viven en DbDeposito y SINUBE valida su serie-folio, no el UUID.
+        // Los pagos de clientes viven en DbRecepcionPagosXML y SINUBE valida su serie-folio, no el UUID.
         List<string> pagos = clientes ? facturas.Where(a => datos[a].Tipo == "P").ToList() : [];
         Dictionary<string, string>? pagosEnSinube = pagos.Count > 0
             ? await PagosEnSinubeAsync(config, pagos.Select(a => datos[a].Serie))
@@ -770,8 +770,7 @@
 
         if (pagosEnSinube is not null)
         {
-            // Los pagos ya importados quedan en DbDeposito sin serie ni folio: se reconocen por UUID, en los depósitos
-            // del mes anterior al siguiente (el mes del depósito es el de la fecha de pago).
+            // Por UUID, del mes anterior al siguiente (en DbDeposito el mes es el de la fecha de pago).
             enSinube.UnionWith(pagosEnSinube.Values);
             enSinube.UnionWith(await DatosSinube.UuidsDepositosAsync(config, [periodo.AddMonths(-1), periodo, periodo.AddMonths(1)]));
         }

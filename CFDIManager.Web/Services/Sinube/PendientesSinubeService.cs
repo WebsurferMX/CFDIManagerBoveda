@@ -67,7 +67,7 @@ public class PendientesSinubeService(PostgreSqlRepository repo, SinubeService si
                 {
                     HashSet<string> enSinube = await datos.UuidsEnSinubeAsync(config, clientes, [desde], cancelacion);
 
-                    // Los pagos de clientes viven en DbDeposito; el mes del depósito es el de la fecha de pago.
+                    // Los pagos de clientes viven en DbRecepcionPagosXML (y a veces DbDeposito, por mes de pago).
                     if (clientes && xml.Any(x => x.Tipo == "P"))
                         enSinube.UnionWith(await datos.UuidsDepositosAsync(config, [desde.AddMonths(-1), desde, desde.AddMonths(1)], cancelacion));
 

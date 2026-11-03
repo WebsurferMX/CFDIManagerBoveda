@@ -72,8 +72,9 @@ public class SinubeDatosService(SinubeService sinube, IHttpClientFactory http)
     }
 
     /// <summary>
-    /// UUID de los depósitos (pagos de clientes) de esos meses. Los complementos de pago importados quedan en
-    /// DbDeposito sin serie y con folio 0: solo se reconocen por UUID. El mes es el del depósito (fecha de pago).
+    /// UUID de los complementos de pago de clientes de esos meses. SINUBE guarda cada XML de pago en
+    /// DbRecepcionPagosXML ("Consulta de CFDI Complemento Recepción Pago", mes de emisión) con la serie con la que se
+    /// subió; los depósitos (DbDeposito, mes de pago) casi nunca traen el UUID. Se juntan ambos.
     /// </summary>
     public async Task<HashSet<string>> UuidsDepositosAsync(
         SinubeConfiguracionDto configuracion, IEnumerable<DateTime> meses, CancellationToken cancelacion = default)
@@ -83,13 +84,16 @@ public class SinubeDatosService(SinubeService sinube, IHttpClientFactory http)
 
         foreach (int periodo in meses.Select(m => m.Year * 100 + m.Month).Distinct())
         {
-            List<FilaSinube> filas = await ConsultarAsync(
-                configuracion, $"SELECT uuid FROM DbDeposito WHERE empresa = '{empresa}' AND mes = {periodo}", cancelacion);
-
-            foreach (FilaSinube fila in filas)
+            foreach (string entidad in new[] { "DbRecepcionPagosXML", "DbDeposito" })
             {
-                if (fila.Texto("uuid") is { Length: > 0 } uuid)
-                    uuids.Add(uuid.Trim());
+                List<FilaSinube> filas = await ConsultarAsync(
+                    configuracion, $"SELECT uuid FROM {entidad} WHERE empresa = '{empresa}' AND mes = {periodo}", cancelacion);
+
+                foreach (FilaSinube fila in filas)
+                {
+                    if (fila.Texto("uuid") is { Length: > 0 } uuid)
+                        uuids.Add(uuid.Trim());
+                }
             }
         }
 
@@ -97,7 +101,7 @@ public class SinubeDatosService(SinubeService sinube, IHttpClientFactory http)
     }
 
     /// <summary>
-    /// Complementos de pago de clientes que SINUBE ya tiene (DbDeposito) con esas series, de cualquier mes.
+    /// Complementos de pago de clientes que SINUBE ya tiene (DbRecepcionPagosXML) con esas series, de cualquier mes.
     /// SINUBE rechaza un pago cuyo serie-folio ya ocupa otro, aunque el UUID sea distinto.
     /// </summary>
     public async Task<List<PagoSinube>> PagosClientesAsync(
@@ -109,12 +113,12 @@ public class SinubeDatosService(SinubeService sinube, IHttpClientFactory http)
         foreach (string serie in series.Select(s => s.Trim().ToUpperInvariant()).Where(s => s != "").Distinct())
         {
             List<FilaSinube> filas = await ConsultarAsync(configuracion,
-                $"SELECT uuid, serieComplementoPago, folioComplementoPago FROM DbDeposito " +
-                $"WHERE empresa = '{empresa}' AND serieComplementoPago = '{serie.Replace("'", "")}'", cancelacion);
+                $"SELECT uuid, serieRecepcionPago, folioRecepcionPago FROM DbRecepcionPagosXML " +
+                $"WHERE empresa = '{empresa}' AND serieRecepcionPago = '{serie.Replace("'", "")}'", cancelacion);
 
             foreach (FilaSinube fila in filas)
             {
-                if (fila.Entero("folioComplementoPago") is long folio)
+                if (fila.Entero("folioRecepcionPago") is long folio)
                     pagos.Add(new PagoSinube((fila.Texto("uuid") ?? "").Trim().ToUpperInvariant(), serie, folio));
             }
         }
@@ -214,7 +218,7 @@ public class SinubeDatosService(SinubeService sinube, IHttpClientFactory http)
     private static string Escapar(string? valor) => (valor ?? "").Replace("&", "%26");
 }
 
-/// <summary>Complemento de pago registrado en SINUBE (DbDeposito).</summary>
+/// <summary>Complemento de pago registrado en SINUBE (DbRecepcionPagosXML).</summary>
 public sealed record PagoSinube(string Uuid, string Serie, long Folio)
 {
     public string Llave => SerieFolio(Serie, Folio.ToString());

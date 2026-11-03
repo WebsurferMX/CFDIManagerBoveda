@@ -67,7 +67,8 @@ public class ConciliacionSinubeService(
     // Nombres de campo de cada entidad de SINUBE (difieren en mayúsculas y prefijos).
     private sealed record Entidad(
         string Nombre, string Clasificacion, string Uuid, string Rfc, string RazonSocial, string Fecha,
-        string Serie, string Folio, string? PolizaCancelada, string? CanceladaPac);
+        string Serie, string Folio, string? PolizaCancelada, string? CanceladaPac,
+        string Total = "importeTotal", bool ConPoliza = true);
 
     private static readonly Entidad Proveedores = new(
         "DbFacturaProveedorDeXML", "RECIBIDO", "UUID", "rfcProveedor", "razonSocialProveedor", "fechaFacturaXml",
@@ -77,6 +78,13 @@ public class ConciliacionSinubeService(
         "DbFactura", "EMITIDO", "uuid", Rfc: "", "razonSocial", "fechaFactura",
         "serieFactura", "folioFactura", PolizaCancelada: null, CanceladaPac: "canceladaPAC");
 
+    // Complementos de pago de clientes ("Consulta de CFDI Complemento Recepción Pago"): la serie es con la que se
+    // subió (p. ej. COMFR) y la póliza va en el depósito, no aquí.
+    private static readonly Entidad PagosClientes = new(
+        "DbRecepcionPagosXML", "EMITIDO", "uuid", Rfc: "", "razonSocial", "fechaRecepcionPago",
+        "serieRecepcionPago", "folioRecepcionPago", PolizaCancelada: null, CanceladaPac: null,
+        Total: "monto", ConPoliza: false);
+
     // Diferencia de total que se tolera por redondeo.
     private const decimal ToleranciaTotal = 0.01m;
 
@@ -85,6 +93,7 @@ public class ConciliacionSinubeService(
         public SatMetadatoDto? Sat;
         public CfdiConciliacionDto? Boveda;
         public FilaSinube? Sinube;
+        public Entidad? EntidadSinube;
     }
 
     public async Task<ResultadoConciliacion> ConciliarAsync(
@@ -96,25 +105,31 @@ public class ConciliacionSinubeService(
         SinubeConfiguracionDto configuracion = sinube.ObtenerConfiguracion(empresa);
         long periodo = anio * 100L + mes;
 
-        string campos = string.Join(", ", new[]
+        // SINUBE clasifica en "mes" por la fecha del comprobante; SAT y bóveda filtran por fecha de emisión.
+        string Consulta(Entidad x)
         {
-            e.Uuid, e.Rfc, e.RazonSocial, e.Fecha, "importeTotal", e.Serie, e.Folio, "statusValidadoSAT",
-            "tienePoliza", "tipoPoliza", "numPoliza", "mesPoliza", e.PolizaCancelada ?? "", e.CanceladaPac ?? ""
-        }.Where(c => c.Length > 0));
+            string campos = string.Join(", ", new[]
+            {
+                x.Uuid, x.Rfc, x.RazonSocial, x.Fecha, x.Total, x.Serie, x.Folio, "statusValidadoSAT",
+                x.ConPoliza ? "tienePoliza, tipoPoliza, numPoliza, mesPoliza" : "", x.PolizaCancelada ?? "", x.CanceladaPac ?? ""
+            }.Where(c => c.Length > 0));
 
-        // SINUBE clasifica en "mes" por la fecha de la factura; SAT y bóveda filtran por fecha de emisión.
-        string consulta =
-            $"SELECT {campos} FROM {e.Nombre} " +
-            $"WHERE empresa = '{configuracion.Empresa.Replace("'", "")}' AND mes = {periodo}";
+            return $"SELECT {campos} FROM {x.Nombre} " +
+                   $"WHERE empresa = '{configuracion.Empresa.Replace("'", "")}' AND mes = {periodo}";
+        }
+
+        // Clientes: facturas y notas (DbFactura) y complementos de pago (DbRecepcionPagosXML).
+        Entidad[] entidades = tipo == TipoConciliacion.Clientes ? [e, PagosClientes] : [e];
 
         // SINUBE (la parte lenta, por red) corre mientras se leen la bóveda y los metadatos del SAT.
-        Task<List<FilaSinube>> tareaSinube = datos.ConsultarAsync(configuracion, consulta, cancelacion);
+        Task<List<FilaSinube>[]> tareaSinube = Task.WhenAll(
+            entidades.Select(x => datos.ConsultarAsync(configuracion, Consulta(x), cancelacion)));
 
         var desde = new DateTime(anio, mes, 1);
         List<CfdiConciliacionDto> deBoveda = repo.ObtenerCfdiConciliacion(empresa.EmpresaId, e.Clasificacion, desde, desde.AddMonths(1));
         (SatMetadatosPeriodoDto? periodoSat, List<SatMetadatoDto> deSat) = await metadatosSat.ObtenerAsync(empresa, recibidos, anio, mes);
 
-        List<FilaSinube> deSinube = await tareaSinube;
+        List<FilaSinube>[] deSinube = await tareaSinube;
         bool conSat = periodoSat is not null;
 
         var porUuid = new Dictionary<string, Fuentes>(StringComparer.OrdinalIgnoreCase);
@@ -126,11 +141,17 @@ public class ConciliacionSinubeService(
         foreach (CfdiConciliacionDto c in deBoveda)
             De(c.Uuid.Trim()).Boveda = c;
 
-        foreach (FilaSinube f in deSinube)
+        for (int i = 0; i < entidades.Length; i++)
         {
-            // Las facturas sin timbrar no tienen UUID y no existen en el SAT.
-            if (f.Texto(e.Uuid) is { Length: > 0 } uuid)
-                De(uuid.Trim()).Sinube ??= f;
+            foreach (FilaSinube f in deSinube[i])
+            {
+                // Las facturas sin timbrar no tienen UUID y no existen en el SAT.
+                if (f.Texto(entidades[i].Uuid) is { Length: > 0 } uuid && De(uuid.Trim()) is { Sinube: null } fuentes)
+                {
+                    fuentes.Sinube = f;
+                    fuentes.EntidadSinube = entidades[i];
+                }
+            }
         }
 
         // SINUBE lleva la nómina en otra entidad (DbNominaFactura): en clientes es solo informativa.
@@ -154,18 +175,19 @@ public class ConciliacionSinubeService(
             tipo, configuracion.Empresa, anio, mes, DateTime.Now, filas, nominas, periodoSat, reloj.Elapsed);
     }
 
-    private static ConciliacionFilaDto CrearFila(Entidad e, bool recibidos, bool conSat, Fuentes f, long periodo)
+    private static ConciliacionFilaDto CrearFila(Entidad principal, bool recibidos, bool conSat, Fuentes f, long periodo)
     {
         SatMetadatoDto? sat = f.Sat;
         CfdiConciliacionDto? b = f.Boveda;
         FilaSinube? s = f.Sinube;
+        Entidad e = f.EntidadSinube ?? principal;
 
         bool existeSat = conSat ? sat is not null : b is not null;
         string estatusSat = sat is not null ? sat.Estatus : b is not null ? NormalizarEstatus(b.EstadoSat) : "";
         string estatusSinube = s is null ? "" : EstatusSinube(e, s);
         bool poliza = s is not null && s.Booleano("tienePoliza") && !(e.PolizaCancelada is string pc && s.Booleano(pc));
         long? mesPoliza = poliza ? s!.Entero("mesPoliza") : null;
-        decimal? totalSinube = s?.Decimal("importeTotal");
+        decimal? totalSinube = s?.Decimal(e.Total);
         decimal? totalSat = sat?.Monto ?? b?.Total;
 
         var diferencias = new List<string>();
@@ -231,6 +253,9 @@ public class ConciliacionSinubeService(
     /// </summary>
     private static string EstatusSinube(Entidad e, FilaSinube s) => s.Entero("statusValidadoSAT") switch
     {
+        // En los complementos de pago el código es de dos dígitos: 1x vigente, 2x cancelado.
+        >= 10 and < 20 when !e.ConPoliza => "Vigente",
+        >= 20 and < 30 when !e.ConPoliza => "Cancelado",
         0 => "Cancelado",
         1 => "Vigente",
         2 => "No encontrado",

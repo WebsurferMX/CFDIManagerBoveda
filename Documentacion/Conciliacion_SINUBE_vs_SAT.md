@@ -63,6 +63,15 @@ Escapes: `&PipeSiNube;` `|`, `&EnterSiNube;` salto de línea, `&SeparadorSiNube;
 - Las facturas sin `uuid` (sin timbrar) se ignoran.
 - Octubre 2026, AAL090714841: 2,474 de 2,474 facturas de SINUBE coinciden con la bóveda (incluye 757 notas de crédito).
 
+**`DbRecepcionPagosXML`** (complementos de pago de clientes; portal: "Consulta de CFDI Complemento Recepción Pago"),
+también en modo **Clientes**: `uuid`, `razonSocial`, `fechaRecepcionPago`, `dia`, `mes` (de emisión), `monto`,
+`serieRecepcionPago`, `folioRecepcionPago`, `statusValidadoSAT`, `folioDeposito`, `xml`.
+
+- La serie es **con la que se subió** (p. ej. COMFR o SSFR cuando el folio original estaba ocupado), no la del XML.
+- `statusValidadoSAT` es de dos dígitos: 1x vigente, 2x cancelado (vacío: sin validar). No trae póliza (va en el depósito).
+- `DbDeposito` es el depósito bancario: los capturados a mano no traen `uuid` ni serie/folio del complemento.
+- Octubre 2026: BTM 292/292, ODI120704BW1 134/134, PZA 35/35 y PLI 246/246 pagos de la bóveda coinciden por UUID.
+
 ## Lado SAT: metadatos de la descarga masiva (3 vías)
 
 La conciliación cruza tres fuentes por UUID: **SAT** (existencia y estatus oficiales), **bóveda** (XML local) y

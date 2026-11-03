@@ -406,7 +406,7 @@ public class SinubeService
 
                 // Clientes (facturas, notas y pagos): SINUBE valida el serie-folio, no el UUID. Si otro comprobante ya
                 // ocupa ese folio se intenta con las series alternas de la empresa (Herramientas), en orden; el XML de la
-                // bóveda no se modifica. Los folios de pagos ocupados conocidos (DbDeposito) se saltan; los demás se
+                // bóveda no se modifica. Los folios de pagos ocupados conocidos (DbRecepcionPagosXML) se saltan; los demás se
                 // descubren por la respuesta de SINUBE.
                 List<string>? seriesIntento = null;
 
