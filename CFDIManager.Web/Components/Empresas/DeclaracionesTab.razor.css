@@ -1,8 +1,32 @@
 .declaraciones {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.9rem;
 }
+
+.dc-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid #dbe3ef;
+    border-top: 3px solid #1d4ed8;
+    border-radius: 0.6rem;
+    background: #fff;
+}
+
+.dc-card.diot { border-top-color: #7c3aed; }
+
+.dc-card-titulo {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: #0f172a;
+    font-weight: 750;
+}
+
+.dc-card-titulo .bi { color: #1d4ed8; }
+.dc-card.diot .dc-card-titulo .bi { color: #7c3aed; }
 
 .dc-barra {
     display: flex;
@@ -52,6 +76,7 @@
 .dc-mes.pendiente { border-color: #fde68a; background: #fef3c7; color: #92400e; }
 .dc-mes.futuro { border-color: #e2e8f0; background: #f8fafc; color: #94a3b8; }
 .dc-mes.anual { border-style: dashed; }
+.dc-meses.doce { grid-template-columns: repeat(12, minmax(0, 1fr)); }
 
 .dc-tabla {
     width: 100%;
@@ -133,12 +158,18 @@
 .dc-captcha-texto { max-width: 170px; text-transform: uppercase; }
 
 @media (max-width: 720px) {
-    .dc-meses { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+    .dc-meses,
+    .dc-meses.doce { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 
 /* ===== MODO OSCURO ===== */
 
-html[data-theme="dark"] .dc-titulo { color: #e8ecf7; }
+html[data-theme="dark"] .dc-titulo,
+html[data-theme="dark"] .dc-card-titulo { color: #e8ecf7; }
+html[data-theme="dark"] .dc-card { border-color: #2a3b52; border-top-color: #4f7bea; background: #0f1a28; }
+html[data-theme="dark"] .dc-card.diot { border-top-color: #a78bfa; }
+html[data-theme="dark"] .dc-card-titulo .bi { color: #88a3ef; }
+html[data-theme="dark"] .dc-card.diot .dc-card-titulo .bi { color: #c4b5fd; }
 
 html[data-theme="dark"] .dc-barra > label:not(.btn),
 html[data-theme="dark"] .dc-ayuda,

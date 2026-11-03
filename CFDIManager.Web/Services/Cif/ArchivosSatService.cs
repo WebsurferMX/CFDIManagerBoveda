@@ -26,13 +26,29 @@ public sealed class OpinionCumplimientoDto
     public string ArchivoOriginal { get; set; } = "";
 }
 
-/// <summary>Acuse de declaración (mensual o anual) guardado por la empresa.</summary>
+/// <summary>Acuse de declaración (mensual, anual o DIOT) guardado por la empresa.</summary>
 public sealed class DeclaracionSatDto
 {
     public string Id { get; set; } = "";
 
-    /// <summary>MENSUAL o ANUAL.</summary>
+    /// <summary>MENSUAL, ANUAL o DIOT (declaración informativa de operaciones con terceros, mensual).</summary>
     public string Tipo { get; set; } = "MENSUAL";
+
+    /// <summary>Folio de recepción del acuse (DIOT del aplicativo anterior; la plataforma nueva solo trae número de operación).</summary>
+    public string Folio { get; set; } = "";
+
+    /// <summary>DIOT: Mensual, medio de presentación (Internet) y versión del acuse.</summary>
+    public string Periodicidad { get; set; } = "";
+
+    public string Medio { get; set; } = "";
+
+    public string Version { get; set; } = "";
+
+    /// <summary>DIOT: total de operaciones que relaciona.</summary>
+    public int? Operaciones { get; set; }
+
+    /// <summary>DIOT: total del IVA pagado sin incluir importaciones.</summary>
+    public decimal? IvaPagado { get; set; }
 
     public int Ejercicio { get; set; }
 
@@ -205,12 +221,21 @@ public sealed class ArchivosSatService
         if (rfcPdf != "" && !string.IsNullOrWhiteSpace(rfcEmpresa) && !rfcPdf.Equals(rfcEmpresa.Trim(), StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"El acuse es del RFC {rfcPdf}, no de la empresa ({rfcEmpresa.Trim().ToUpperInvariant()}).");
 
-        tipo = tipo.ToUpperInvariant() == "ANUAL" ? "ANUAL" : "MENSUAL";
+        // El acuse de la DIOT ("Declaración informativa de operaciones con terceros") se guarda como DIOT aunque en
+        // pantalla esté elegido Mensual; si se eligió DIOT, el PDF tiene que serlo.
+        bool esDiot = mayusculas.Contains("OPERACIONES CON TERCEROS");
+        tipo = tipo.ToUpperInvariant();
 
-        if (Regex.Match(mayusculas, @"EJERCICIO:?\s*(20\d{2})") is { Success: true } e)
+        if (validarContenido && tipo == "DIOT" && !esDiot)
+            throw new InvalidOperationException("El PDF no es un acuse de la DIOT (declaración informativa de operaciones con terceros).");
+
+        tipo = esDiot ? "DIOT" : tipo == "ANUAL" ? "ANUAL" : "MENSUAL";
+
+        if (Regex.Match(mayusculas, @"EJERCICIO(?:\s+FISCAL)?:?\s*(20\d{2})") is { Success: true } e)
             ejercicio = int.Parse(e.Groups[1].Value, CultureInfo.InvariantCulture);
 
-        if (tipo == "MENSUAL" && Regex.Match(mayusculas, @"PERIODO:?\s*([A-Z]+)") is { Success: true } p && Mes(p.Groups[1].Value) is int mes)
+        // "Periodo: Junio" (DIOT anterior) o "Período de la declaración: Agosto" (DIOT nueva).
+        if (tipo != "ANUAL" && Regex.Match(mayusculas, @"PERIODO(?: DE LA DECLARACION)?:?\s*([A-Z]+)") is { Success: true } p && Mes(p.Groups[1].Value) is int mes)
             periodo = mes;
 
         var declaracion = new DeclaracionSatDto
@@ -227,12 +252,26 @@ public sealed class ArchivosSatService
             },
             NumeroOperacion = Regex.Match(mayusculas, @"(?:NUMERO|NO\.?) DE OPERACION:?\s*(\d{6,})").Groups[1].Value,
             FechaPresentacion = PrimeraFecha(texto),
-            ImporteAPagar = Importe(mayusculas),
+            ImporteAPagar = esDiot ? null : Importe(mayusculas),
             ArchivoOriginal = nombreArchivo,
             Cargada = DateTime.Now
         };
 
-        string nombre = tipo == "ANUAL" ? $"{ejercicio}-anual" : $"{ejercicio}-{declaracion.Periodo:00}";
+        if (esDiot)
+            LeerDiot(mayusculas, declaracion);
+
+        if (esDiot && declaracion.Folio != "" && ObtenerDeclaraciones(empresaId).Any(d => d.Tipo == "DIOT" && d.Folio == declaracion.Folio))
+            throw new InvalidOperationException($"El acuse de la DIOT con folio {declaracion.Folio} ya está cargado.");
+
+        if ((!esDiot || declaracion.Folio == "") && TieneOperacion(empresaId, declaracion.NumeroOperacion))
+            throw new InvalidOperationException($"El acuse con número de operación {declaracion.NumeroOperacion} ya está cargado.");
+
+        string nombre = tipo switch
+        {
+            "ANUAL" => $"{ejercicio}-anual",
+            "DIOT" => $"{ejercicio}-{declaracion.Periodo:00}-diot",
+            _ => $"{ejercicio}-{declaracion.Periodo:00}"
+        };
         declaracion.Archivo = $"{nombre}-{declaracion.Id}.pdf";
 
         string carpeta = Path.Combine(Carpeta(empresaId), "declaraciones");
@@ -244,6 +283,70 @@ public sealed class ArchivosSatService
         GuardarIndice(empresaId, lista);
 
         return declaracion;
+    }
+
+    /// <summary>
+    /// Datos del acuse de la DIOT: aplicativo anterior ("Periodo: Junio", "Folio de Recepción", número de operación
+    /// alfanumérico como 273FA) o plataforma nueva ("Período de la declaración: Agosto", "Fecha y hora de
+    /// presentación: 30/09/2026 12:15", periodicidad, medio, versión, operaciones e IVA pagado). Lo que no encuentra
+    /// lo deja como estaba.
+    /// </summary>
+    private static void LeerDiot(string mayusculas, DeclaracionSatDto d)
+    {
+        string Valor(string patron) => Regex.Match(mayusculas, patron).Groups[1].Value;
+
+        if (Valor(@"EJERCICIO(?:\s+FISCAL)?:?\s*(20\d{2})") is { Length: > 0 } ejercicio)
+            d.Ejercicio = int.Parse(ejercicio, CultureInfo.InvariantCulture);
+        if (Mes(Valor(@"PERIODO(?: DE LA DECLARACION)?:?\s*([A-Z]+)")) is int mes)
+            d.Periodo = mes;
+        if (Valor(@"(?:NUMERO|NO\.?) DE OPERACION:?\s*([0-9A-Z]{3,})") is { Length: > 0 } operacion)
+            d.NumeroOperacion = operacion;
+
+        // El primer dd/mm/aaaa del texto puede ser el encabezado de impresión del navegador: se toma el del campo.
+        Match f = Regex.Match(mayusculas, @"FECHA (?:Y HORA )?DE PRESENTACION:?\s*(\d{2}/\d{2}/20\d{2})(?:\s+(\d{1,2}:\d{2}))?");
+        if (f.Success && DateTime.TryParseExact(f.Groups[1].Value + (f.Groups[2].Success ? " " + f.Groups[2].Value : ""),
+                ["dd/MM/yyyy", "dd/MM/yyyy H:mm"], CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime fecha))
+            d.FechaPresentacion = fecha;
+
+        d.Folio = Valor(@"FOLIO DE RECEPCION:?\s*(\d{4,})");
+        d.Periodicidad = Titulo(Valor(@"PERIODICIDAD:?\s*([A-Z]+)"));
+        d.Medio = Titulo(Valor(@"MEDIO DE PRESENTACION:?\s*([A-Z]+)"));
+        d.Version = Valor(@"VERSION:?\s*(\d+)");
+        d.Operaciones = Valor(@"TOTAL DE OPERACIONES QUE RELACIONA\s+(\d+)") is { Length: > 0 } ops ? int.Parse(ops, CultureInfo.InvariantCulture) : null;
+        d.IvaPagado = Valor(@"SIN INCLUIR IMPORTACIONES(?:\s+VACIO)?\s+IVA PAGADO\s+\$?\s*([\d,]+(?:\.\d{1,2})?)") is { Length: > 0 } iva
+            ? decimal.Parse(iva.Replace(",", ""), CultureInfo.InvariantCulture)
+            : null;
+    }
+
+    private static string Titulo(string valor) => valor.Length == 0 ? "" : valor[..1] + valor[1..].ToLowerInvariant();
+
+    /// <summary>
+    /// Vuelve a leer los acuses de DIOT guardados antes de que la app reconociera el formato nuevo (sin
+    /// periodicidad): corrige periodo, fecha y hora, operaciones e IVA pagado con lo que trae su PDF.
+    /// </summary>
+    public void ReleerDiot(long empresaId)
+    {
+        List<DeclaracionSatDto> lista = ObtenerDeclaraciones(empresaId);
+        bool cambio = false;
+
+        foreach (DeclaracionSatDto d in lista.Where(d => d.Tipo == "DIOT" && d.Periodicidad == "" && d.Folio == ""))
+        {
+            if (RutaDeclaracion(empresaId, d.Id) is not string ruta)
+                continue;
+
+            try
+            {
+                LeerDiot(SinAcentos(Texto(File.ReadAllBytes(ruta))).ToUpperInvariant(), d);
+                cambio = true;
+            }
+            catch (InvalidOperationException)
+            {
+                // PDF ilegible: se queda como estaba.
+            }
+        }
+
+        if (cambio)
+            GuardarIndice(empresaId, lista);
     }
 
     public bool TieneOperacion(long empresaId, string numeroOperacion) =>

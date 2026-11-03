@@ -7,7 +7,7 @@
 @inject DescargaArchivosSatService Descarga
 @inject IJSRuntime JS
 
-@* Acuses de declaraciones mensuales y anuales de la empresa, por ejercicio. *@
+@* Acuses de la empresa por ejercicio: declaraciones mensuales y anual, y DIOT, cada una en su tarjeta. *@
 <div class="declaraciones">
 
     @if (EmpresaId <= 0)
@@ -16,6 +16,8 @@
     }
     else
     {
+        <section class="dc-card">
+        <div class="dc-card-titulo"><i class="bi bi-file-earmark-text"></i>Declaraciones mensuales y anual</div>
         <div class="dc-barra">
             <label>
                 Ejercicio
@@ -150,28 +152,20 @@
             <div class="alert alert-danger py-2 small mt-2 mb-0"><i class="bi bi-exclamation-triangle me-1"></i>@Error</div>
         }
 
-        <div class="dc-titulo">Declaraciones del ejercicio @Ejercicio</div>
         <div class="dc-meses">
             @for (int m = 1; m <= 12; m++)
             {
-                int mes = m;
-                List<DeclaracionSatDto> delMes = DelEjercicio.Where(d => d.Tipo == "MENSUAL" && d.Periodo == mes).ToList();
-
-                <div class="dc-mes @(delMes.Count > 0 ? "presentada" : FuturoOActual(mes) ? "futuro" : "pendiente")"
-                     title="@(delMes.Count > 0 ? $"{delMes.Count} acuse(s)" : "Sin acuse cargado")">
-                    <span>@Mx.DateTimeFormat.GetAbbreviatedMonthName(mes).TrimEnd('.').ToUpperInvariant()</span>
-                    <i class="bi @(delMes.Count > 0 ? "bi-check-circle-fill" : FuturoOActual(mes) ? "bi-dash-circle" : "bi-exclamation-circle")"></i>
-                </div>
+                @Mes(Declaraciones, Ejercicio, m, "acuse(s)")
             }
-            <div class="dc-mes anual @(DelEjercicio.Any(d => d.Tipo == "ANUAL") ? "presentada" : "pendiente")">
+            <div class="dc-mes anual @(Declaraciones.Any(d => d.Tipo == "ANUAL") ? "presentada" : "pendiente")">
                 <span>ANUAL</span>
-                <i class="bi @(DelEjercicio.Any(d => d.Tipo == "ANUAL") ? "bi-check-circle-fill" : "bi-exclamation-circle")"></i>
+                <i class="bi @(Declaraciones.Any(d => d.Tipo == "ANUAL") ? "bi-check-circle-fill" : "bi-exclamation-circle")"></i>
             </div>
         </div>
 
-        @if (DelEjercicio.Count == 0)
+        @if (Declaraciones.Count == 0)
         {
-            <p class="dc-vacio">Todavía no hay acuses guardados para este ejercicio.</p>
+            <p class="dc-vacio">Todavía no hay acuses guardados para el ejercicio @Ejercicio.</p>
         }
         else
         {
@@ -187,7 +181,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (DeclaracionSatDto d in DelEjercicio)
+                    @foreach (DeclaracionSatDto d in Declaraciones)
                     {
                         <tr>
                             <td><b>@(d.Tipo == "ANUAL" ? "Anual" : Mx.DateTimeFormat.GetMonthName(d.Periodo))</b></td>
@@ -195,15 +189,107 @@
                             <td>@(d.FechaPresentacion?.ToString("dd/MM/yyyy") ?? "—")</td>
                             <td class="mono">@(d.NumeroOperacion != "" ? d.NumeroOperacion : "—")</td>
                             <td class="num">@(d.ImporteAPagar is decimal i ? i.ToString("C2", Mx) : "—")</td>
-                            <td class="dc-acciones">
-                                <a href="@($"api/empresa/{EmpresaId}/archivos-sat/declaracion-{d.Id}")" target="_blank" title="Ver PDF"><i class="bi bi-file-earmark-pdf"></i></a>
-                                <button type="button" title="Eliminar" @onclick="() => Eliminar(d)"><i class="bi bi-trash3"></i></button>
-                            </td>
+                            @Acciones(d)
                         </tr>
                     }
                 </tbody>
             </table>
         }
+        </section>
+
+        <section class="dc-card diot">
+            <div class="dc-card-titulo"><i class="bi bi-people"></i>DIOT · operaciones con terceros</div>
+            <div class="dc-barra">
+                <label>
+                    Ejercicio
+                    <select class="form-select form-select-sm" @bind="EjercicioDiot">
+                        @foreach (int anio in Ejercicios)
+                        {
+                            <option value="@anio">@anio</option>
+                        }
+                    </select>
+                </label>
+
+                <label>
+                    Periodo
+                    <select class="form-select form-select-sm" @bind="PeriodoDiot">
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            int mes = m;
+                            <option value="@mes">@Mx.DateTimeFormat.GetMonthName(mes)</option>
+                        }
+                    </select>
+                </label>
+
+                <label class="btn btn-outline-primary btn-sm mb-0 text-nowrap @(CargandoDiot ? "disabled" : "")">
+                    <i class="bi bi-upload me-1"></i>@(CargandoDiot ? "Leyendo…" : "Cargar acuse DIOT (PDF)")
+                    <InputFile class="d-none" accept=".pdf,application/pdf" OnChange="CargarDiot" disabled="@CargandoDiot" />
+                </label>
+            </div>
+
+            @if (ErrorDiot != "")
+            {
+                <div class="alert alert-danger py-2 small mt-2 mb-0"><i class="bi bi-exclamation-triangle me-1"></i>@ErrorDiot</div>
+            }
+
+            <div class="dc-meses doce">
+                @for (int m = 1; m <= 12; m++)
+                {
+                    @Mes(Diot, EjercicioDiot, m, "acuse(s) de DIOT")
+                }
+            </div>
+
+            @if (Diot.Count == 0)
+            {
+                <p class="dc-vacio">Todavía no hay acuses de DIOT para el ejercicio @EjercicioDiot.</p>
+            }
+            else
+            {
+                <table class="dc-tabla">
+                    <thead>
+                        <tr>
+                            <th>Periodo</th>
+                            <th>Ejercicio</th>
+                            <th>Tipo</th>
+                            <th>Periodicidad</th>
+                            <th>Presentación</th>
+                            <th>Medio</th>
+                            <th>Versión</th>
+                            <th>No. operación</th>
+                            @if (Diot.Any(d => d.Folio != ""))
+                            {
+                                <th>Folio</th>
+                            }
+                            <th class="num">Operaciones</th>
+                            <th class="num">IVA pagado</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (DeclaracionSatDto d in Diot)
+                        {
+                            <tr>
+                                <td><b>@Mx.DateTimeFormat.GetMonthName(d.Periodo)</b></td>
+                                <td>@d.Ejercicio</td>
+                                <td>@(d.TipoDeclaracion != "" ? d.TipoDeclaracion : "—")</td>
+                                <td>@(d.Periodicidad != "" ? d.Periodicidad : "—")</td>
+                                <td>@(d.FechaPresentacion is DateTime fp ? fp.ToString(fp.TimeOfDay == TimeSpan.Zero ? "dd/MM/yyyy" : "dd/MM/yyyy HH:mm") : "—")</td>
+                                <td>@(d.Medio != "" ? d.Medio : "—")</td>
+                                <td>@(d.Version != "" ? d.Version : "—")</td>
+                                <td class="mono">@(d.NumeroOperacion != "" ? d.NumeroOperacion : "—")</td>
+                                @if (Diot.Any(x => x.Folio != ""))
+                                {
+                                    <td class="mono">@(d.Folio != "" ? d.Folio : "—")</td>
+                                }
+                                <td class="num">@(d.Operaciones?.ToString("N0", Mx) ?? "—")</td>
+                                <td class="num">@(d.IvaPagado is decimal iva ? iva.ToString("C0", Mx) : "—")</td>
+                                @Acciones(d)
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </section>
     }
 </div>
 
@@ -234,14 +320,43 @@
     private string Error = "";
     private long? EmpresaCargada;
 
+    // DIOT: su propio ejercicio y periodo.
+    private int EjercicioDiot = DateTime.Today.Year;
+    private int PeriodoDiot = DateTime.Today.AddMonths(-1).Month;
+    private bool CargandoDiot;
+    private string ErrorDiot = "";
+
     private IEnumerable<int> Ejercicios =>
         Enumerable.Range(DateTime.Today.Year - 5, 6).Concat(Lista.Select(d => d.Ejercicio)).Distinct().OrderDescending();
 
-    private List<DeclaracionSatDto> DelEjercicio =>
-        Lista.Where(d => d.Ejercicio == Ejercicio).OrderBy(d => d.Tipo == "ANUAL" ? 13 : d.Periodo).ToList();
+    private List<DeclaracionSatDto> Declaraciones =>
+        Lista.Where(d => d.Tipo != "DIOT" && d.Ejercicio == Ejercicio).OrderBy(d => d.Tipo == "ANUAL" ? 13 : d.Periodo).ToList();
+
+    private List<DeclaracionSatDto> Diot =>
+        Lista.Where(d => d.Tipo == "DIOT" && d.Ejercicio == EjercicioDiot).OrderBy(d => d.Periodo).ToList();
 
     /// <summary>El mes en curso y los siguientes todavía no vencen.</summary>
-    private bool FuturoOActual(int mes) => new DateTime(Ejercicio, mes, 1) >= new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private static bool FuturoOActual(int ejercicio, int mes) =>
+        new DateTime(ejercicio, mes, 1) >= new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+
+    /// <summary>Casilla del mes en el cuadro del ejercicio: verde con acuse, amarillo si falta, gris si no ha vencido.</summary>
+    private RenderFragment Mes(List<DeclaracionSatDto> lista, int ejercicio, int mes, string acuses)
+    {
+        int cuantos = lista.Count(d => d.Tipo != "ANUAL" && d.Periodo == mes);
+        bool futuro = FuturoOActual(ejercicio, mes);
+
+        return @<div class="dc-mes @(cuantos > 0 ? "presentada" : futuro ? "futuro" : "pendiente")"
+                     title="@(cuantos > 0 ? $"{cuantos} {acuses}" : "Sin acuse cargado")">
+                    <span>@Mx.DateTimeFormat.GetAbbreviatedMonthName(mes).TrimEnd('.').ToUpperInvariant()</span>
+                    <i class="bi @(cuantos > 0 ? "bi-check-circle-fill" : futuro ? "bi-dash-circle" : "bi-exclamation-circle")"></i>
+                </div>;
+    }
+
+    private RenderFragment Acciones(DeclaracionSatDto d) =>
+        @<td class="dc-acciones">
+            <a href="@($"api/empresa/{EmpresaId}/archivos-sat/declaracion-{d.Id}")" target="_blank" title="Ver PDF"><i class="bi bi-file-earmark-pdf"></i></a>
+            <button type="button" title="Eliminar" @onclick="() => Eliminar(d)"><i class="bi bi-trash3"></i></button>
+        </td>;
 
     protected override void OnParametersSet()
     {
@@ -250,6 +365,10 @@
 
         EmpresaCargada = EmpresaId;
         Error = "";
+        ErrorDiot = "";
+        if (EmpresaId > 0)
+            Archivos.ReleerDiot(EmpresaId);
+
         Lista = EmpresaId > 0 ? Archivos.ObtenerDeclaraciones(EmpresaId) : [];
         PanelSat = false;
         Resultado = null;
@@ -377,7 +496,12 @@
                 Archivos.CargarDeclaracion(EmpresaId, Rfc, Tipo, Ejercicio, Periodo, ms.ToArray(), e.File.Name));
 
             Lista = Archivos.ObtenerDeclaraciones(EmpresaId);
-            Ejercicio = d.Ejercicio;
+
+            // Un acuse de DIOT cargado aquí se guarda como DIOT y aparece en su tarjeta.
+            if (d.Tipo == "DIOT")
+                EjercicioDiot = d.Ejercicio;
+            else
+                Ejercicio = d.Ejercicio;
         }
         catch (Exception ex)
         {
@@ -389,11 +513,38 @@
         }
     }
 
+    private async Task CargarDiot(InputFileChangeEventArgs e)
+    {
+        CargandoDiot = true;
+        ErrorDiot = "";
+
+        try
+        {
+            await using Stream origen = e.File.OpenReadStream(10 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await origen.CopyToAsync(ms);
+
+            DeclaracionSatDto d = await Task.Run(() =>
+                Archivos.CargarDeclaracion(EmpresaId, Rfc, "DIOT", EjercicioDiot, PeriodoDiot, ms.ToArray(), e.File.Name));
+
+            Lista = Archivos.ObtenerDeclaraciones(EmpresaId);
+            EjercicioDiot = d.Ejercicio;
+        }
+        catch (Exception ex)
+        {
+            ErrorDiot = ex.Message;
+        }
+        finally
+        {
+            CargandoDiot = false;
+        }
+    }
+
     private async Task Eliminar(DeclaracionSatDto d)
     {
         string periodo = d.Tipo == "ANUAL" ? $"anual {d.Ejercicio}" : $"{Mx.DateTimeFormat.GetMonthName(d.Periodo)} {d.Ejercicio}";
 
-        if (!await JS.InvokeAsync<bool>("confirm", $"¿Eliminar el acuse de la declaración {periodo}?"))
+        if (!await JS.InvokeAsync<bool>("confirm", $"¿Eliminar el acuse de la {(d.Tipo == "DIOT" ? "DIOT" : "declaración")} {periodo}?"))
             return;
 
         Archivos.EliminarDeclaracion(EmpresaId, d.Id);
