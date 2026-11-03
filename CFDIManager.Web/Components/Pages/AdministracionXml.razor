@@ -671,16 +671,13 @@
     // Panel derecho: secciones con sus acciones (texto, icono, color, acción).
     private IEnumerable<(string, (string, string, string, Func<Task>)[])> Herramientas =>
     [
-        ("Básica",
+        ("Herramientas",
         [
             ("Exportar a Excel", "bi-file-earmark-excel", "verde", () => Exportar(TipoReporte)),
             ("Enviar por correo", "bi-envelope-paper", "azul", PrepararCorreo),
             ("Abrir XML", "bi-filetype-xml", "azul", Sincrona(AbrirXml)),
             ("Generar PDF", "bi-file-earmark-pdf", "rojo", GenerarPdf),
-            ("Valida Estado SAT", "bi-shield-check", "azul", ValidarEstadoSat)
-        ]),
-        ("Herramientas",
-        [
+            ("Valida Estado SAT", "bi-shield-check", "azul", ValidarEstadoSat),
             ("Localizar XML", "bi-search", "azul", Sincrona(Localizar)),
             ("Importar XML", "bi-upload", "azul", Sincrona(() => AbrirModal("importar"))),
             ("Descargar XML (ZIP)", "bi-file-earmark-zip", "ambar", DescargarZipXml),
