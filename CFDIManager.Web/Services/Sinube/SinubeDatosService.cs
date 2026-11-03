@@ -72,6 +72,32 @@ public class SinubeDatosService(SinubeService sinube, IHttpClientFactory http)
     }
 
     /// <summary>
+    /// Complementos de pago de clientes que SINUBE ya tiene (DbDeposito) con esas series, de cualquier mes.
+    /// SINUBE rechaza un pago cuyo serie-folio ya ocupa otro, aunque el UUID sea distinto.
+    /// </summary>
+    public async Task<List<PagoSinube>> PagosClientesAsync(
+        SinubeConfiguracionDto configuracion, IEnumerable<string> series, CancellationToken cancelacion = default)
+    {
+        string empresa = configuracion.Empresa.Replace("'", "");
+        var pagos = new List<PagoSinube>();
+
+        foreach (string serie in series.Select(s => s.Trim().ToUpperInvariant()).Where(s => s != "").Distinct())
+        {
+            List<FilaSinube> filas = await ConsultarAsync(configuracion,
+                $"SELECT uuid, serieComplementoPago, folioComplementoPago FROM DbDeposito " +
+                $"WHERE empresa = '{empresa}' AND serieComplementoPago = '{serie.Replace("'", "")}'", cancelacion);
+
+            foreach (FilaSinube fila in filas)
+            {
+                if (fila.Entero("folioComplementoPago") is long folio)
+                    pagos.Add(new PagoSinube((fila.Texto("uuid") ?? "").Trim().ToUpperInvariant(), serie, folio));
+            }
+        }
+
+        return pagos;
+    }
+
+    /// <summary>
     /// Ejecuta un SELECT y regresa todas las filas (sigue el CURSOR hasta la última página).
     /// La consulta no debe incluir TAMPAG/CURSOR/NOADMINSINUBE: se agregan aquí.
     /// </summary>
@@ -161,6 +187,19 @@ public class SinubeDatosService(SinubeService sinube, IHttpClientFactory http)
 
     // Igual que ClsSiNubeGetPost.sustituirEscapes: solo '&' rompe el form-urlencoded de SINUBE.
     private static string Escapar(string? valor) => (valor ?? "").Replace("&", "%26");
+}
+
+/// <summary>Complemento de pago registrado en SINUBE (DbDeposito).</summary>
+public sealed record PagoSinube(string Uuid, string Serie, long Folio)
+{
+    public string Llave => SerieFolio(Serie, Folio.ToString());
+
+    /// <summary>"SERIE|FOLIO" en mayúsculas y sin ceros a la izquierda en el folio numérico.</summary>
+    public static string SerieFolio(string? serie, string? folio)
+    {
+        string f = (folio ?? "").Trim();
+        return $"{(serie ?? "").Trim().ToUpperInvariant()}|{(long.TryParse(f, out long n) ? n.ToString() : f.ToUpperInvariant())}";
+    }
 }
 
 /// <summary>Una fila de una consulta a SINUBE; los valores se leen por nombre de campo.</summary>

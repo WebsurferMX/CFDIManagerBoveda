@@ -240,7 +240,7 @@
                     <TarjetaTotal Ancho="col" Titulo="Omitidos" Valor="@Contar("OMITIDO").ToString("N0")" Icono="bi-skip-forward" />
                     <TarjetaTotal Ancho="col" Titulo="Nómina (no se sube)" Valor="@Contar("NOMINA").ToString("N0")" Icono="bi-people" Color="primary" />
                     <TarjetaTotal Ancho="col" Titulo="IEPS" Valor="@Contar("IEPS").ToString("N0")" Icono="bi-exclamation-triangle" Color="warning" />
-                    <TarjetaTotal Ancho="col" Titulo="Errores / inválidos" Valor="@((Contar("ERROR") + Contar("INVALIDO")).ToString("N0"))" Icono="bi-x-octagon" Color="danger" />
+                    <TarjetaTotal Ancho="col" Titulo="Errores / inválidos" Valor="@((Contar("ERROR") + Contar("INVALIDO") + Contar("FOLIO")).ToString("N0"))" Icono="bi-x-octagon" Color="danger" />
                 </div>
 
                 <section class="results-card">
@@ -342,6 +342,16 @@
                             <option value="@SinubeAmbientes.PruebasFacturanube">Pruebas (facturanube)</option>
                             <option value="@SinubeAmbientes.PruebasSinubeFb">Pruebas (si-nube-fb)</option>
                         </select>
+                    </div>
+                </div>
+
+                <h2 class="second-title"><i class="bi bi-receipt"></i> Pagos de clientes</h2>
+
+                <div class="form-grid">
+                    <div class="field">
+                        <label>Serie alterna para pagos con folio ocupado</label>
+                        <input class="form-control" @bind="Config.SerieAlternaPagos" placeholder="Vacío: no se cambia (p. ej. COMFR)" maxlength="25" />
+                        <small class="hint">Si en SINUBE otro pago ya tiene la misma serie y folio, el pago se sube con esta serie. El XML de la bóveda no cambia.</small>
                     </div>
                 </div>
 
@@ -553,7 +563,7 @@
             : "";
 
     private IEnumerable<SinubeEnvioDto> ResultadosVisibles =>
-        SoloProblemas ? Resultados.Where(r => r.Estatus is "ERROR" or "INVALIDO" or "IEPS") : Resultados;
+        SoloProblemas ? Resultados.Where(r => r.Estatus is "ERROR" or "INVALIDO" or "IEPS" or "FOLIO") : Resultados;
 
     private string EjemploNombre =>
         Config is null
@@ -614,6 +624,15 @@
         /// <summary>Recibos de nómina del periodo (clientes): SINUBE no los importa.</summary>
         public int Nomina { get; init; }
 
+        /// <summary>Pagos de clientes cuyo serie-folio ya ocupa otro pago en SINUBE: se suben con la serie alterna.</summary>
+        public int PagosSerieAlterna { get; init; }
+
+        /// <summary>Pagos con folio ocupado que no se pueden subir (sin serie alterna, o también ocupada).</summary>
+        public int PagosFolioOcupado { get; init; }
+
+        /// <summary>Pagos de clientes en SINUBE (DbDeposito) por "SERIE|FOLIO" → UUID, para el envío.</summary>
+        public Dictionary<string, string>? PagosEnSinube { get; init; }
+
         public List<string> PorSubir { get; init; } = [];
     }
 
@@ -633,6 +652,14 @@
             @if (r.Nomina > 0)
             {
                 <TarjetaTotal Ancho="col" Titulo="Nómina (no se sube)" Valor="@r.Nomina.ToString("N0")" Icono="bi-people" Color="primary" />
+            }
+            @if (r.PagosSerieAlterna > 0)
+            {
+                <TarjetaTotal Ancho="col" Titulo="@($"Folio ocupado → {Config?.SerieAlternaPagos}")" Valor="@r.PagosSerieAlterna.ToString("N0")" Icono="bi-arrow-left-right" Color="info" />
+            }
+            @if (r.PagosFolioOcupado > 0)
+            {
+                <TarjetaTotal Ancho="col" Titulo="Folio ocupado (no se sube)" Valor="@r.PagosFolioOcupado.ToString("N0")" Icono="bi-exclamation-octagon" Color="danger" />
             }
             <TarjetaTotal Ancho="col" Titulo="Por subir" Valor="@r.PorSubir.Count.ToString("N0")" Icono="bi-cloud-arrow-up" Color="@(r.PorSubir.Count > 0 ? "warning" : "success")" />
         </text>;
@@ -667,32 +694,68 @@
         List<string> archivos = Sinube.Archivos(empresa, clientes, periodo);
         HashSet<string> enSinube = await DatosSinube.UuidsEnSinubeAsync(config, clientes, [periodo]);
         HashSet<string> enviados = Reenviar ? [] : Sinube.UuidsEnviados(empresa, clientes);
-        Dictionary<string, (string Uuid, string Tipo)> datos = await Task.Run(() => archivos.ToDictionary(a => a, DatosDeArchivo));
+        Dictionary<string, DatosXml> datos = await Task.Run(() => archivos.ToDictionary(a => a, DatosDeArchivo));
 
         // SINUBE no importa nómina: en clientes se cuenta aparte y no queda por subir.
         bool EsNomina(string a) => clientes && datos[a].Tipo == "N";
         List<string> facturas = archivos.Where(a => !EsNomina(a)).ToList();
+
+        // Los pagos de clientes viven en DbDeposito y SINUBE valida su serie-folio, no el UUID.
+        List<string> pagos = clientes ? facturas.Where(a => datos[a].Tipo == "P").ToList() : [];
+        Dictionary<string, string>? pagosEnSinube = pagos.Count > 0
+            ? await PagosEnSinubeAsync(config, pagos.Select(a => datos[a].Serie))
+            : null;
+
+        if (pagosEnSinube is not null)
+            enSinube.UnionWith(pagosEnSinube.Values);
+
+        bool EnSinube(string a) => enSinube.Contains(datos[a].Uuid);
+        bool Ocupado(string a) => pagosEnSinube?.ContainsKey(PagoSinube.SerieFolio(datos[a].Serie, datos[a].Folio)) == true && !EnSinube(a);
+
+        string alterna = config.SerieAlternaPagos.Trim().ToUpperInvariant();
+        bool SeSubeConAlterna(string a) => alterna != "" && !pagosEnSinube!.ContainsKey(PagoSinube.SerieFolio(alterna, datos[a].Folio));
+
+        List<string> pendientes = facturas.Where(a => !EnSinube(a) && !enviados.Contains(datos[a].Uuid)).ToList();
+        List<string> ocupados = pendientes.Where(a => datos[a].Tipo == "P" && Ocupado(a)).ToList();
+        List<string> bloqueados = ocupados.Where(a => !SeSubeConAlterna(a)).ToList();
 
         return new RevisionSinube
         {
             Archivos = archivos.Count,
             YaEnSinube = enSinube,
             Nomina = archivos.Count - facturas.Count,
-            EnSinube = facturas.Count(a => enSinube.Contains(datos[a].Uuid)),
-            EnviadosAntes = facturas.Count(a => !enSinube.Contains(datos[a].Uuid) && enviados.Contains(datos[a].Uuid)),
-            PorSubir = facturas.Where(a => !enSinube.Contains(datos[a].Uuid) && !enviados.Contains(datos[a].Uuid)).ToList()
+            EnSinube = facturas.Count(EnSinube),
+            EnviadosAntes = facturas.Count(a => !EnSinube(a) && enviados.Contains(datos[a].Uuid)),
+            PagosSerieAlterna = ocupados.Count - bloqueados.Count,
+            PagosFolioOcupado = bloqueados.Count,
+            PagosEnSinube = pagosEnSinube,
+            PorSubir = pendientes.Except(bloqueados).ToList()
         };
     }
 
+    /// <summary>Pagos de clientes que SINUBE ya tiene con esas series o con la serie alterna: "SERIE|FOLIO" → UUID.</summary>
+    private async Task<Dictionary<string, string>> PagosEnSinubeAsync(SinubeConfiguracionDto config, IEnumerable<string> series)
+    {
+        List<PagoSinube> pagos = await DatosSinube.PagosClientesAsync(config, series.Append(config.SerieAlternaPagos));
+        var porLlave = new Dictionary<string, string>();
+
+        foreach (PagoSinube p in pagos)
+            porLlave.TryAdd(p.Llave, p.Uuid);
+
+        return porLlave;
+    }
+
+    private sealed record DatosXml(string Uuid, string Tipo, string Serie, string Folio);
+
     /// <summary>
-    /// UUID y TipoDeComprobante del XML, leídos en streaming (el atributo está en la raíz y el timbre al final).
-    /// Los XML de la bóveda se llaman {UUID}.xml: entonces basta con la raíz.
+    /// UUID, TipoDeComprobante, Serie y Folio del XML, leídos en streaming (los atributos están en la raíz y el timbre
+    /// al final). Los XML de la bóveda se llaman {UUID}.xml: entonces basta con la raíz.
     /// </summary>
-    private static (string Uuid, string Tipo) DatosDeArchivo(string archivo)
+    private static DatosXml DatosDeArchivo(string archivo)
     {
         string nombre = Path.GetFileNameWithoutExtension(archivo);
         bool nombreEsUuid = Guid.TryParse(nombre, out _);
-        string tipo = "";
+        string tipo = "", serie = "", folio = "";
 
         try
         {
@@ -706,13 +769,15 @@
                 if (lector.LocalName == "Comprobante")
                 {
                     tipo = (lector.GetAttribute("TipoDeComprobante") ?? "").ToUpperInvariant();
+                    serie = lector.GetAttribute("Serie") ?? "";
+                    folio = lector.GetAttribute("Folio") ?? "";
 
                     if (nombreEsUuid)
                         break;
                 }
                 else if (lector.LocalName == "TimbreFiscalDigital")
                 {
-                    return (lector.GetAttribute("UUID") ?? nombre, tipo);
+                    return new DatosXml((lector.GetAttribute("UUID") ?? nombre).ToUpperInvariant(), tipo, serie, folio);
                 }
             }
         }
@@ -721,7 +786,7 @@
             // Un XML ilegible se queda con el nombre; el envío lo marcará como inválido.
         }
 
-        return (nombre, tipo);
+        return new DatosXml(nombre.ToUpperInvariant(), tipo, serie, folio);
     }
 
     private void CambiarTab(string tab)
@@ -798,6 +863,17 @@
 
         try
         {
+            // Pagos de clientes ya en SINUBE (serie-folio → UUID): de la revisión, o se consultan ahora.
+            Dictionary<string, string>? pagosEnSinube = Revision?.PagosEnSinube;
+
+            if (clientes && Revision is null)
+            {
+                List<DatosXml> pagos = await Task.Run(() => archivos.Select(DatosDeArchivo).Where(d => d.Tipo == "P").ToList());
+
+                if (pagos.Count > 0)
+                    pagosEnSinube = await PagosEnSinubeAsync(Config, pagos.Select(p => p.Serie));
+            }
+
             await Task.Run(() => Sinube.EnviarArchivosAsync(
                 empresa,
                 Config,
@@ -814,7 +890,8 @@
                 }),
                 Cancelacion.Token,
                 sinFolio,
-                yaEnSinube));
+                yaEnSinube,
+                pagosEnSinube));
 
             terminado = true;
         }

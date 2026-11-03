@@ -32,6 +32,12 @@ public class SinubeConfiguracionDto
 
     public bool ValidarIeps { get; set; } = true;
 
+    /// <summary>
+    /// Serie con la que se suben los complementos de pago de clientes cuyo serie-folio ya ocupa otro pago en SINUBE
+    /// (SINUBE valida el folio, no el UUID; p. ej. COM → COMFR). Vacía: no se cambia.
+    /// </summary>
+    public string SerieAlternaPagos { get; set; } = "";
+
     // Parámetros de descarga / nombre de XML (pestaña "Descarga XMLs del SAT")
     public bool IncluirUuid { get; set; }
 

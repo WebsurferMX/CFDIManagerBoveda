@@ -51,7 +51,8 @@ public partial class PostgreSqlRepository
             );
 
             ALTER TABLE empresas_sinube ADD COLUMN IF NOT EXISTS foliador_llave TEXT NOT NULL DEFAULT '';
-            ALTER TABLE empresas_sinube ADD COLUMN IF NOT EXISTS foliador_nombre TEXT NOT NULL DEFAULT '';", cn);
+            ALTER TABLE empresas_sinube ADD COLUMN IF NOT EXISTS foliador_nombre TEXT NOT NULL DEFAULT '';
+            ALTER TABLE empresas_sinube ADD COLUMN IF NOT EXISTS serie_alterna_pagos TEXT NOT NULL DEFAULT '';", cn);
 
         cmd.ExecuteNonQuery();
     }
@@ -90,6 +91,7 @@ public partial class PostgreSqlRepository
             CriterioNombre = (int)dr["criterio_nombre"],
             FoliadorLlave = (string)dr["foliador_llave"],
             FoliadorNombre = (string)dr["foliador_nombre"],
+            SerieAlternaPagos = (string)dr["serie_alterna_pagos"],
             UltimaPrueba = dr["ultima_prueba"] as DateTime?,
             ResultadoPrueba = dr["resultado_prueba"] as string
         };
@@ -105,11 +107,13 @@ public partial class PostgreSqlRepository
             INSERT INTO empresas_sinube (
                 empresa_id, empresa, sucursal, usuario, password, ambiente,
                 modo_producto, serie_folio_de_folio, agrupar_codigo_sat, usar_producto_clientes, validar_ieps,
-                incluir_uuid, incluir_tipo, emisor_receptor, criterio_nombre, foliador_llave, foliador_nombre)
+                incluir_uuid, incluir_tipo, emisor_receptor, criterio_nombre, foliador_llave, foliador_nombre,
+                serie_alterna_pagos)
             VALUES (
                 @empresa_id, @empresa, @sucursal, @usuario, @password, @ambiente,
                 @modo_producto, @serie_folio_de_folio, @agrupar_codigo_sat, @usar_producto_clientes, @validar_ieps,
-                @incluir_uuid, @incluir_tipo, @emisor_receptor, @criterio_nombre, @foliador_llave, @foliador_nombre)
+                @incluir_uuid, @incluir_tipo, @emisor_receptor, @criterio_nombre, @foliador_llave, @foliador_nombre,
+                @serie_alterna_pagos)
             ON CONFLICT (empresa_id) DO UPDATE SET
                 empresa = @empresa,
                 sucursal = @sucursal,
@@ -127,6 +131,7 @@ public partial class PostgreSqlRepository
                 criterio_nombre = @criterio_nombre,
                 foliador_llave = @foliador_llave,
                 foliador_nombre = @foliador_nombre,
+                serie_alterna_pagos = @serie_alterna_pagos,
                 fecha_actualizacion = NOW();", cn);
 
         cmd.Parameters.AddWithValue("empresa_id", modelo.EmpresaId);
@@ -146,6 +151,7 @@ public partial class PostgreSqlRepository
         cmd.Parameters.AddWithValue("criterio_nombre", modelo.CriterioNombre);
         cmd.Parameters.AddWithValue("foliador_llave", modelo.FoliadorLlave);
         cmd.Parameters.AddWithValue("foliador_nombre", modelo.FoliadorNombre);
+        cmd.Parameters.AddWithValue("serie_alterna_pagos", modelo.SerieAlternaPagos.Trim().ToUpperInvariant());
 
         cmd.ExecuteNonQuery();
     }
