@@ -36,6 +36,20 @@
         <div class="border rounded-3 bg-body-tertiary">
             <div class="p-3 d-flex flex-wrap align-items-end gap-3">
                 <div>
+                    <span class="form-label small fw-semibold mb-1 d-block">Comprobantes</span>
+                    <div class="btn-group" role="group" aria-label="Dirección">
+                        <button type="button" class="btn @(Recibidos ? "btn-primary" : "btn-outline-secondary")"
+                                @onclick="() => CambiarDireccion(true)" disabled="@Ocupado">
+                            <i class="bi bi-box-arrow-in-down-left me-1"></i>Egresos (proveedores)
+                        </button>
+                        <button type="button" class="btn @(!Recibidos ? "btn-primary" : "btn-outline-secondary")"
+                                @onclick="() => CambiarDireccion(false)" disabled="@Ocupado">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>Ingresos (clientes)
+                        </button>
+                    </div>
+                </div>
+
+                <div>
                     <label class="form-label small fw-semibold mb-1" for="rc-anio">Año</label>
                     <select id="rc-anio" class="form-select" @bind="Anio" @bind:after="Cargar" disabled="@Ocupado">
                         @for (int a = DateTime.Today.Year; a >= DateTime.Today.Year - 6; a--)
@@ -68,6 +82,23 @@
                     }
                 </button>
 
+                @if (!Recibidos)
+                {
+                    <button type="button" class="btn btn-success d-inline-flex align-items-center gap-2" @onclick="DescargarDelSat"
+                            disabled="@(Ocupado || Faltantes == 0)">
+                        @if (Descargando)
+                        {
+                            <span class="spinner-border spinner-border-sm"></span>
+                            <span>Descargando…</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-cloud-arrow-down"></i>
+                            <span>Descargar @Faltantes.ToString("N0") del SAT</span>
+                        }
+                    </button>
+                }
+
                 <label class="btn btn-primary d-inline-flex align-items-center gap-2 mb-0 @(Ocupado ? "disabled" : "")">
                     @if (Cargando)
                     {
@@ -95,7 +126,7 @@
                 </div>
             </div>
 
-            @if (Consultando)
+            @if (Consultando || Descargando)
             {
                 <div class="border-top px-3 py-2 small d-flex align-items-center gap-2">
                     <span class="spinner-border spinner-border-sm text-primary"></span>
@@ -118,7 +149,7 @@
         {
             <div class="alert alert-warning d-flex align-items-center gap-2 mb-0">
                 <i class="bi bi-cloud-slash fs-5"></i>
-                <span>No hay metadatos de recibidos de @Anio@Mes.ToString("00"): usa Consultar SAT.</span>
+                <span>No hay metadatos de @(Recibidos ? "recibidos" : "emitidos") de @Anio@Mes.ToString("00"): usa Consultar SAT.</span>
             </div>
         }
 
@@ -176,8 +207,8 @@
                 <table class="table table-sm table-hover align-middle mb-0 tabla">
                     <thead>
                         <tr>
-                            <th>RFC emisor</th>
-                            <th>Emisor</th>
+                            <th>@(Recibidos ? "RFC emisor" : "RFC receptor")</th>
+                            <th>@(Recibidos ? "Emisor" : "Receptor")</th>
                             <th>Fecha emisión</th>
                             <th class="text-end">Monto</th>
                             <th>Tipo</th>
@@ -190,8 +221,8 @@
                         @foreach (CanceladoSatDto c in Visibles)
                         {
                             <tr>
-                                <td>@c.RfcEmisor</td>
-                                <td class="emisor" title="@c.NombreEmisor">@c.NombreEmisor</td>
+                                <td>@c.RfcContraparte</td>
+                                <td class="emisor" title="@c.NombreContraparte">@c.NombreContraparte</td>
                                 <td>@c.FechaEmision.ToString("dd/MM/yyyy HH:mm")</td>
                                 <td class="text-end">@c.Monto.ToString("N2")</td>
                                 <td>@c.Efecto</td>
@@ -231,7 +262,67 @@
     private string? Error;
     private string? Mensaje;
 
-    private bool Ocupado => Cargando || Consultando;
+    private bool Recibidos = true;
+    private bool Descargando;
+
+    private bool Ocupado => Cargando || Consultando || Descargando;
+
+    private void CambiarDireccion(bool recibidos)
+    {
+        if (Recibidos == recibidos)
+            return;
+
+        Recibidos = recibidos;
+        UltimaCarga = null;
+        Mensaje = null;
+        Error = null;
+        Cargar();
+    }
+
+    /// <summary>Emitidos cancelados que faltan: el SAT sí los entrega, se piden y se importan.</summary>
+    private async Task DescargarDelSat()
+    {
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa)
+            return;
+
+        Error = null;
+        Mensaje = null;
+        Descargando = true;
+        AvanceSat = "Solicitando al SAT los XML…";
+        CancelacionSat = new CancellationTokenSource();
+        int anio = Anio, mes = Mes;
+        List<string> uuids = Filas.Where(f => !f.EnBoveda).Select(f => f.Uuid).ToList();
+
+        var progreso = new Progress<string>(texto => InvokeAsync(() =>
+        {
+            AvanceSat = texto;
+            StateHasChanged();
+        }));
+
+        try
+        {
+            var r = await Recuperacion.DescargarEmitidosAsync(empresa, anio, mes, uuids, progreso, CancelacionSat.Token);
+            Cargar();
+            Mensaje = $"Del SAT se importaron {r.Importados:N0} de {uuids.Count:N0}; faltan {Faltantes:N0}.";
+
+            if (r.Rechazados.Count > 0)
+                Error = "El SAT rechazó: " + string.Join(" · ", r.Rechazados);
+        }
+        catch (OperationCanceledException)
+        {
+            // Se detuvo o se cambió de empresa: las solicitudes siguen en Descargas SAT.
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Descargando = false;
+            CancelacionSat?.Dispose();
+            CancelacionSat = null;
+        }
+    }
     private List<RecuperacionArchivo>? UltimaCarga;
     private Guid _inputKey = Guid.NewGuid();
 
@@ -261,8 +352,8 @@
             return;
         }
 
-        Filas = Recuperacion.Listar(EmpresaContext.EmpresaId, Anio, Mes);
-        MetadatosMes = Recuperacion.Metadatos(EmpresaContext.EmpresaId, Anio, Mes);
+        Filas = Recuperacion.Listar(EmpresaContext.EmpresaId, Recibidos, Anio, Mes);
+        MetadatosMes = Recuperacion.Metadatos(EmpresaContext.EmpresaId, Recibidos, Anio, Mes);
     }
 
     private void EmpresaCambio() => InvokeAsync(() =>
@@ -299,9 +390,10 @@
 
         try
         {
-            await MetadatosSat.ActualizarAsync(empresa, recibidos: true, anio, mes, progreso, CancelacionSat.Token, origen: "Recuperar cancelados");
+            bool recibidos = Recibidos;
+            await MetadatosSat.ActualizarAsync(empresa, recibidos, anio, mes, progreso, CancelacionSat.Token, origen: "Recuperar cancelados");
             Cargar();
-            Mensaje = $"SAT consultado: {Filas.Count:N0} recibidos cancelados en {anio}{mes:00}, {Faltantes:N0} sin XML" +
+            Mensaje = $"SAT consultado: {Filas.Count:N0} {(recibidos ? "recibidos" : "emitidos")} cancelados en {anio}{mes:00}, {Faltantes:N0} sin XML" +
                       (Faltantes != antes ? $" (antes {antes:N0})." : ".");
         }
         catch (OperationCanceledException)
@@ -327,7 +419,7 @@
 
         try
         {
-            UltimaCarga = await Recuperacion.CargarAsync(EmpresaContext.EmpresaActiva!, e.GetMultipleFiles(5000));
+            UltimaCarga = await Recuperacion.CargarAsync(EmpresaContext.EmpresaActiva!, Recibidos, e.GetMultipleFiles(5000));
             Cargar();
         }
         catch (Exception ex)
@@ -343,8 +435,9 @@
 
     private async Task DescargarExcel()
     {
-        byte[] contenido = Recuperacion.GenerarExcel(EmpresaContext.EmpresaActiva!, Anio, Mes, Filas.Where(f => !f.EnBoveda));
-        await JS.InvokeVoidAsync("descargarArchivoBase64", $"Cancelados_sin_XML_{EmpresaContext.Rfc}_{Anio}{Mes:00}.xlsx",
+        byte[] contenido = Recuperacion.GenerarExcel(EmpresaContext.EmpresaActiva!, Recibidos, Anio, Mes, Filas.Where(f => !f.EnBoveda));
+        await JS.InvokeVoidAsync("descargarArchivoBase64",
+            $"Cancelados_sin_XML_{(Recibidos ? "recibidos" : "emitidos")}_{EmpresaContext.Rfc}_{Anio}{Mes:00}.xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Convert.ToBase64String(contenido));
     }
 

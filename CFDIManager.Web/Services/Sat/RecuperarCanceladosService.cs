@@ -13,10 +13,14 @@ public sealed record RecuperacionArchivo(string Archivo, string Uuid, string Est
 }
 
 /// <summary>
-/// Recibidos cancelados que el SAT ya no entrega (5012): la lista sale de los metadatos y los XML se cargan de otra
-/// fuente (SINUBE, el proveedor). Solo se aceptan XML cuyo UUID, emisor, receptor y total coinciden con el SAT.
+/// Cancelados del SAT que no están en la bóveda, de recibidos (egresos) o emitidos (ingresos). La lista sale de los
+/// metadatos. Los recibidos cancelados el SAT ya no los entrega (5012) y se cargan de otra fuente (SINUBE, el
+/// proveedor); los emitidos cancelados también se pueden bajar del SAT. Solo se aceptan XML cuyo UUID, emisor,
+/// receptor y total coinciden con el SAT.
 /// </summary>
-public class RecuperarCanceladosService(PostgreSqlRepository repo, XmlCfdiParser parser, ImportacionCfdiService importacion)
+public class RecuperarCanceladosService(
+    PostgreSqlRepository repo, XmlCfdiParser parser, ImportacionCfdiService importacion,
+    CFDIManager.Web.Services.Sinube.SatMetadatosService metadatosSat)
 {
     public const string Recuperado = "Recuperado";
     public const string YaEstaba = "Ya estaba";
@@ -27,21 +31,30 @@ public class RecuperarCanceladosService(PostgreSqlRepository repo, XmlCfdiParser
     private const long MaximoXml = 25L * 1024 * 1024;
     private const long MaximoZip = 200L * 1024 * 1024;
 
-    public List<CanceladoSatDto> Listar(long empresaId, int anio, int mes)
+    public List<CanceladoSatDto> Listar(long empresaId, bool recibidos, int anio, int mes)
     {
         var desde = new DateTime(anio, mes, 1);
-        return repo.ObtenerRecibidosCancelados(empresaId, desde, desde.AddMonths(1));
+        return repo.ObtenerCancelados(empresaId, recibidos, desde, desde.AddMonths(1));
     }
 
-    /// <summary>¿Hay metadatos de recibidos descargados para el mes? Sin ellos no se sabe qué falta.</summary>
-    public SatMetadatosPeriodoDto? Metadatos(long empresaId, int anio, int mes) =>
-        repo.ObtenerMetadatosPeriodo(empresaId, recibido: true, anio * 100 + mes);
+    /// <summary>¿Hay metadatos descargados del mes en esa dirección? Sin ellos no se sabe qué falta.</summary>
+    public SatMetadatosPeriodoDto? Metadatos(long empresaId, bool recibidos, int anio, int mes) =>
+        repo.ObtenerMetadatosPeriodo(empresaId, recibidos, anio * 100 + mes);
 
-    /// <summary>Carga XML sueltos o en ZIP; importa a la bóveda los que el SAT tiene como recibidos cancelados.</summary>
+    /// <summary>
+    /// Emitidos cancelados que faltan en la bóveda: se piden al SAT (sí los entrega) y se importan.
+    /// Con hasta 10 se pide cada UUID; con más, el XML del mes del que solo se importan esos.
+    /// </summary>
+    public Task<CFDIManager.Web.Services.Sinube.SatMetadatosService.ResultadoXmlFaltantes> DescargarEmitidosAsync(
+        EmpresaDto empresa, int anio, int mes, IReadOnlyCollection<string> uuids, IProgress<string> progreso, CancellationToken ct) =>
+        metadatosSat.DescargarXmlFaltantesAsync(empresa, recibidos: false, anio, mes, vigentes: uuids, cancelados: [],
+            progreso, ct, origen: "Recuperar cancelados");
+
+    /// <summary>Carga XML sueltos o en ZIP; importa a la bóveda los que el SAT tiene como cancelados en esa dirección.</summary>
     public async Task<List<RecuperacionArchivo>> CargarAsync(
-        EmpresaDto empresa, IReadOnlyList<IBrowserFile> archivos, CancellationToken ct = default)
+        EmpresaDto empresa, bool recibidos, IReadOnlyList<IBrowserFile> archivos, CancellationToken ct = default)
     {
-        Dictionary<string, CanceladoSatDto> cancelados = repo.ObtenerRecibidosCancelados(empresa.EmpresaId)
+        Dictionary<string, CanceladoSatDto> cancelados = repo.ObtenerCancelados(empresa.EmpresaId, recibidos)
             .ToDictionary(c => c.Uuid, StringComparer.OrdinalIgnoreCase);
 
         string temporal = CarpetaStorage.Ruta("Temporal", Guid.NewGuid().ToString("N"));
@@ -69,7 +82,7 @@ public class RecuperarCanceladosService(PostgreSqlRepository repo, XmlCfdiParser
 
                 if (!esZip)
                 {
-                    resultados.Add(Procesar(empresa, ruta, archivo.Name, cancelados));
+                    resultados.Add(Procesar(empresa, recibidos, ruta, archivo.Name, cancelados));
                     continue;
                 }
 
@@ -80,7 +93,7 @@ public class RecuperarCanceladosService(PostgreSqlRepository repo, XmlCfdiParser
                     ct.ThrowIfCancellationRequested();
                     string rutaXml = Path.Combine(temporal, Guid.NewGuid().ToString("N") + ".xml");
                     entrada.ExtractToFile(rutaXml);
-                    resultados.Add(Procesar(empresa, rutaXml, $"{archivo.Name} › {entrada.FullName}", cancelados));
+                    resultados.Add(Procesar(empresa, recibidos, rutaXml, $"{archivo.Name} › {entrada.FullName}", cancelados));
                 }
             }
         }
@@ -103,7 +116,7 @@ public class RecuperarCanceladosService(PostgreSqlRepository repo, XmlCfdiParser
     }
 
     private RecuperacionArchivo Procesar(
-        EmpresaDto empresa, string ruta, string nombre, Dictionary<string, CanceladoSatDto> cancelados)
+        EmpresaDto empresa, bool recibidos, string ruta, string nombre, Dictionary<string, CanceladoSatDto> cancelados)
     {
         CfdiDto cfdi;
 
@@ -119,7 +132,8 @@ public class RecuperarCanceladosService(PostgreSqlRepository repo, XmlCfdiParser
         string uuid = (cfdi.UUID ?? "").Trim().ToUpperInvariant();
 
         if (!cancelados.TryGetValue(uuid, out CanceladoSatDto? sat))
-            return new RecuperacionArchivo(nombre, uuid, NoEnLista, "El SAT no lo tiene como recibido cancelado de esta empresa.");
+            return new RecuperacionArchivo(nombre, uuid, NoEnLista,
+                $"El SAT no lo tiene como {(recibidos ? "recibido" : "emitido")} cancelado de esta empresa.");
 
         if (sat.EnBoveda)
             return new RecuperacionArchivo(nombre, uuid, YaEstaba, "El XML ya estaba en la bóveda.");
@@ -145,24 +159,26 @@ public class RecuperarCanceladosService(PostgreSqlRepository repo, XmlCfdiParser
             return new RecuperacionArchivo(nombre, uuid, ConError, r.Detalle);
 
         sat.EnBoveda = true;
-        return new RecuperacionArchivo(nombre, uuid, Recuperado, $"{sat.RfcEmisor} · {sat.Monto:N2}");
+        return new RecuperacionArchivo(nombre, uuid, Recuperado, $"{sat.RfcContraparte} · {sat.Monto:N2}");
     }
 
     private static bool Igual(string? a, string? b) =>
         string.Equals((a ?? "").Trim(), (b ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Lista del mes para pedir los XML a SINUBE o a los proveedores.</summary>
-    public byte[] GenerarExcel(EmpresaDto empresa, int anio, int mes, IEnumerable<CanceladoSatDto> filas)
+    /// <summary>Lista del mes para pedir los XML a SINUBE, a los proveedores o a los clientes.</summary>
+    public byte[] GenerarExcel(EmpresaDto empresa, bool recibidos, int anio, int mes, IEnumerable<CanceladoSatDto> filas)
     {
         using var libro = new XLWorkbook();
         IXLWorksheet hoja = libro.AddWorksheet("Cancelados");
 
-        hoja.Cell(1, 1).Value = $"Recibidos cancelados · {empresa.Rfc} · {empresa.NombreParaMostrar} · Periodo {anio}{mes:00}";
+        hoja.Cell(1, 1).Value =
+            $"{(recibidos ? "Recibidos" : "Emitidos")} cancelados · {empresa.Rfc} · {empresa.NombreParaMostrar} · Periodo {anio}{mes:00}";
         hoja.Cell(1, 1).Style.Font.SetBold().Font.SetFontSize(13);
         hoja.Cell(2, 1).Value = $"Generado {DateTime.Now:dd/MM/yyyy HH:mm}";
 
+        string contraparte = recibidos ? "Emisor" : "Receptor";
         string[] encabezados =
-            ["RFC emisor", "Emisor", "Fecha emisión", "Monto", "Tipo", "Fecha cancelación", "XML en bóveda", "UUID"];
+            [$"RFC {contraparte.ToLowerInvariant()}", contraparte, "Fecha emisión", "Monto", "Tipo", "Fecha cancelación", "XML en bóveda", "UUID"];
 
         for (int i = 0; i < encabezados.Length; i++)
             hoja.Cell(4, i + 1).Value = encabezados[i];
@@ -171,7 +187,7 @@ public class RecuperarCanceladosService(PostgreSqlRepository repo, XmlCfdiParser
         foreach (CanceladoSatDto c in filas)
         {
             object?[] valores =
-                [c.RfcEmisor, c.NombreEmisor, c.FechaEmision, c.Monto, c.Efecto, c.FechaCancelacion, c.EnBoveda ? "Sí" : "No", c.Uuid];
+                [c.RfcContraparte, c.NombreContraparte, c.FechaEmision, c.Monto, c.Efecto, c.FechaCancelacion, c.EnBoveda ? "Sí" : "No", c.Uuid];
 
             for (int i = 0; i < valores.Length; i++)
                 hoja.Cell(fila, i + 1).Value = XLCellValue.FromObject(valores[i]);

@@ -222,10 +222,11 @@ public partial class PostgreSqlRepository
     }
 
     /// <summary>
-    /// Recibidos cancelados según los metadatos del SAT (todos o los de [desde, hasta)), con si su XML ya está en la
-    /// bóveda. El SAT no entrega el XML de un recibido cancelado (5012): Recuperar cancelados los carga de otra fuente.
+    /// Cancelados según los metadatos del SAT (recibidos o emitidos; todos o los de [desde, hasta)), con si su XML ya
+    /// está en la bóveda. El SAT no entrega el XML de un recibido cancelado (5012): Recuperar cancelados los carga de
+    /// otra fuente. Los emitidos cancelados sí se pueden bajar del SAT.
     /// </summary>
-    public List<CanceladoSatDto> ObtenerRecibidosCancelados(long empresaId, DateTime? desde = null, DateTime? hasta = null)
+    public List<CanceladoSatDto> ObtenerCancelados(long empresaId, bool recibido, DateTime? desde = null, DateTime? hasta = null)
     {
         using var cn = new NpgsqlConnection(_connectionString);
         cn.Open();
@@ -235,11 +236,12 @@ public partial class PostgreSqlRepository
                    m.monto, m.efecto, m.estatus, m.fecha_cancelacion,
                    EXISTS (SELECT 1 FROM cfdi c WHERE c.empresa_id = m.empresa_id AND UPPER(c.uuid) = m.uuid)
             FROM sat_metadatos m
-            WHERE m.empresa_id = @empresa_id AND m.recibido AND m.estatus ILIKE 'cancel%'
+            WHERE m.empresa_id = @empresa_id AND m.recibido = @recibido AND m.estatus ILIKE 'cancel%'
               AND (@desde::timestamp IS NULL OR m.fecha_emision >= @desde::timestamp)
               AND (@hasta::timestamp IS NULL OR m.fecha_emision < @hasta::timestamp)
             ORDER BY m.fecha_emision", cn);
         cmd.Parameters.AddWithValue("empresa_id", empresaId);
+        cmd.Parameters.AddWithValue("recibido", recibido);
         cmd.Parameters.Add(new NpgsqlParameter("desde", NpgsqlDbType.Timestamp) { Value = (object?)desde ?? DBNull.Value });
         cmd.Parameters.Add(new NpgsqlParameter("hasta", NpgsqlDbType.Timestamp) { Value = (object?)hasta ?? DBNull.Value });
 
@@ -260,6 +262,7 @@ public partial class PostgreSqlRepository
                 Efecto = dr.GetString(7),
                 Estatus = dr.GetString(8),
                 FechaCancelacion = dr.IsDBNull(9) ? null : dr.GetDateTime(9),
+                Recibido = recibido,
                 EnBoveda = dr.GetBoolean(10)
             });
         }
