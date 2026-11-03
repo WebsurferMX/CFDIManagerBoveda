@@ -5,6 +5,35 @@
     letter-spacing: .12em;
 }
 
+/* Un solo marco con pestañas; las anchas hacen scroll dentro del marco. */
+.marco {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.marco .nav-tabs {
+    scrollbar-width: thin;
+}
+
+.marco .nav-link {
+    color: var(--bs-secondary-color);
+    font-weight: 600;
+}
+
+.marco .nav-link:hover {
+    color: var(--bs-primary);
+}
+
+.marco .nav-link.active {
+    color: var(--bs-primary);
+    border-top: 3px solid var(--bs-primary);
+}
+
+/* El periodo de trabajo es un formulario corto: no necesita todo el ancho. */
+.pestana {
+    max-width: 48rem;
+}
+
 html[data-theme="dark"] .eyebrow {
     color: #a0e6f7;
 }

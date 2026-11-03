@@ -1,5 +1,3 @@
-@page "/recuperar-cancelados"
-@attribute [Authorize(Policy = "Tarea:recuperar-cancelados")]
 @implements IDisposable
 
 @using System.Globalization
@@ -10,15 +8,15 @@
 @inject EmpresaContext EmpresaContext
 @inject RecuperarCanceladosService Recuperacion
 @inject PeriodoTrabajoService Periodo
+@inject CFDIManager.Web.Services.Sinube.SatMetadatosService MetadatosSat
 @inject IJSRuntime JS
 
-<PageTitle>Recuperar cancelados</PageTitle>
-
-<div class="recuperar-page d-flex flex-column gap-3 pb-4">
-    <header>
-        <span class="eyebrow">SAT</span>
-        <h1 class="h2 mb-0">Recuperar cancelados</h1>
-    </header>
+@* Recibidos cancelados sin XML (el SAT ya no los entrega): se cargan de SINUBE o del proveedor. Pestaña de Herramientas. *@
+<div class="recuperar d-flex flex-column gap-3">
+    <div>
+        <span class="eyebrow">SAT · @EmpresaContext.Rfc</span>
+        <h2 class="h5 mb-0">Recuperar cancelados</h2>
+    </div>
 
     @if (!EmpresaContext.TieneEmpresaActiva)
     {
@@ -35,11 +33,11 @@
             </div>
         }
 
-        <div class="card shadow-sm">
-            <div class="card-body d-flex flex-wrap align-items-end gap-3">
+        <div class="border rounded-3 bg-body-tertiary">
+            <div class="p-3 d-flex flex-wrap align-items-end gap-3">
                 <div>
-                    <label class="form-label small fw-semibold mb-1" for="anio">Año</label>
-                    <select id="anio" class="form-select" @bind="Anio" @bind:after="Cargar" disabled="@Cargando">
+                    <label class="form-label small fw-semibold mb-1" for="rc-anio">Año</label>
+                    <select id="rc-anio" class="form-select" @bind="Anio" @bind:after="Cargar" disabled="@Ocupado">
                         @for (int a = DateTime.Today.Year; a >= DateTime.Today.Year - 6; a--)
                         {
                             <option value="@a">@a</option>
@@ -48,8 +46,8 @@
                 </div>
 
                 <div>
-                    <label class="form-label small fw-semibold mb-1" for="mes">Mes</label>
-                    <select id="mes" class="form-select" @bind="Mes" @bind:after="Cargar" disabled="@Cargando">
+                    <label class="form-label small fw-semibold mb-1" for="rc-mes">Mes</label>
+                    <select id="rc-mes" class="form-select" @bind="Mes" @bind:after="Cargar" disabled="@Ocupado">
                         @for (int m = 1; m <= 12; m++)
                         {
                             <option value="@m">@m.ToString("00") · @Mx.DateTimeFormat.GetMonthName(m)</option>
@@ -57,7 +55,20 @@
                     </select>
                 </div>
 
-                <label class="btn btn-primary d-inline-flex align-items-center gap-2 mb-0 @(Cargando ? "disabled" : "")">
+                <button type="button" class="btn btn-outline-primary d-inline-flex align-items-center gap-2" @onclick="ConsultarSat" disabled="@Ocupado">
+                    @if (Consultando)
+                    {
+                        <span class="spinner-border spinner-border-sm"></span>
+                        <span>Consultando SAT…</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-arrow-repeat"></i>
+                        <span>Consultar SAT</span>
+                    }
+                </button>
+
+                <label class="btn btn-primary d-inline-flex align-items-center gap-2 mb-0 @(Ocupado ? "disabled" : "")">
                     @if (Cargando)
                     {
                         <span class="spinner-border spinner-border-sm"></span>
@@ -68,23 +79,46 @@
                         <i class="bi bi-upload"></i>
                         <span>Cargar XML o ZIP</span>
                     }
-                    <InputFile @key="_inputKey" class="d-none" multiple accept=".xml,.zip" OnChange="CargarArchivos" disabled="@Cargando" />
+                    <InputFile @key="_inputKey" class="d-none" multiple accept=".xml,.zip" OnChange="CargarArchivos" disabled="@Ocupado" />
                 </label>
 
-                <button type="button" class="btn btn-outline-success ms-auto" @onclick="DescargarExcel" disabled="@(Faltantes == 0)">
-                    <i class="bi bi-file-earmark-excel me-1"></i>Excel de faltantes
-                </button>
+                <div class="ms-auto d-flex align-items-center gap-3">
+                    @if (MetadatosMes is not null)
+                    {
+                        <span class="small text-body-secondary" title="Solicitud @MetadatosMes.SolicitudId">
+                            <i class="bi bi-clock-history me-1"></i>SAT al @MetadatosMes.CubreHasta.ToString("dd/MM/yyyy HH:mm")
+                        </span>
+                    }
+                    <button type="button" class="btn btn-outline-success" @onclick="DescargarExcel" disabled="@(Faltantes == 0)">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Excel de faltantes
+                    </button>
+                </div>
             </div>
+
+            @if (Consultando)
+            {
+                <div class="border-top px-3 py-2 small d-flex align-items-center gap-2">
+                    <span class="spinner-border spinner-border-sm text-primary"></span>
+                    <span>@AvanceSat</span>
+                    <button type="button" class="btn btn-sm btn-link ms-auto" @onclick="() => CancelacionSat?.Cancel()">Detener</button>
+                </div>
+            }
         </div>
 
-        @if (SinMetadatos)
+        @if (!string.IsNullOrEmpty(Mensaje))
+        {
+            <div class="alert alert-success alert-dismissible d-flex align-items-center gap-2 mb-0" role="status">
+                <i class="bi bi-check-circle-fill fs-5"></i>
+                <span>@Mensaje</span>
+                <button type="button" class="btn-close" @onclick="() => Mensaje = null"></button>
+            </div>
+        }
+
+        @if (MetadatosMes is null && !Consultando)
         {
             <div class="alert alert-warning d-flex align-items-center gap-2 mb-0">
                 <i class="bi bi-cloud-slash fs-5"></i>
-                <span>
-                    No hay metadatos de recibidos de @Anio@Mes.ToString("00").
-                    Ejecuta el cierre del mes en <a href="sat-descargas" class="alert-link">Descargas SAT</a>.
-                </span>
+                <span>No hay metadatos de recibidos de @Anio@Mes.ToString("00"): usa Consultar SAT.</span>
             </div>
         }
 
@@ -97,7 +131,7 @@
 
         @if (UltimaCarga is { Count: > 0 })
         {
-            <div class="card shadow-sm">
+            <div class="card">
                 <div class="card-header d-flex flex-wrap align-items-center gap-2">
                     <span class="fw-semibold">Última carga</span>
                     @foreach (var grupo in UltimaCarga.GroupBy(r => r.Estatus))
@@ -129,7 +163,7 @@
             </div>
         }
 
-        <div class="card shadow-sm">
+        <div class="card">
             <div class="card-header d-flex flex-wrap align-items-center gap-2">
                 <div class="btn-group btn-group-sm" role="group" aria-label="Filtro">
                     <button type="button" class="btn @(Filtro == "faltan" ? "btn-primary" : "btn-outline-secondary")" @onclick='() => Filtro = "faltan"'>Faltan XML</button>
@@ -188,10 +222,16 @@
     private int Anio;
     private int Mes;
     private List<CanceladoSatDto> Filas = new();
-    private bool SinMetadatos;
+    private SatMetadatosPeriodoDto? MetadatosMes;
     private string Filtro = "faltan";
     private bool Cargando;
+    private bool Consultando;
+    private string AvanceSat = "";
+    private CancellationTokenSource? CancelacionSat;
     private string? Error;
+    private string? Mensaje;
+
+    private bool Ocupado => Cargando || Consultando;
     private List<RecuperacionArchivo>? UltimaCarga;
     private Guid _inputKey = Guid.NewGuid();
 
@@ -217,20 +257,68 @@
         if (!EmpresaContext.TieneEmpresaActiva)
         {
             Filas = new();
-            SinMetadatos = false;
+            MetadatosMes = null;
             return;
         }
 
         Filas = Recuperacion.Listar(EmpresaContext.EmpresaId, Anio, Mes);
-        SinMetadatos = Recuperacion.Metadatos(EmpresaContext.EmpresaId, Anio, Mes) is null;
+        MetadatosMes = Recuperacion.Metadatos(EmpresaContext.EmpresaId, Anio, Mes);
     }
 
     private void EmpresaCambio() => InvokeAsync(() =>
     {
+        CancelacionSat?.Cancel();
         UltimaCarga = null;
+        Mensaje = null;
         Cargar();
         StateHasChanged();
     });
+
+    /// <summary>
+    /// Pide al SAT los metadatos de recibidos del mes y vuelve a calcular la lista: quedan los cancelados que no
+    /// están en la bóveda (el SAT ya no entrega su XML). Tarda de 1 a 10 minutos.
+    /// </summary>
+    private async Task ConsultarSat()
+    {
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa)
+            return;
+
+        Error = null;
+        Mensaje = null;
+        Consultando = true;
+        AvanceSat = "Enviando la solicitud de metadatos al SAT…";
+        CancelacionSat = new CancellationTokenSource();
+        int antes = Faltantes;
+        int anio = Anio, mes = Mes;
+
+        var progreso = new Progress<string>(texto => InvokeAsync(() =>
+        {
+            AvanceSat = texto;
+            StateHasChanged();
+        }));
+
+        try
+        {
+            await MetadatosSat.ActualizarAsync(empresa, recibidos: true, anio, mes, progreso, CancelacionSat.Token, origen: "Recuperar cancelados");
+            Cargar();
+            Mensaje = $"SAT consultado: {Filas.Count:N0} recibidos cancelados en {anio}{mes:00}, {Faltantes:N0} sin XML" +
+                      (Faltantes != antes ? $" (antes {antes:N0})." : ".");
+        }
+        catch (OperationCanceledException)
+        {
+            // Se detuvo o se cambió de empresa: la solicitud sigue en Descargas SAT y se retoma al volver a consultar.
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Consultando = false;
+            CancelacionSat?.Dispose();
+            CancelacionSat = null;
+        }
+    }
 
     private async Task CargarArchivos(InputFileChangeEventArgs e)
     {
@@ -271,5 +359,6 @@
     public void Dispose()
     {
         EmpresaContext.OnChange -= EmpresaCambio;
+        CancelacionSat?.Cancel();
     }
 }

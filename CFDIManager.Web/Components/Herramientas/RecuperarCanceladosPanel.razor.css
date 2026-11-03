@@ -1,6 +1,6 @@
-/* Las tablas son anchas: que hagan scroll dentro de su tarjeta en vez de ensanchar la página. */
-.recuperar-page,
-.recuperar-page > .card {
+/* Las tablas son anchas: que hagan scroll dentro de su tarjeta en vez de ensanchar la pestaña. */
+.recuperar,
+.recuperar > .card {
     min-width: 0;
     max-width: 100%;
 }
@@ -13,7 +13,7 @@
 }
 
 .tabla-contenedor {
-    max-height: calc(100vh - 24rem);
+    max-height: calc(100vh - 28rem);
     min-height: 220px;
 }
 

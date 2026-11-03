@@ -46,15 +46,31 @@
         </div>
     }
 
-    <div class="row g-3">
-        <div class="col-xl-7">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-body py-3">
+    <div class="card shadow-sm marco">
+        <div class="card-header bg-body-tertiary pb-0">
+            <ul class="nav nav-tabs card-header-tabs flex-nowrap overflow-x-auto" role="tablist">
+                @foreach ((string clave, string nombre, string icono) in Pestanas)
+                {
+                    <li class="nav-item" role="presentation">
+                        <button type="button" role="tab" class="nav-link text-nowrap @(Tab == clave ? "active" : "")"
+                                aria-selected="@(Tab == clave)" @onclick="() => Tab = clave">
+                            <i class="bi @icono me-1"></i>@nombre
+                        </button>
+                    </li>
+                }
+            </ul>
+        </div>
+
+        <div class="card-body p-4">
+        @if (Tab == "periodo")
+        {
+            <div class="pestana">
+                <div class="mb-3">
                     <span class="eyebrow">PERIODO DE TRABAJO</span>
                     <h2 class="h5 mb-0">Mes con el que abren las pantallas</h2>
                 </div>
 
-                <div class="card-body">
+                <div>
 
                     <div class="form-check mb-2">
                         <input class="form-check-input" type="radio" name="modo" id="automatico"
@@ -104,11 +120,12 @@
                     </div>
                 </div>
             </div>
-        </div>
+        }
 
-        <div class="col-12">
-            <div class="card shadow-sm">
-                <div class="card-header bg-body d-flex flex-wrap align-items-center justify-content-between gap-2 py-3">
+        @if (Tab == "sat")
+        {
+            <div>
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
                     <div>
                         <span class="eyebrow">SAT</span>
                         <h2 class="h5 mb-0">Descarga automática del SAT</h2>
@@ -123,7 +140,7 @@
                     </div>
                 </div>
 
-                <div class="card-body">
+                <div>
 
                     @if (DescargaPausada)
                     {
@@ -205,16 +222,22 @@
                     </div>
                 </div>
             </div>
-        </div>
+        }
 
-        <div class="col-12">
-            <div class="card shadow-sm">
-                <div class="card-header bg-body py-3">
+        @if (Tab == "cancelados")
+        {
+            <RecuperarCanceladosPanel />
+        }
+
+        @if (Tab == "storage")
+        {
+            <div>
+                <div class="mb-3">
                     <span class="eyebrow">CARPETA DE DATOS</span>
                     <h2 class="h5 mb-0">Ubicación de Storage en este equipo (@Environment.MachineName)</h2>
                 </div>
 
-                <div class="card-body">
+                <div>
 
                     <dl class="row small mb-3">
                         <dt class="col-sm-3">En uso</dt>
@@ -269,16 +292,17 @@
                     </button>
                 </div>
             </div>
-        </div>
+        }
 
-        <div class="col-12">
-            <div class="card shadow-sm">
-                <div class="card-header bg-body py-3">
+        @if (Tab == "respaldo")
+        {
+            <div>
+                <div class="mb-3">
                     <span class="eyebrow">RESPALDO</span>
                     <h2 class="h5 mb-0">Respaldo de la base de datos y Storage</h2>
                 </div>
 
-                <div class="card-body">
+                <div>
 
                     <div class="input-group mb-2">
                         <span class="input-group-text"><i class="bi bi-cloud-arrow-up"></i></span>
@@ -352,16 +376,17 @@
                     }
                 </div>
             </div>
-        </div>
+        }
 
-        <div class="col-12">
-            <div class="card shadow-sm">
-                <div class="card-header bg-body py-3">
+        @if (Tab == "resincronizar")
+        {
+            <div>
+                <div class="mb-3">
                     <span class="eyebrow">BÓVEDA</span>
                     <h2 class="h5 mb-0">Re-sincronizar con la bóveda</h2>
                 </div>
 
-                <div class="card-body">
+                <div>
 
                     <div class="d-flex flex-wrap gap-2 align-items-end mb-3">
                         <div>
@@ -469,12 +494,34 @@
                     }
                 </div>
             </div>
+        }
         </div>
     </div>
 </div>
 
 @code {
     private static readonly CultureInfo Mx = CultureInfo.GetCultureInfo("es-MX");
+
+    private static readonly (string Clave, string Nombre, string Icono)[] Pestanas =
+    [
+        ("periodo", "Periodo de trabajo", "bi-calendar3"),
+        ("sat", "Descarga SAT", "bi-cloud-arrow-down"),
+        ("cancelados", "Recuperar cancelados", "bi-file-earmark-x"),
+        ("storage", "Storage", "bi-hdd"),
+        ("respaldo", "Respaldo", "bi-shield-check"),
+        ("resincronizar", "Re-sincronizar", "bi-arrow-repeat")
+    ];
+
+    [SupplyParameterFromQuery(Name = "tab")]
+    private string? TabInicial { get; set; }
+
+    private string _tab = "";
+
+    private string Tab
+    {
+        get => _tab != "" ? _tab : Pestanas.Any(p => p.Clave == TabInicial) ? TabInicial! : "periodo";
+        set => _tab = value;
+    }
 
     private bool Automatico;
     private int MesElegido;
