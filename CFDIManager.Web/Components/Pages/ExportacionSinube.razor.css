@@ -631,3 +631,38 @@ html[data-theme="dark"] .results-table th {
 }
 
 /* ===== FIN MODO OSCURO ===== */
+
+/* Totales del envío y de SINUBE junto a la barra de progreso; cada grupo en una sola línea. */
+.kpis-envio {
+    display: flex;
+    flex-direction: column;
+    gap: .45rem;
+    margin-top: .75rem;
+}
+
+.kpis-titulo {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .8rem;
+    font-weight: 700;
+}
+
+.kpis-fila {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: .5rem;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.kpis-fila ::deep .kpi-celda {
+    flex: 1 1 0;
+    min-width: 9.5rem;
+}
+
+.kpis-fila ::deep .kpi-celda .text-uppercase {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}

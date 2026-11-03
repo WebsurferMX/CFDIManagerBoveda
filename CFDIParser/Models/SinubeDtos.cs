@@ -33,10 +33,18 @@ public class SinubeConfiguracionDto
     public bool ValidarIeps { get; set; } = true;
 
     /// <summary>
-    /// Serie con la que se suben los complementos de pago de clientes cuyo serie-folio ya ocupa otro pago en SINUBE
-    /// (SINUBE valida el folio, no el UUID; p. ej. COM → COMFR). Vacía: no se cambia.
+    /// Series, separadas por coma y en orden, con las que se suben los complementos de pago de clientes cuyo
+    /// serie-folio ya ocupa otro pago en SINUBE (SINUBE valida el folio, no el UUID; p. ej. "COMFR,COMFRR").
+    /// Se usa la primera con el folio libre. Vacía: no se cambia.
     /// </summary>
     public string SerieAlternaPagos { get; set; } = "";
+
+    /// <summary><see cref="SerieAlternaPagos"/> como lista, en mayúsculas y sin repetidas.</summary>
+    public List<string> SeriesAlternasPagos =>
+        SerieAlternaPagos.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(s => s.ToUpperInvariant())
+            .Distinct()
+            .ToList();
 
     // Parámetros de descarga / nombre de XML (pestaña "Descarga XMLs del SAT")
     public bool IncluirUuid { get; set; }

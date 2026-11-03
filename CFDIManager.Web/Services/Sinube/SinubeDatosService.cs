@@ -72,6 +72,31 @@ public class SinubeDatosService(SinubeService sinube, IHttpClientFactory http)
     }
 
     /// <summary>
+    /// UUID de los depósitos (pagos de clientes) de esos meses. Los complementos de pago importados quedan en
+    /// DbDeposito sin serie y con folio 0: solo se reconocen por UUID. El mes es el del depósito (fecha de pago).
+    /// </summary>
+    public async Task<HashSet<string>> UuidsDepositosAsync(
+        SinubeConfiguracionDto configuracion, IEnumerable<DateTime> meses, CancellationToken cancelacion = default)
+    {
+        string empresa = configuracion.Empresa.Replace("'", "");
+        var uuids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (int periodo in meses.Select(m => m.Year * 100 + m.Month).Distinct())
+        {
+            List<FilaSinube> filas = await ConsultarAsync(
+                configuracion, $"SELECT uuid FROM DbDeposito WHERE empresa = '{empresa}' AND mes = {periodo}", cancelacion);
+
+            foreach (FilaSinube fila in filas)
+            {
+                if (fila.Texto("uuid") is { Length: > 0 } uuid)
+                    uuids.Add(uuid.Trim());
+            }
+        }
+
+        return uuids;
+    }
+
+    /// <summary>
     /// Complementos de pago de clientes que SINUBE ya tiene (DbDeposito) con esas series, de cualquier mes.
     /// SINUBE rechaza un pago cuyo serie-folio ya ocupa otro, aunque el UUID sea distinto.
     /// </summary>

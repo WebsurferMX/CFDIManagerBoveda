@@ -159,9 +159,9 @@
                         <div class="field">
                             <label>Tipos de comprobante</label>
                             <div class="check-list">
-                                <label><input type="checkbox" @bind="IncluirIngreso" disabled="@Enviando" /> Ingreso</label>
-                                <label><input type="checkbox" @bind="IncluirEgreso" disabled="@Enviando" /> Egreso</label>
-                                <label><input type="checkbox" @bind="IncluirPago" disabled="@Enviando" /> Pago</label>
+                                <label><input type="checkbox" @bind="IncluirIngreso" @bind:after="LimpiarRevision" disabled="@Enviando" /> Ingreso</label>
+                                <label><input type="checkbox" @bind="IncluirEgreso" @bind:after="LimpiarRevision" disabled="@Enviando" /> Egreso</label>
+                                <label><input type="checkbox" @bind="IncluirPago" @bind:after="LimpiarRevision" disabled="@Enviando" /> Pago</label>
                             </div>
                             <small class="hint">Los XML de más de 900,000 caracteres se envían sin conceptos (XML reducido).</small>
                         </div>
@@ -211,8 +211,8 @@
 
                 @if (Revision is not null && Resultados.Count == 0)
                 {
-                    <div class="row row-cols-2 row-cols-md-5 g-2 mt-1">
-                        @TarjetasRevision(Revision)
+                    <div class="kpis-fila mt-1">
+                        @TarjetasRevision(Revision, "kpi-celda")
                     </div>
                 }
 
@@ -225,6 +225,41 @@
                         <span>Archivos procesados: @Procesados de @Total, insertados: @Contar("OK")</span>
                     </div>
                 }
+
+                @* Totales del envío y de SINUBE junto a la barra de progreso: no se mueven aunque la lista crezca. *@
+                @if (Resultados.Count > 0)
+                {
+                    <div class="kpis-envio">
+                        <div class="kpis-fila">
+                            <TarjetaTotal Ancho="kpi-celda" Titulo="Insertados" Valor="@Contar("OK").ToString("N0")" Icono="bi-check2-circle" Color="success" />
+                            <TarjetaTotal Ancho="kpi-celda" Titulo="Ya existían" Valor="@Contar("EXISTE").ToString("N0")" Icono="bi-cloud-check" Color="info" />
+                            <TarjetaTotal Ancho="kpi-celda" Titulo="Omitidos" Valor="@Contar("OMITIDO").ToString("N0")" Icono="bi-skip-forward" />
+                            @if (Clientes)
+                            {
+                                <TarjetaTotal Ancho="kpi-celda" Titulo="Nómina (no se sube)" Valor="@Contar("NOMINA").ToString("N0")" Icono="bi-people" Color="primary" />
+                                <TarjetaTotal Ancho="kpi-celda" Titulo="IEPS" Valor="@Contar("IEPS").ToString("N0")" Icono="bi-exclamation-triangle" Color="warning" />
+                            }
+                            <TarjetaTotal Ancho="kpi-celda" Titulo="Errores / inválidos" Valor="@((Contar("ERROR") + Contar("INVALIDO") + Contar("FOLIO")).ToString("N0"))" Icono="bi-x-octagon" Color="danger" />
+                        </div>
+
+                        @if (RevisandoFinal || Revision is not null)
+                        {
+                            <div class="kpis-titulo">
+                                <i class="bi bi-cloud-check"></i> SINUBE
+                                @if (RevisandoFinal)
+                                {
+                                    <span class="spinner-border spinner-border-sm text-secondary"></span>
+                                }
+                            </div>
+                            @if (Revision is not null)
+                            {
+                                <div class="kpis-fila">
+                                    @TarjetasRevision(Revision, "kpi-celda")
+                                </div>
+                            }
+                        }
+                    </div>
+                }
             </section>
 
             @if (!string.IsNullOrWhiteSpace(Error))
@@ -234,15 +269,6 @@
 
             @if (Resultados.Count > 0)
             {
-                <div class="row row-cols-2 row-cols-md-3 row-cols-xl-6 g-2">
-                    <TarjetaTotal Ancho="col" Titulo="Insertados" Valor="@Contar("OK").ToString("N0")" Icono="bi-check2-circle" Color="success" />
-                    <TarjetaTotal Ancho="col" Titulo="Ya existían" Valor="@Contar("EXISTE").ToString("N0")" Icono="bi-cloud-check" Color="info" />
-                    <TarjetaTotal Ancho="col" Titulo="Omitidos" Valor="@Contar("OMITIDO").ToString("N0")" Icono="bi-skip-forward" />
-                    <TarjetaTotal Ancho="col" Titulo="Nómina (no se sube)" Valor="@Contar("NOMINA").ToString("N0")" Icono="bi-people" Color="primary" />
-                    <TarjetaTotal Ancho="col" Titulo="IEPS" Valor="@Contar("IEPS").ToString("N0")" Icono="bi-exclamation-triangle" Color="warning" />
-                    <TarjetaTotal Ancho="col" Titulo="Errores / inválidos" Valor="@((Contar("ERROR") + Contar("INVALIDO") + Contar("FOLIO")).ToString("N0"))" Icono="bi-x-octagon" Color="danger" />
-                </div>
-
                 <section class="results-card">
                     <header class="results-heading">
                         <div>
@@ -289,25 +315,6 @@
                         </table>
                     </div>
                 </section>
-
-                @if (RevisandoFinal || Revision is not null)
-                {
-                    <section class="panel-card">
-                        <h2 class="d-flex align-items-center gap-2">
-                            <i class="bi bi-cloud-check"></i> Así quedó en SINUBE
-                            @if (RevisandoFinal)
-                            {
-                                <span class="spinner-border spinner-border-sm text-secondary"></span>
-                            }
-                        </h2>
-                        @if (Revision is not null)
-                        {
-                            <div class="row row-cols-2 row-cols-md-5 g-2">
-                                @TarjetasRevision(Revision)
-                            </div>
-                        }
-                    </section>
-                }
             }
         }
         else
@@ -349,9 +356,9 @@
 
                 <div class="form-grid">
                     <div class="field">
-                        <label>Serie alterna para pagos con folio ocupado</label>
-                        <input class="form-control" @bind="Config.SerieAlternaPagos" placeholder="Vacío: no se cambia (p. ej. COMFR)" maxlength="25" />
-                        <small class="hint">Si en SINUBE otro pago ya tiene la misma serie y folio, el pago se sube con esta serie. El XML de la bóveda no cambia.</small>
+                        <label>Series alternas para pagos con folio ocupado</label>
+                        <input class="form-control" @bind="Config.SerieAlternaPagos" placeholder="Vacío: no se cambia (p. ej. COMFR,COMFRR)" maxlength="100" />
+                        <small class="hint">Separadas por coma, en orden: si otro pago en SINUBE ya tiene la misma serie y folio, se usa la primera con ese folio libre. El XML de la bóveda no cambia.</small>
                     </div>
                 </div>
 
@@ -630,6 +637,9 @@
         /// <summary>Pagos con folio ocupado que no se pueden subir (sin serie alterna, o también ocupada).</summary>
         public int PagosFolioOcupado { get; init; }
 
+        /// <summary>Proveedores: pendientes de un tipo de comprobante no marcado (Ingreso, Egreso, Pago).</summary>
+        public int TipoNoSeleccionado { get; init; }
+
         /// <summary>Pagos de clientes en SINUBE (DbDeposito) por "SERIE|FOLIO" → UUID, para el envío.</summary>
         public Dictionary<string, string>? PagosEnSinube { get; init; }
 
@@ -644,24 +654,28 @@
 
     private void LimpiarRevision() => Revision = null;
 
-    private RenderFragment TarjetasRevision(RevisionSinube r) =>
+    private RenderFragment TarjetasRevision(RevisionSinube r, string ancho) =>
         @<text>
-            <TarjetaTotal Ancho="col" Titulo="XML del periodo" Valor="@r.Archivos.ToString("N0")" Icono="bi-files" />
-            <TarjetaTotal Ancho="col" Titulo="Ya en SINUBE" Valor="@r.EnSinube.ToString("N0")" Icono="bi-cloud-check" Color="info" />
-            <TarjetaTotal Ancho="col" Titulo="Enviados antes" Valor="@r.EnviadosAntes.ToString("N0")" Icono="bi-clock-history" />
+            <TarjetaTotal Ancho="@ancho" Titulo="XML del periodo" Valor="@r.Archivos.ToString("N0")" Icono="bi-files" />
+            <TarjetaTotal Ancho="@ancho" Titulo="Ya en SINUBE" Valor="@r.EnSinube.ToString("N0")" Icono="bi-cloud-check" Color="info" />
+            <TarjetaTotal Ancho="@ancho" Titulo="Enviados antes" Valor="@r.EnviadosAntes.ToString("N0")" Icono="bi-clock-history" />
             @if (r.Nomina > 0)
             {
-                <TarjetaTotal Ancho="col" Titulo="Nómina (no se sube)" Valor="@r.Nomina.ToString("N0")" Icono="bi-people" Color="primary" />
+                <TarjetaTotal Ancho="@ancho" Titulo="Nómina (no se sube)" Valor="@r.Nomina.ToString("N0")" Icono="bi-people" Color="primary" />
             }
             @if (r.PagosSerieAlterna > 0)
             {
-                <TarjetaTotal Ancho="col" Titulo="@($"Folio ocupado → {Config?.SerieAlternaPagos}")" Valor="@r.PagosSerieAlterna.ToString("N0")" Icono="bi-arrow-left-right" Color="info" />
+                <TarjetaTotal Ancho="@ancho" Titulo="@($"Folio ocupado → {string.Join(" / ", Config?.SeriesAlternasPagos ?? [])}")" Valor="@r.PagosSerieAlterna.ToString("N0")" Icono="bi-arrow-left-right" Color="info" />
+            }
+            @if (r.TipoNoSeleccionado > 0)
+            {
+                <TarjetaTotal Ancho="@ancho" Titulo="Tipo no marcado" Valor="@r.TipoNoSeleccionado.ToString("N0")" Icono="bi-funnel" />
             }
             @if (r.PagosFolioOcupado > 0)
             {
-                <TarjetaTotal Ancho="col" Titulo="Folio ocupado (no se sube)" Valor="@r.PagosFolioOcupado.ToString("N0")" Icono="bi-exclamation-octagon" Color="danger" />
+                <TarjetaTotal Ancho="@ancho" Titulo="Folio ocupado (no se sube)" Valor="@r.PagosFolioOcupado.ToString("N0")" Icono="bi-exclamation-octagon" Color="danger" />
             }
-            <TarjetaTotal Ancho="col" Titulo="Por subir" Valor="@r.PorSubir.Count.ToString("N0")" Icono="bi-cloud-arrow-up" Color="@(r.PorSubir.Count > 0 ? "warning" : "success")" />
+            <TarjetaTotal Ancho="@ancho" Titulo="Por subir" Valor="@r.PorSubir.Count.ToString("N0")" Icono="bi-cloud-arrow-up" Color="@(r.PorSubir.Count > 0 ? "warning" : "success")" />
         </text>;
 
     private async Task RevisarSinube()
@@ -707,15 +721,26 @@
             : null;
 
         if (pagosEnSinube is not null)
+        {
+            // Los pagos ya importados quedan en DbDeposito sin serie ni folio: se reconocen por UUID, en los depósitos
+            // del mes anterior al siguiente (el mes del depósito es el de la fecha de pago).
             enSinube.UnionWith(pagosEnSinube.Values);
+            enSinube.UnionWith(await DatosSinube.UuidsDepositosAsync(config, [periodo.AddMonths(-1), periodo, periodo.AddMonths(1)]));
+        }
 
         bool EnSinube(string a) => enSinube.Contains(datos[a].Uuid);
         bool Ocupado(string a) => pagosEnSinube?.ContainsKey(PagoSinube.SerieFolio(datos[a].Serie, datos[a].Folio)) == true && !EnSinube(a);
 
-        string alterna = config.SerieAlternaPagos.Trim().ToUpperInvariant();
-        bool SeSubeConAlterna(string a) => alterna != "" && !pagosEnSinube!.ContainsKey(PagoSinube.SerieFolio(alterna, datos[a].Folio));
+        List<string> alternas = config.SeriesAlternasPagos;
+        bool SeSubeConAlterna(string a) => alternas.Any(s => !pagosEnSinube!.ContainsKey(PagoSinube.SerieFolio(s, datos[a].Folio)));
 
         List<string> pendientes = facturas.Where(a => !EnSinube(a) && !enviados.Contains(datos[a].Uuid)).ToList();
+
+        // Proveedores: solo los tipos marcados se envían; los demás se cuentan aparte.
+        HashSet<string>? tipos = clientes ? null : TiposSeleccionados();
+        List<string> noMarcados = tipos is null ? [] : pendientes.Where(a => !tipos.Contains(datos[a].Tipo)).ToList();
+        pendientes = pendientes.Except(noMarcados).ToList();
+
         List<string> ocupados = pendientes.Where(a => datos[a].Tipo == "P" && Ocupado(a)).ToList();
         List<string> bloqueados = ocupados.Where(a => !SeSubeConAlterna(a)).ToList();
 
@@ -728,15 +753,16 @@
             EnviadosAntes = facturas.Count(a => !EnSinube(a) && enviados.Contains(datos[a].Uuid)),
             PagosSerieAlterna = ocupados.Count - bloqueados.Count,
             PagosFolioOcupado = bloqueados.Count,
+            TipoNoSeleccionado = noMarcados.Count,
             PagosEnSinube = pagosEnSinube,
             PorSubir = pendientes.Except(bloqueados).ToList()
         };
     }
 
-    /// <summary>Pagos de clientes que SINUBE ya tiene con esas series o con la serie alterna: "SERIE|FOLIO" → UUID.</summary>
+    /// <summary>Pagos de clientes que SINUBE ya tiene con esas series o con las series alternas: "SERIE|FOLIO" → UUID.</summary>
     private async Task<Dictionary<string, string>> PagosEnSinubeAsync(SinubeConfiguracionDto config, IEnumerable<string> series)
     {
-        List<PagoSinube> pagos = await DatosSinube.PagosClientesAsync(config, series.Append(config.SerieAlternaPagos));
+        List<PagoSinube> pagos = await DatosSinube.PagosClientesAsync(config, series.Concat(config.SeriesAlternasPagos));
         var porLlave = new Dictionary<string, string>();
 
         foreach (PagoSinube p in pagos)
@@ -806,6 +832,16 @@
             CargarHistorial();
     }
 
+    /// <summary>Tipos de comprobante marcados en proveedores (Ingreso, Egreso, Pago).</summary>
+    private HashSet<string> TiposSeleccionados()
+    {
+        HashSet<string> tipos = [];
+        if (IncluirIngreso) tipos.Add("I");
+        if (IncluirEgreso) tipos.Add("E");
+        if (IncluirPago) tipos.Add("P");
+        return tipos;
+    }
+
     private static bool TryPeriodo(string texto, out DateTime periodo) =>
         DateTime.TryParseExact(texto + "-01", "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out periodo);
 
@@ -829,15 +865,7 @@
             return;
         }
 
-        HashSet<string>? tipos = null;
-
-        if (!Clientes)
-        {
-            tipos = [];
-            if (IncluirIngreso) tipos.Add("I");
-            if (IncluirEgreso) tipos.Add("E");
-            if (IncluirPago) tipos.Add("P");
-        }
+        HashSet<string>? tipos = Clientes ? null : TiposSeleccionados();
 
         SinubeSinFolioDto? sinFolio = null;
 
@@ -871,7 +899,10 @@
                 List<DatosXml> pagos = await Task.Run(() => archivos.Select(DatosDeArchivo).Where(d => d.Tipo == "P").ToList());
 
                 if (pagos.Count > 0)
+                {
                     pagosEnSinube = await PagosEnSinubeAsync(Config, pagos.Select(p => p.Serie));
+                    yaEnSinube = await DatosSinube.UuidsDepositosAsync(Config, [periodo.AddMonths(-1), periodo, periodo.AddMonths(1)]);
+                }
             }
 
             await Task.Run(() => Sinube.EnviarArchivosAsync(

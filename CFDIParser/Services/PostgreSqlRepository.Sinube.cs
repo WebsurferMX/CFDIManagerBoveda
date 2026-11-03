@@ -151,7 +151,7 @@ public partial class PostgreSqlRepository
         cmd.Parameters.AddWithValue("criterio_nombre", modelo.CriterioNombre);
         cmd.Parameters.AddWithValue("foliador_llave", modelo.FoliadorLlave);
         cmd.Parameters.AddWithValue("foliador_nombre", modelo.FoliadorNombre);
-        cmd.Parameters.AddWithValue("serie_alterna_pagos", modelo.SerieAlternaPagos.Trim().ToUpperInvariant());
+        cmd.Parameters.AddWithValue("serie_alterna_pagos", string.Join(",", modelo.SeriesAlternasPagos));
 
         cmd.ExecuteNonQuery();
     }

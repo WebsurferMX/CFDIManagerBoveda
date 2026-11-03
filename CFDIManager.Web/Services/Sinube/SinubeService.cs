@@ -404,11 +404,12 @@ public class SinubeService
                     continue;
                 }
 
-                string? serieCambiada = null;
+                // Pagos de clientes: SINUBE valida el serie-folio, no el UUID. Si otro depósito ya ocupa ese folio
+                // se intenta con las series alternas de la empresa (Herramientas), en orden; el XML de la bóveda
+                // no se modifica. Los folios ocupados conocidos se saltan; los demás se descubren por la respuesta.
+                List<string>? seriesIntento = null;
 
-                // Pagos de clientes: SINUBE valida el serie-folio, no el UUID. Si otro pago ya ocupa ese folio
-                // se sube con la serie alterna de la empresa (Herramientas); el XML de la bóveda no se modifica.
-                if (clientes && envio.TipoComprobante == "P" && pagosEnSinube is not null)
+                if (clientes && sinFolio is null && envio.TipoComprobante == "P" && configuracion.SeriesAlternasPagos.Count > 0)
                 {
                     if (uuidsPagosEnSinube.Contains(envio.Uuid))
                     {
@@ -419,25 +420,20 @@ public class SinubeService
                         continue;
                     }
 
-                    if (pagosEnSinube.ContainsKey(PagoSinube.SerieFolio(envio.Serie, envio.Folio)))
+                    bool Ocupado(string serie) => pagosEnSinube?.ContainsKey(PagoSinube.SerieFolio(serie, envio.Folio)) == true;
+
+                    seriesIntento = new[] { envio.Serie }.Concat(configuracion.SeriesAlternasPagos)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .Where(s => !Ocupado(s))
+                        .ToList();
+
+                    if (seriesIntento.Count == 0)
                     {
-                        string alterna = configuracion.SerieAlternaPagos.Trim().ToUpperInvariant();
-                        string original = $"{envio.Serie}-{envio.Folio}";
-
-                        if (alterna == "" || pagosEnSinube.ContainsKey(PagoSinube.SerieFolio(alterna, envio.Folio)))
-                        {
-                            envio.Estatus = "FOLIO";
-                            envio.Mensaje = alterna == ""
-                                ? $"El folio {original} ya lo tiene otro pago en SINUBE. Configura la serie alterna para pagos en Herramientas."
-                                : $"El folio {original} ya lo tiene otro pago en SINUBE, y {alterna}-{envio.Folio} también.";
-                            _repo.RegistrarEnvioSinube(envio);
-                            await progreso(envio, i + 1, archivos.Count);
-                            continue;
-                        }
-
-                        ((XmlElement)Comprobante(documento)).SetAttribute("Serie", alterna);
-                        serieCambiada = $"Serie cambiada: {original} ya existe en SINUBE, se subió como {alterna}-{envio.Folio}. ";
-                        envio.Serie = alterna;
+                        envio.Estatus = "FOLIO";
+                        envio.Mensaje = FolioOcupado(envio, configuracion);
+                        _repo.RegistrarEnvioSinube(envio);
+                        await progreso(envio, i + 1, archivos.Count);
+                        continue;
                     }
                 }
 
@@ -466,10 +462,17 @@ public class SinubeService
                         }
                     }
 
-                    await EnviarClienteAsync(documento, envio, configuracion, password, empresa.Rfc, sinFolio, cancelacion);
+                    if (seriesIntento is null)
+                    {
+                        await EnviarClienteAsync(documento, envio, configuracion, password, empresa.Rfc, sinFolio, cancelacion);
 
-                    if (serieCambiada is not null)
-                        envio.Mensaje = serieCambiada + envio.Mensaje;
+                        if (UuidYaExiste(envio))
+                            envio.Estatus = "EXISTE";
+                    }
+                    else
+                    {
+                        await EnviarPagoConSeriesAsync(documento, envio, seriesIntento, configuracion, password, empresa.Rfc, cancelacion);
+                    }
                 }
                 else
                 {
@@ -680,6 +683,72 @@ public class SinubeService
         }
 
         return avisos.Count > 0 ? string.Join(", ", avisos) : null;
+    }
+
+    /// <summary>
+    /// Envía un pago de clientes probando sus series en orden (la original y las alternas con el folio libre):
+    /// si SINUBE responde que ya existe un depósito con ese serie-folio, intenta con la siguiente.
+    /// </summary>
+    private async Task EnviarPagoConSeriesAsync(
+        XmlDocument documento,
+        SinubeEnvioDto envio,
+        List<string> series,
+        SinubeConfiguracionDto configuracion,
+        string password,
+        string rfcEmpresa,
+        CancellationToken cancelacion)
+    {
+        string original = $"{envio.Serie}-{envio.Folio}";
+        string serieOriginal = envio.Serie;
+
+        foreach (string serie in series)
+        {
+            ((XmlElement)Comprobante(documento)).SetAttribute("Serie", serie);
+            envio.Serie = serie;
+
+            await EnviarClienteAsync(documento, envio, configuracion, password, rfcEmpresa, null, cancelacion);
+
+            // El que ya existe es el UUID: el pago ya está en SINUBE, no se reintenta con otra serie.
+            if (UuidYaExiste(envio))
+            {
+                envio.Estatus = "EXISTE";
+                envio.Serie = serieOriginal;
+                return;
+            }
+
+            if (envio.Estatus == "OK" || !EsDepositoDuplicado(envio.Mensaje))
+                break;
+        }
+
+        if (envio.Estatus == "OK" && !string.Equals(envio.Serie, serieOriginal, StringComparison.OrdinalIgnoreCase))
+        {
+            envio.Mensaje = $"Serie cambiada: {original} ya existe en SINUBE, se subió como {envio.Serie}-{envio.Folio}. " + envio.Mensaje;
+        }
+        else if (envio.Estatus != "OK" && EsDepositoDuplicado(envio.Mensaje))
+        {
+            envio.Estatus = "FOLIO";
+            envio.Mensaje = FolioOcupado(envio, configuracion);
+            envio.Serie = serieOriginal;
+        }
+    }
+
+    // "PASO 8.4. El CFDI 'RFC-SERIE-FOLIO' ya existe en la sucursal [Matriz] como Depósito." (o "como factura":
+    // pagos y facturas sin serie comparten la numeración).
+    private static bool EsDepositoDuplicado(string? mensaje) =>
+        mensaje is not null && mensaje.Contains("ya existe en", StringComparison.OrdinalIgnoreCase) &&
+        (mensaje.Contains("como Dep", StringComparison.OrdinalIgnoreCase) || mensaje.Contains("como factura", StringComparison.OrdinalIgnoreCase));
+
+    // "PASO 8.4. El CFDI 'RFC-uuid' ya existe en alguna de sus sucursales como Depósito.": el mismo pago ya está.
+    private static bool UuidYaExiste(SinubeEnvioDto envio) =>
+        envio.Estatus != "OK" && EsDepositoDuplicado(envio.Mensaje) &&
+        envio.Uuid != "" && envio.Mensaje.Contains(envio.Uuid, StringComparison.OrdinalIgnoreCase);
+
+    private static string FolioOcupado(SinubeEnvioDto envio, SinubeConfiguracionDto configuracion)
+    {
+        List<string> alternas = configuracion.SeriesAlternasPagos;
+        return alternas.Count == 0
+            ? $"El folio {envio.Serie}-{envio.Folio} ya lo tiene otro depósito en SINUBE. Configura las series alternas para pagos en Herramientas."
+            : $"El folio {envio.Folio} ya lo tiene otro depósito en SINUBE con la serie original y con {string.Join(", ", alternas)}. Agrega otra serie alterna en Herramientas.";
     }
 
     private async Task EnviarClienteAsync(
