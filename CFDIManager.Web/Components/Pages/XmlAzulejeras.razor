@@ -13,6 +13,7 @@
 @inject XmlAzulejerasService Servicio
 @inject SinubeService Sinube
 @inject SinubeDatosService DatosSinube
+@inject CFDIParser.Services.PostgreSqlRepository Repo
 @inject EmpresaContext EmpresaContext
 @inject IJSRuntime JS
 @inject PeriodoTrabajoService Periodo
@@ -202,14 +203,16 @@
 
     @if (Resultado is not null)
     {
-        <div class="row g-2 mb-3">
+        <div class="kpis-fila mb-2">
             @Tarjeta("Leídos", Resultado.Leidos.ToString("N0"), "bi-files", "secondary")
             @Tarjeta("Modificados", Resultado.Modificados.ToString("N0"), "bi-pencil-square", "primary")
             @Tarjeta("Sin cambio", Resultado.SinCambios.ToString("N0"), "bi-dash-circle", "secondary")
             @Tarjeta("Errores", Resultado.Errores.ToString("N0"), "bi-exclamation-triangle", Resultado.Errores > 0 ? "danger" : "secondary")
-            @Tarjeta("Importe total", Moneda(Resultado.ImporteTotal), "bi-cash-stack", "secondary", ancho: "col-md-4")
-            @Tarjeta("Con cambio", Moneda(Resultado.ImporteModificados), "bi-cash-coin", "primary", ancho: "col-md-4")
-            @Tarjeta("Sin cambio", Moneda(Resultado.ImporteSinCambios), "bi-cash", "secondary", ancho: "col-md-4")
+        </div>
+        <div class="kpis-fila mb-3">
+            @Tarjeta("Importe total", Moneda(Resultado.ImporteTotal), "bi-cash-stack", "secondary")
+            @Tarjeta("Con cambio", Moneda(Resultado.ImporteModificados), "bi-cash-coin", "primary")
+            @Tarjeta("Sin cambio", Moneda(Resultado.ImporteSinCambios), "bi-cash", "secondary")
         </div>
 
         @if (Resultado.Archivos.Count > 0)
@@ -326,15 +329,52 @@
                             </div>
                         }
 
-                        @if (Revision is not null && Envios.Count == 0)
+                        @* Totales del envío y de SINUBE junto a la barra de progreso: no se mueven aunque la bitácora crezca. *@
+                        @if (Envios.Count > 0)
                         {
-                            <div class="row g-2">
+                            <div class="kpis-fila mb-2">
+                                @Tarjeta("Subidos", Contar("OK").ToString("N0"), "bi-check2-circle", "success")
+                                @Tarjeta("Ya existían", Contar("EXISTE").ToString("N0"), "bi-cloud-check", "info")
+                                @Tarjeta("Descartados", Descartados.ToString("N0"), "bi-x-octagon", Descartados > 0 ? "warning" : "secondary",
+                                    detalle: string.Join(" · ", new[] { "OMITIDO", "IEPS", "INVALIDO", "ERROR" }.Where(e => Contar(e) > 0).Select(e => $"{TextoEstatus(e)}: {Contar(e):N0}")))
+                                @Tarjeta("Procesados", Envios.Count.ToString("N0"), "bi-list-check", "secondary")
+                            </div>
+                        }
+
+                        @if (RevisandoFinal || (Revision is not null && Envios.Count > 0))
+                        {
+                            <div class="small fw-bold mb-1 d-flex align-items-center gap-2">
+                                <i class="bi bi-cloud-check"></i> SINUBE
+                                @if (RevisandoFinal)
+                                {
+                                    <span class="spinner-border spinner-border-sm text-secondary"></span>
+                                }
+                            </div>
+                        }
+
+                        @if (Revision is not null && !RevisandoFinal)
+                        {
+                            <div class="kpis-fila">
                                 @Tarjeta("Generados", Resultado.Archivos.Count.ToString("N0"), "bi-files", "secondary")
                                 @Tarjeta("Ya en SINUBE", Revision.EnSinube.ToString("N0"), "bi-cloud-check", "info")
-                                @Tarjeta("Enviados antes", Revision.EnviadosAntes.ToString("N0"), "bi-clock-history", "secondary")
-                                @Tarjeta("Por subir", Revision.PorSubir.Count.ToString("N0"), "bi-cloud-arrow-up", "primary",
+                                @if (Revision.YaExistenSinConfirmar.Count > 0)
+                                {
+                                    @Tarjeta("Ya existe (sin confirmar)", Revision.YaExistenSinConfirmar.Count.ToString("N0"), "bi-question-circle", "secondary")
+                                }
+                                @Tarjeta("Por subir", Revision.PorSubir.Count.ToString("N0"), "bi-cloud-arrow-up", Revision.PorSubir.Count > 0 ? "warning" : "success",
                                     detalle: AnticiposPorSubir.Count > 0 ? $"{AnticiposPorSubir.Count:N0} anticipos con código genérico" : null)
                             </div>
+
+                            @if (Revision.YaExistenSinConfirmar.Count > 0 && !Subiendo)
+                            {
+                                <div class="alert alert-secondary d-flex flex-wrap align-items-center gap-2 py-2 px-3 mt-2 mb-0 small">
+                                    <i class="bi bi-question-circle"></i>
+                                    <span>SINUBE respondió que ya existen @Revision.YaExistenSinConfirmar.Count.ToString("N0") con ese serie-folio.</span>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" @onclick="MarcarYaEnSinube">
+                                        <i class="bi bi-check2-all me-1"></i>Marcar @Revision.YaExistenSinConfirmar.Count.ToString("N0") como ya en SINUBE
+                                    </button>
+                                </div>
+                            }
                         }
                     }
                 </div>
@@ -353,16 +393,6 @@
                                     @texto <span class="badge text-bg-light ms-1">@ContarFiltro(clave).ToString("N0")</span>
                                 </button>
                             }
-                        </div>
-                    </div>
-
-                    <div class="card-body pb-0">
-                        <div class="row g-2 mb-3">
-                            @Tarjeta("Subidos", Contar("OK").ToString("N0"), "bi-check-circle", "success")
-                            @Tarjeta("Ya existían", Contar("EXISTE").ToString("N0"), "bi-cloud-check", "info")
-                            @Tarjeta("Descartados", Descartados.ToString("N0"), "bi-x-circle", Descartados > 0 ? "warning" : "secondary",
-                                detalle: string.Join(" · ", new[] { "OMITIDO", "IEPS", "INVALIDO", "ERROR" }.Where(e => Contar(e) > 0).Select(e => $"{TextoEstatus(e)}: {Contar(e):N0}")))
-                            @Tarjeta("Procesados", Envios.Count.ToString("N0"), "bi-list-check", "secondary")
                         </div>
                     </div>
 
@@ -604,6 +634,7 @@
         Procesados = 0;
         Subiendo = true;
         CancelacionSinube = new CancellationTokenSource();
+        bool terminado = false;
 
         try
         {
@@ -657,6 +688,8 @@
 
                 previos += tanda.Count;
             }
+
+            terminado = true;
         }
         catch (OperationCanceledException)
         {
@@ -673,19 +706,48 @@
             CancelacionSinube = null;
             await InvokeAsync(StateHasChanged);
         }
+
+        // Al terminar se vuelve a consultar SINUBE para ver cómo quedó; la bitácora del envío se conserva.
+        if (terminado)
+        {
+            RevisandoFinal = true;
+            await InvokeAsync(StateHasChanged);
+
+            try
+            {
+                Revision = await ConsultarRevisionAsync(empresa);
+            }
+            catch (Exception ex)
+            {
+                Error = $"Se subió, pero no se pudo volver a consultar SINUBE: {ex.Message}";
+            }
+            finally
+            {
+                RevisandoFinal = false;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
     }
 
     /// <summary>Lo que ya tiene SINUBE (consulta por mes) y lo ya enviado desde la app; el resto queda por subir.</summary>
     private sealed class RevisionSinube
     {
         public HashSet<string> YaEnSinube { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Los que SINUBE confirma y los que la app ya subió o el usuario confirmó.</summary>
         public int EnSinube { get; init; }
-        public int EnviadosAntes { get; init; }
+
+        /// <summary>Por subir que SINUBE rechazó porque "ya existe" ese serie-folio; solo el usuario confirma que es el mismo.</summary>
+        public List<string> YaExistenSinConfirmar { get; init; } = [];
+
         public List<string> PorSubir { get; init; } = [];
     }
 
     private RevisionSinube? Revision;
     private bool Revisando;
+
+    // Revisión que se hace sola al terminar de subir.
+    private bool RevisandoFinal;
 
     private List<string> AnticiposPorSubir =>
         Revision is not null && Resultado is not null && ConfigSinube is not null &&
@@ -711,22 +773,7 @@
 
         try
         {
-            var meses = new List<DateTime>();
-            for (var m = new DateTime(FechaInicio.Year, FechaInicio.Month, 1); m <= FechaFin; m = m.AddMonths(1))
-                meses.Add(m);
-
-            HashSet<string> enSinube = await DatosSinube.UuidsFacturasClientesAsync(ConfigSinube, meses);
-            HashSet<string> enviados = Sinube.UuidsEnviados(empresa, clientes: true);
-
-            string Uuid(string archivo) => Path.GetFileNameWithoutExtension(archivo);
-
-            Revision = new RevisionSinube
-            {
-                YaEnSinube = enSinube,
-                EnSinube = Resultado.Archivos.Count(a => enSinube.Contains(Uuid(a))),
-                EnviadosAntes = Resultado.Archivos.Count(a => !enSinube.Contains(Uuid(a)) && enviados.Contains(Uuid(a))),
-                PorSubir = Resultado.Archivos.Where(a => !enSinube.Contains(Uuid(a)) && !enviados.Contains(Uuid(a))).ToList()
-            };
+            Revision = await ConsultarRevisionAsync(empresa);
         }
         catch (Exception ex)
         {
@@ -735,6 +782,48 @@
         finally
         {
             Revisando = false;
+        }
+    }
+
+    private async Task<RevisionSinube> ConsultarRevisionAsync(EmpresaDto empresa)
+    {
+        var meses = new List<DateTime>();
+        for (var m = new DateTime(FechaInicio.Year, FechaInicio.Month, 1); m <= FechaFin; m = m.AddMonths(1))
+            meses.Add(m);
+
+        HashSet<string> enSinube = await DatosSinube.UuidsFacturasClientesAsync(ConfigSinube!, meses);
+        HashSet<string> enviados = Sinube.UuidsEnviados(empresa, clientes: true);
+        HashSet<string> yaExisten = Repo.ObtenerUuidsYaExistenSinube(empresa.EmpresaId, "C");
+
+        string Uuid(string archivo) => Path.GetFileNameWithoutExtension(archivo);
+        bool Arriba(string a) => enSinube.Contains(Uuid(a)) || enviados.Contains(Uuid(a));
+
+        List<string> porSubir = Resultado!.Archivos.Where(a => !Arriba(a)).ToList();
+
+        return new RevisionSinube
+        {
+            YaEnSinube = enSinube,
+            EnSinube = Resultado.Archivos.Count(Arriba),
+            YaExistenSinConfirmar = porSubir.Select(Uuid).Where(yaExisten.Contains).ToList(),
+            PorSubir = porSubir
+        };
+    }
+
+    /// <summary>El usuario confirma que los que SINUBE dijo que "ya existen" son los mismos: no se vuelven a subir.</summary>
+    private async Task MarcarYaEnSinube()
+    {
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa || Revision is null || ConfigSinube is null)
+            return;
+
+        Repo.MarcarYaEnSinube(empresa.EmpresaId, "C", Revision.YaExistenSinConfirmar);
+
+        try
+        {
+            Revision = await ConsultarRevisionAsync(empresa);
+        }
+        catch (Exception ex)
+        {
+            Error = $"No se pudo consultar SINUBE: {ex.Message}";
         }
     }
 
@@ -763,27 +852,11 @@
         Envios.Select((e, i) => (e, i + 1)).Where(x => PasaFiltro(x.e)).Reverse().Take(1000);
 
     /// <summary>Tarjeta de total con Bootstrap.</summary>
+    // Misma tarjeta compacta con degradado que Importación a SINUBE; va dentro de una .kpis-fila (una sola línea).
     private static RenderFragment Tarjeta(string titulo, string valor, string icono, string color,
-        string ancho = "col-6 col-md-3", string? detalle = null) => __builder =>
+        string ancho = "kpi-celda", string? detalle = null) => __builder =>
     {
-        <div class="@ancho">
-            <div class="card h-100 border-@color-subtle shadow-sm">
-                <div class="card-body py-2 d-flex align-items-center gap-3">
-                    <div class="rounded-3 bg-@color-subtle text-@color-emphasis d-flex align-items-center justify-content-center"
-                         style="width: 2.5rem; height: 2.5rem">
-                        <i class="bi @icono fs-5"></i>
-                    </div>
-                    <div class="min-w-0">
-                        <div class="small text-body-secondary">@titulo</div>
-                        <div class="fs-5 fw-semibold text-@color-emphasis">@valor</div>
-                        @if (!string.IsNullOrEmpty(detalle))
-                        {
-                            <div class="small text-body-secondary text-truncate" title="@detalle">@detalle</div>
-                        }
-                    </div>
-                </div>
-            </div>
-        </div>
+        <TarjetaTotal Ancho="@ancho" Titulo="@titulo" Valor="@valor" Icono="@icono" Color="@color" Detalle="@detalle" />
     };
 
     private int Contar(string estatus) => Envios.Count(e => e.Estatus == estatus);

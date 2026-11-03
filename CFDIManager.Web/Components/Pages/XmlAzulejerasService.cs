@@ -23,9 +23,13 @@ public sealed class XmlAzulejerasService
         _repo = repo;
     }
 
+    /// <param name="SerieNueva">Null: la serie no cambia, solo el nombre del receptor.</param>
     private sealed record EquivalenciaSerie(
-        string SerieNueva,
+        string? SerieNueva,
         string NombreReceptor);
+
+    // Regla para todas las series de la empresa que no tengan una propia.
+    private const string TodasLasSeries = "*";
 
     private static readonly Dictionary<string,
         Dictionary<string, EquivalenciaSerie>>
@@ -96,10 +100,26 @@ public sealed class XmlAzulejerasService
                             new(
                                 "76EE",
                                 "CLIENTE MOSTRADOR EXPO SAN VICENTE CHICOLOAPAN")
+                    },
+
+                // Conserva la serie; solo el nombre del receptor a público general.
+                ["ASN260505492"] =
+                    new(StringComparer.OrdinalIgnoreCase)
+                    {
+                        [TodasLasSeries] =
+                            new(
+                                null,
+                                "CLIENTE MOSTRADOR")
                     }
             };
 
     public static bool EsAzulejera(string rfc) => Equivalencias.ContainsKey(rfc);
+
+    /// <summary>Regla de la serie (o la de todas las series) con la serie destino ya resuelta.</summary>
+    private static EquivalenciaSerie? Regla(Dictionary<string, EquivalenciaSerie> reglas, string serie) =>
+        (reglas.GetValueOrDefault(serie) ?? reglas.GetValueOrDefault(TodasLasSeries)) is { } regla
+            ? regla with { SerieNueva = regla.SerieNueva ?? serie }
+            : null;
 
     private Dictionary<string, EquivalenciaSerie> Reglas(EmpresaDto empresa) =>
         Equivalencias.TryGetValue(empresa.Rfc, out Dictionary<string, EquivalenciaSerie>? reglas)
@@ -143,7 +163,7 @@ public sealed class XmlAzulejerasService
             .GroupBy(c => c.Serie.Trim(), StringComparer.OrdinalIgnoreCase)
             .Select(g =>
             {
-                reglas.TryGetValue(g.Key, out EquivalenciaSerie? regla);
+                EquivalenciaSerie? regla = Regla(reglas, g.Key);
                 List<CfdiConsultaDto> publico = g.Where(EsPublicoGeneral).ToList();
 
                 return new SerieAzulejeraDto
@@ -194,7 +214,7 @@ public sealed class XmlAzulejerasService
             // Solo público general de las series elegidas que tienen equivalencia.
             if (!EsPublicoGeneral(cfdi) ||
                 !series.Contains(cfdi.Serie.Trim()) ||
-                !reglas.TryGetValue(cfdi.Serie.Trim(), out EquivalenciaSerie? equivalencia))
+                Regla(reglas, cfdi.Serie.Trim()) is not { } equivalencia)
             {
                 resultado.SinCambios++;
                 resultado.ImporteSinCambios += cfdi.Total;
@@ -208,7 +228,7 @@ public sealed class XmlAzulejerasService
                 TipoCfdi = cfdi.TipoCfdi,
                 UUID = cfdi.UUID,
                 SerieOriginal = cfdi.Serie,
-                SerieNueva = equivalencia.SerieNueva,
+                SerieNueva = equivalencia.SerieNueva ?? cfdi.Serie,
                 NombreOriginal = cfdi.NombreReceptor,
                 NombreNuevo = equivalencia.NombreReceptor,
                 Total = cfdi.Total

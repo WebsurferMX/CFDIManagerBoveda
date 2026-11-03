@@ -206,3 +206,23 @@ html[data-theme="dark"] .date-arrow {
     color: #7ca1f3;
 }
 /* ===== FIN MODO OSCURO ===== */
+
+/* Tarjetas en una sola línea (igual que Importación a SINUBE). */
+.kpis-fila {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: .5rem;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.kpis-fila ::deep .kpi-celda {
+    flex: 1 1 0;
+    min-width: 9.5rem;
+}
+
+.kpis-fila ::deep .kpi-celda .text-uppercase {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
