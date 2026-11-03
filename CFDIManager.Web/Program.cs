@@ -191,6 +191,8 @@ builder.Services.AddScoped<CFDIManager.Web.Services.Sinube.SatMetadatosService>(
 
 builder.Services.AddScoped<CFDIManager.Web.Services.Sat.RecuperarCanceladosService>();
 
+builder.Services.AddScoped<CFDIManager.Web.Services.Sinube.PendientesSinubeService>();
+
 builder.Services.AddScoped<CFDIManager.Web.Services.Sinube.ConciliacionSinubeService>();
 
 builder.Services.AddScoped<PostgreSqlRepository>(

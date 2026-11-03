@@ -247,6 +247,32 @@ public partial class PostgreSqlRepository
         return cmd.ExecuteNonQuery();
     }
 
+    /// <summary>UUID (en mayúsculas) y tipo de los CFDI emitidos o recibidos del periodo, sin nómina: lo que se sube a SINUBE.</summary>
+    public List<(string Uuid, string Tipo)> ObtenerCfdiParaSinube(long empresaId, bool emitidos, DateTime desde, DateTime hasta)
+    {
+        using var cn = new NpgsqlConnection(_connectionString);
+        cn.Open();
+
+        using var cmd = new NpgsqlCommand(@"
+            SELECT UPPER(uuid), TRIM(tipo_cfdi) FROM cfdi
+            WHERE empresa_id = @empresa_id AND clasificacion = @clasificacion AND tipo_cfdi <> 'N'
+              AND fecha_emision >= @desde AND fecha_emision < @hasta;", cn);
+
+        cmd.Parameters.AddWithValue("empresa_id", empresaId);
+        cmd.Parameters.AddWithValue("clasificacion", emitidos ? "EMITIDO" : "RECIBIDO");
+        cmd.Parameters.AddWithValue("desde", desde);
+        cmd.Parameters.AddWithValue("hasta", hasta);
+
+        var resultado = new List<(string, string)>();
+
+        using var dr = cmd.ExecuteReader();
+
+        while (dr.Read())
+            resultado.Add((dr.GetString(0), dr.GetString(1)));
+
+        return resultado;
+    }
+
     public void RegistrarEnvioSinube(SinubeEnvioDto envio)
     {
         using var cn = new NpgsqlConnection(_connectionString);

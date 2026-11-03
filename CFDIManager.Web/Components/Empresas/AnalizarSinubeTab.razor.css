@@ -1,0 +1,61 @@
+/* La tabla es ancha: que haga scroll dentro de su tarjeta. */
+.analizar,
+.analizar > .card {
+    min-width: 0;
+    max-width: 100%;
+}
+
+/* KPI en una sola línea. */
+.kpis {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: .5rem;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.kpis ::deep .kpi {
+    flex: 1 1 0;
+    min-width: 9.5rem;
+}
+
+.kpis ::deep .kpi .text-uppercase {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.tabla-contenedor {
+    max-height: calc(100vh - 26rem);
+    min-height: 220px;
+}
+
+.tabla {
+    font-size: .8rem;
+}
+
+.tabla thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.tabla td {
+    white-space: nowrap;
+}
+
+.tabla .empresa {
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.tabla .avance {
+    min-width: 7rem;
+}

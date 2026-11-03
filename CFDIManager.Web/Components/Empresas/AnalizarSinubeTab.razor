@@ -1,0 +1,232 @@
+@implements IDisposable
+
+@using System.Globalization
+@using CFDIManager.Web.Services
+@using CFDIManager.Web.Services.Sinube
+@using CFDIParser.Models
+
+@inject PendientesSinubeService Pendientes
+@inject AccesoEmpresasService Acceso
+@inject PeriodoTrabajoService Periodo
+@inject EmpresaContext EmpresaContext
+@inject NavigationManager Navegacion
+
+@* Empresas → Analizar: barrido de XML del mes contra SINUBE por empresa (clientes y proveedores). Solo lectura. *@
+<div class="analizar d-flex flex-column gap-3">
+    <div class="border rounded-3 bg-body-tertiary p-3 d-flex flex-wrap align-items-end gap-3">
+        <div>
+            <label class="form-label small fw-semibold mb-1" for="an-anio">Año</label>
+            <select id="an-anio" class="form-select" @bind="Anio" disabled="@Analizando">
+                @for (int a = DateTime.Today.Year; a >= DateTime.Today.Year - 6; a--)
+                {
+                    <option value="@a">@a</option>
+                }
+            </select>
+        </div>
+
+        <div>
+            <label class="form-label small fw-semibold mb-1" for="an-mes">Mes</label>
+            <select id="an-mes" class="form-select" @bind="Mes" disabled="@Analizando">
+                @for (int m = 1; m <= 12; m++)
+                {
+                    <option value="@m">@m.ToString("00") · @Mx.DateTimeFormat.GetMonthName(m)</option>
+                }
+            </select>
+        </div>
+
+        <button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" @onclick="Analizar" disabled="@Analizando">
+            @if (Analizando)
+            {
+                <span class="spinner-border spinner-border-sm"></span>
+                <span>Analizando…</span>
+            }
+            else
+            {
+                <i class="bi bi-search"></i>
+                <span>Analizar</span>
+            }
+        </button>
+
+        @if (Analizando)
+        {
+            <button type="button" class="btn btn-link" @onclick="() => Cancelacion?.Cancel()">Detener</button>
+            <span class="small text-body-secondary">@Avance</span>
+        }
+        else if (Fecha is DateTime fecha)
+        {
+            <span class="small text-body-secondary ms-auto"><i class="bi bi-clock-history me-1"></i>@AnioAnalizado@MesAnalizado.ToString("00") · @fecha.ToString("dd/MM/yyyy HH:mm")</span>
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <div class="alert alert-danger mb-0">@Error</div>
+    }
+
+    @if (Filas is not null)
+    {
+        <div class="kpis">
+            <TarjetaTotal Ancho="kpi" Titulo="XML del periodo" Valor="@Filas.Sum(f => f.Xml).ToString("N0")" Icono="bi-files" />
+            <TarjetaTotal Ancho="kpi" Titulo="Ya en SINUBE" Valor="@Filas.Sum(f => f.EnSinube).ToString("N0")" Icono="bi-cloud-check" Color="info" />
+            <TarjetaTotal Ancho="kpi" Titulo="Faltan clientes" Valor="@Filas.Where(f => f.Clientes).Sum(f => f.Pendientes).ToString("N0")" Icono="bi-box-arrow-up-right" Color="warning" />
+            <TarjetaTotal Ancho="kpi" Titulo="Faltan proveedores" Valor="@Filas.Where(f => !f.Clientes).Sum(f => f.Pendientes).ToString("N0")" Icono="bi-box-arrow-in-down-left" Color="warning" />
+            <TarjetaTotal Ancho="kpi" Titulo="Empresas al corriente" Valor="@AlCorriente.ToString("N0")" Icono="bi-check2-circle" Color="success" />
+            @if (ConAviso > 0)
+            {
+                <TarjetaTotal Ancho="kpi" Titulo="Con aviso" Valor="@ConAviso.ToString("N0")" Icono="bi-exclamation-triangle" Color="danger" />
+            }
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex flex-wrap align-items-center gap-2">
+                <div class="btn-group btn-group-sm" role="group" aria-label="Filtro">
+                    <button type="button" class="btn @(SoloPendientes ? "btn-primary" : "btn-outline-secondary")" @onclick="() => SoloPendientes = true">Con pendientes</button>
+                    <button type="button" class="btn @(!SoloPendientes ? "btn-primary" : "btn-outline-secondary")" @onclick="() => SoloPendientes = false">Todas</button>
+                </div>
+                <span class="small text-body-secondary ms-auto">@Visibles.Count() renglones</span>
+            </div>
+            <div class="table-responsive tabla-contenedor">
+                <table class="table table-sm table-hover align-middle mb-0 tabla">
+                    <thead>
+                        <tr>
+                            <th>RFC</th>
+                            <th>Empresa</th>
+                            <th>Lado</th>
+                            <th class="text-end">XML</th>
+                            <th class="text-end">Ya en SINUBE</th>
+                            <th class="text-end">Faltan</th>
+                            <th class="text-end">Facturas</th>
+                            <th class="text-end">Notas</th>
+                            <th class="text-end">Pagos</th>
+                            <th>Avance</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (PendientesSinubeFila f in Visibles)
+                        {
+                            <tr>
+                                <td class="font-monospace">@f.Empresa.Rfc</td>
+                                <td class="empresa" title="@f.Empresa.NombreParaMostrar">@f.Empresa.NombreParaMostrar</td>
+                                @if (f.Aviso is not null)
+                                {
+                                    <td>@(f.Xml > 0 ? Lado(f) : "")</td>
+                                    <td colspan="7" class="text-danger">@f.Aviso</td>
+                                    <td></td>
+                                }
+                                else
+                                {
+                                    <td>@Lado(f)</td>
+                                    <td class="text-end">@f.Xml.ToString("N0")</td>
+                                    <td class="text-end">@f.EnSinube.ToString("N0")</td>
+                                    <td class="text-end fw-semibold @(f.Pendientes > 0 ? "text-warning-emphasis" : "text-success")">@f.Pendientes.ToString("N0")</td>
+                                    <td class="text-end">@Cero(f.PendientesIngreso)</td>
+                                    <td class="text-end">@Cero(f.PendientesEgreso)</td>
+                                    <td class="text-end">@Cero(f.PendientesPago)</td>
+                                    <td class="avance">
+                                        <div class="progress" role="progressbar" aria-valuenow="@Porcentaje(f)" aria-valuemin="0" aria-valuemax="100" style="height: .5rem">
+                                            <div class="progress-bar @(f.Pendientes == 0 ? "bg-success" : "bg-warning")" style="width: @Porcentaje(f)%"></div>
+                                        </div>
+                                    </td>
+                                    <td class="text-end">
+                                        @if (f.Pendientes > 0)
+                                        {
+                                            <button type="button" class="btn btn-sm btn-outline-primary" title="Abrir Importación a SINUBE con esta empresa" @onclick="() => Abrir(f)">
+                                                <i class="bi bi-box-arrow-up-right"></i>
+                                            </button>
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private static readonly CultureInfo Mx = new("es-MX");
+
+    private int Anio;
+    private int Mes;
+    private int AnioAnalizado;
+    private int MesAnalizado;
+    private bool Analizando;
+    private string Avance = "";
+    private string? Error;
+    private DateTime? Fecha;
+    private List<PendientesSinubeFila>? Filas;
+    private bool SoloPendientes = true;
+    private CancellationTokenSource? Cancelacion;
+
+    private IEnumerable<PendientesSinubeFila> Visibles =>
+        (Filas ?? []).Where(f => !SoloPendientes || f.Pendientes > 0 || f.Aviso is not null)
+            .OrderByDescending(f => f.Aviso is null ? f.Pendientes : int.MaxValue)
+            .ThenBy(f => f.Empresa.Rfc);
+
+    private int AlCorriente =>
+        (Filas ?? []).GroupBy(f => f.Empresa.EmpresaId).Count(g => g.All(f => f.Aviso is null && f.Pendientes == 0));
+
+    private int ConAviso => (Filas ?? []).Where(f => f.Aviso is not null).Select(f => f.Empresa.EmpresaId).Distinct().Count();
+
+    protected override void OnInitialized()
+    {
+        Anio = Periodo.Anio;
+        Mes = Periodo.Mes;
+    }
+
+    private async Task Analizar()
+    {
+        Error = null;
+        Analizando = true;
+        Avance = "Leyendo empresas…";
+        Cancelacion = new CancellationTokenSource();
+        int anio = Anio, mes = Mes;
+
+        var progreso = new Progress<string>(texto => InvokeAsync(() =>
+        {
+            Avance = texto;
+            StateHasChanged();
+        }));
+
+        try
+        {
+            List<EmpresaDto> empresas = (await Acceso.ObtenerEmpresasPermitidasAsync()).OrderBy(e => e.Rfc).ToList();
+            Filas = await Pendientes.AnalizarAsync(empresas, new DateTime(anio, mes, 1), progreso, Cancelacion.Token);
+            AnioAnalizado = anio;
+            MesAnalizado = mes;
+            Fecha = DateTime.Now;
+        }
+        catch (OperationCanceledException)
+        {
+            // Se detuvo: se queda el último resultado completo.
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Analizando = false;
+            Cancelacion?.Dispose();
+            Cancelacion = null;
+        }
+    }
+
+    /// <summary>Hace activa la empresa y abre Importación a SINUBE en su pestaña.</summary>
+    private void Abrir(PendientesSinubeFila f)
+    {
+        EmpresaContext.Seleccionar(f.Empresa);
+        Navegacion.NavigateTo("exportacion-sinube");
+    }
+
+    private static string Lado(PendientesSinubeFila f) => f.Clientes ? "Clientes" : "Proveedores";
+
+    private static string Cero(int n) => n == 0 ? "—" : n.ToString("N0");
+
+    private static int Porcentaje(PendientesSinubeFila f) => f.Xml == 0 ? 100 : (int)Math.Round(f.EnSinube * 100.0 / f.Xml);
+
+    public void Dispose() => Cancelacion?.Cancel();
+}

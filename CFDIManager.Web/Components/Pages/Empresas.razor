@@ -137,7 +137,22 @@
                 <i class="bi bi-calendar3"></i>
                 Declaraciones
             </button>
+
+            <button type="button"
+                    class="tab-button @(TabActiva == "Analizar" ? "active" : "")"
+                    @onclick='() => TabActiva = "Analizar"'>
+                <i class="bi bi-clipboard-data"></i>
+                Analizar
+            </button>
         </div>
+
+        @* Página "Analizar": barrido de XML del mes contra SINUBE de todas las empresas. *@
+        @if (TabActiva == "Analizar")
+        {
+            <div class="p-3">
+                <AnalizarSinubeTab />
+            </div>
+        }
 
         @* Página "Empresas": búsqueda y lista. Clic en una fila abre su página General. *@
         <div hidden="@(TabActiva != "Lista")">
@@ -356,7 +371,7 @@
         </div>
 
         @* Páginas de la empresa; ocultas (no desmontadas) para que Accesos SAT conserve lo capturado. *@
-        <div class="detalle-empresa" hidden="@(TabActiva == "Lista")">
+        <div class="detalle-empresa" hidden="@(TabActiva is "Lista" or "Analizar")">
 
 
 
@@ -1048,7 +1063,7 @@
             .Replace("-", "")
             .ToUpperInvariant();
 
-    /// <summary>Página del marco: Lista, General, Fiscales, Sat o Declaraciones.</summary>
+    /// <summary>Página del marco: Lista, General, Fiscales, Sat, Declaraciones o Analizar.</summary>
     private string TabActiva = "Lista";
 
 }
