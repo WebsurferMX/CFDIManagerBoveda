@@ -214,6 +214,7 @@
                     <div class="kpis-fila mt-1">
                         @TarjetasRevision(Revision, "kpi-celda")
                     </div>
+                    @ConfirmarYaExisten(Revision)
                 }
 
                 @if (Total > 0)
@@ -256,6 +257,7 @@
                                 <div class="kpis-fila">
                                     @TarjetasRevision(Revision, "kpi-celda")
                                 </div>
+                                @ConfirmarYaExisten(Revision)
                             }
                         }
                     </div>
@@ -640,6 +642,12 @@
         /// <summary>Proveedores: pendientes de un tipo de comprobante no marcado (Ingreso, Egreso, Pago).</summary>
         public int TipoNoSeleccionado { get; init; }
 
+        /// <summary>
+        /// Pendientes que SINUBE rechazó porque "ya existe" ese serie-folio. SINUBE no guarda el UUID de los pagos
+        /// importados, así que solo el usuario puede confirmar que es el mismo comprobante.
+        /// </summary>
+        public List<string> YaExistenSinConfirmar { get; init; } = [];
+
         /// <summary>Pagos de clientes en SINUBE (DbDeposito) por "SERIE|FOLIO" → UUID, para el envío.</summary>
         public Dictionary<string, string>? PagosEnSinube { get; init; }
 
@@ -658,7 +666,10 @@
         @<text>
             <TarjetaTotal Ancho="@ancho" Titulo="XML del periodo" Valor="@r.Archivos.ToString("N0")" Icono="bi-files" />
             <TarjetaTotal Ancho="@ancho" Titulo="Ya en SINUBE" Valor="@r.EnSinube.ToString("N0")" Icono="bi-cloud-check" Color="info" />
-            <TarjetaTotal Ancho="@ancho" Titulo="Enviados antes" Valor="@r.EnviadosAntes.ToString("N0")" Icono="bi-clock-history" />
+            @if (r.EnviadosAntes > 0)
+            {
+                <TarjetaTotal Ancho="@ancho" Titulo="Enviados antes" Valor="@r.EnviadosAntes.ToString("N0")" Icono="bi-clock-history" />
+            }
             @if (r.Nomina > 0)
             {
                 <TarjetaTotal Ancho="@ancho" Titulo="Nómina (no se sube)" Valor="@r.Nomina.ToString("N0")" Icono="bi-people" Color="primary" />
@@ -666,6 +677,10 @@
             @if (r.PagosSerieAlterna > 0)
             {
                 <TarjetaTotal Ancho="@ancho" Titulo="@($"Folio ocupado → {string.Join(" / ", Config?.SeriesAlternasPagos ?? [])}")" Valor="@r.PagosSerieAlterna.ToString("N0")" Icono="bi-arrow-left-right" Color="info" />
+            }
+            @if (r.YaExistenSinConfirmar.Count > 0)
+            {
+                <TarjetaTotal Ancho="@ancho" Titulo="Ya existe (sin confirmar)" Valor="@r.YaExistenSinConfirmar.Count.ToString("N0")" Icono="bi-question-circle" Color="secondary" />
             }
             @if (r.TipoNoSeleccionado > 0)
             {
@@ -677,6 +692,38 @@
             }
             <TarjetaTotal Ancho="@ancho" Titulo="Por subir" Valor="@r.PorSubir.Count.ToString("N0")" Icono="bi-cloud-arrow-up" Color="@(r.PorSubir.Count > 0 ? "warning" : "success")" />
         </text>;
+
+    // SINUBE dijo "ya existe" ese serie-folio: el usuario confirma que es el mismo comprobante.
+    private RenderFragment ConfirmarYaExisten(RevisionSinube r) =>
+        @<text>
+            @if (r.YaExistenSinConfirmar.Count > 0 && !Enviando)
+            {
+                <div class="alert alert-secondary d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0 small">
+                    <i class="bi bi-question-circle"></i>
+                    <span>SINUBE respondió que ya existen @r.YaExistenSinConfirmar.Count.ToString("N0") con ese serie-folio.</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" @onclick="() => MarcarYaEnSinube(r)">
+                        <i class="bi bi-check2-all me-1"></i>Marcar @r.YaExistenSinConfirmar.Count.ToString("N0") como ya en SINUBE
+                    </button>
+                </div>
+            }
+        </text>;
+
+    private async Task MarcarYaEnSinube(RevisionSinube r)
+    {
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa || Config is null || !TryPeriodo(PeriodoTexto, out DateTime periodo))
+            return;
+
+        Repo.MarcarYaEnSinube(empresa.EmpresaId, Clientes ? "C" : "P", r.YaExistenSinConfirmar);
+
+        try
+        {
+            Revision = await ConsultarRevisionAsync(empresa, Config, Clientes, periodo);
+        }
+        catch (Exception ex)
+        {
+            Error = $"No se pudo consultar SINUBE: {ex.Message}";
+        }
+    }
 
     private async Task RevisarSinube()
     {
@@ -708,6 +755,7 @@
         List<string> archivos = Sinube.Archivos(empresa, clientes, periodo);
         HashSet<string> enSinube = await DatosSinube.UuidsEnSinubeAsync(config, clientes, [periodo]);
         HashSet<string> enviados = Reenviar ? [] : Sinube.UuidsEnviados(empresa, clientes);
+        HashSet<string> yaExisten = Repo.ObtenerUuidsYaExistenSinube(empresa.EmpresaId, clientes ? "C" : "P");
         Dictionary<string, DatosXml> datos = await Task.Run(() => archivos.ToDictionary(a => a, DatosDeArchivo));
 
         // SINUBE no importa nómina: en clientes se cuenta aparte y no queda por subir.
@@ -749,11 +797,17 @@
             Archivos = archivos.Count,
             YaEnSinube = enSinube,
             Nomina = archivos.Count - facturas.Count,
-            EnSinube = facturas.Count(EnSinube),
-            EnviadosAntes = facturas.Count(a => !EnSinube(a) && enviados.Contains(datos[a].Uuid)),
+            // Lo que SINUBE confirma y lo que la app ya subió (o el usuario confirmó): SINUBE no siempre deja
+            // consultar los pagos importados por UUID.
+            EnSinube = facturas.Count(a => EnSinube(a) || enviados.Contains(datos[a].Uuid)),
+            EnviadosAntes = 0,
             PagosSerieAlterna = ocupados.Count - bloqueados.Count,
             PagosFolioOcupado = bloqueados.Count,
             TipoNoSeleccionado = noMarcados.Count,
+            YaExistenSinConfirmar = pendientes.Except(bloqueados)
+                .Where(a => yaExisten.Contains(datos[a].Uuid))
+                .Select(a => datos[a].Uuid)
+                .ToList(),
             PagosEnSinube = pagosEnSinube,
             PorSubir = pendientes.Except(bloqueados).ToList()
         };

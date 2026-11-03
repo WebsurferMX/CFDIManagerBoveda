@@ -198,6 +198,55 @@ public partial class PostgreSqlRepository
         return uuids;
     }
 
+    /// <summary>
+    /// UUID cuyo último envío SINUBE rechazó porque "ya existe" un comprobante con ese serie-folio
+    /// (p. ej. "El CFDI 'RFC--3372' ya existe en la sucursal [Matriz] como Depósito").
+    /// </summary>
+    public HashSet<string> ObtenerUuidsYaExistenSinube(long empresaId, string tipo)
+    {
+        using var cn = new NpgsqlConnection(_connectionString);
+        cn.Open();
+
+        using var cmd = new NpgsqlCommand(@"
+            SELECT uuid FROM sinube_envios
+            WHERE empresa_id = @empresa_id AND tipo = @tipo
+              AND estatus IN ('ERROR', 'FOLIO')
+              AND (mensaje ILIKE '%ya existe en%como%' OR mensaje ILIKE '%ya lo tiene otro dep%');", cn);
+
+        cmd.Parameters.AddWithValue("empresa_id", empresaId);
+        cmd.Parameters.AddWithValue("tipo", tipo);
+
+        var uuids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        using var dr = cmd.ExecuteReader();
+
+        while (dr.Read())
+            uuids.Add(dr.GetString(0));
+
+        return uuids;
+    }
+
+    /// <summary>El usuario confirma que esos comprobantes ya están en SINUBE: quedan como EXISTE y no se vuelven a enviar.</summary>
+    public int MarcarYaEnSinube(long empresaId, string tipo, IEnumerable<string> uuids)
+    {
+        using var cn = new NpgsqlConnection(_connectionString);
+        cn.Open();
+
+        using var cmd = new NpgsqlCommand(@"
+            UPDATE sinube_envios
+            SET estatus = 'EXISTE',
+                mensaje = 'Confirmado por el usuario: ya está en SINUBE. ' || mensaje,
+                fecha_envio = NOW()
+            WHERE empresa_id = @empresa_id AND tipo = @tipo AND UPPER(uuid) = ANY(@uuids)
+              AND estatus IN ('ERROR', 'FOLIO');", cn);
+
+        cmd.Parameters.AddWithValue("empresa_id", empresaId);
+        cmd.Parameters.AddWithValue("tipo", tipo);
+        cmd.Parameters.AddWithValue("uuids", uuids.Select(u => u.ToUpperInvariant()).ToArray());
+
+        return cmd.ExecuteNonQuery();
+    }
+
     public void RegistrarEnvioSinube(SinubeEnvioDto envio)
     {
         using var cn = new NpgsqlConnection(_connectionString);
