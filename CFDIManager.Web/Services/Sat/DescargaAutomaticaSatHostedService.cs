@@ -59,6 +59,25 @@ public class EstadoDescargaAutomaticaSat
         }
     }
 
+    /// <summary>El siguiente ciclo pide la ventana de los últimos días a todas las empresas aunque ya se haya pedido en el horario.</summary>
+    public bool VentanaForzada { get; private set; }
+
+    /// <summary>Ciclo inmediato que además pide la ventana a todas las empresas (Herramientas → SAT).</summary>
+    public void ForzarVentanaAhora()
+    {
+        VentanaForzada = true;
+        Notificar();
+        SolicitarAhora();
+    }
+
+    /// <summary>La pasada toma la ventana forzada pendiente (y la limpia para la siguiente).</summary>
+    internal bool TomarVentanaForzada()
+    {
+        bool forzada = VentanaForzada;
+        VentanaForzada = false;
+        return forzada;
+    }
+
     internal Task EsperarSolicitudAsync(TimeSpan maximo, CancellationToken ct) => _ahora.WaitAsync(maximo, ct);
 }
 
@@ -194,6 +213,8 @@ public class DescargaAutomaticaSatHostedService : BackgroundService
                 return;
             }
 
+            bool forzarVentana = _estado.TomarVentanaForzada();
+
             foreach (EmpresaDto empresa in repo.ObtenerEmpresasActivas())
             {
                 ct.ThrowIfCancellationRequested();
@@ -210,7 +231,7 @@ public class DescargaAutomaticaSatHostedService : BackgroundService
 
                 try
                 {
-                    await CicloEmpresaAsync(empresa, sat, descargas, resultado, ct);
+                    await CicloEmpresaAsync(empresa, sat, descargas, resultado, forzarVentana, ct);
                 }
                 catch (OperationCanceledException)
                 {
@@ -249,6 +270,7 @@ public class DescargaAutomaticaSatHostedService : BackgroundService
         EmpresaSatDto sat,
         ISatDescargaService descargas,
         ResultadoDescargaAutomatica resultado,
+        bool forzarVentana,
         CancellationToken ct)
     {
         SatEstadoDto fiel = await descargas.ValidarConfiguracionAsync(empresa);
@@ -347,10 +369,14 @@ public class DescargaAutomaticaSatHostedService : BackgroundService
             }
         }
 
-        // 3. Ventana móvil en cada horario (una vez por horario; sobrevive a reinicios porque se busca en las solicitudes).
-        if (HorarioVigente() is DateTime horario &&
-            !automaticas.Any(s => s.Origen == "Ventana" && s.Creada >= horario))
+        // 3. Ventana móvil en cada horario (una vez por horario; sobrevive a reinicios porque se busca en las solicitudes),
+        //    o en cualquier momento si se forzó desde Herramientas → SAT.
+        DateTime? horarioVigente = HorarioVigente();
+
+        if (forzarVentana ||
+            (horarioVigente is DateTime vigente && !automaticas.Any(s => s.Origen == "Ventana" && s.Creada >= vigente)))
         {
+            DateTime horario = forzarVentana ? DateTime.Now : horarioVigente!.Value;
             DateTime inicio = DateTime.Today.AddDays(-(_ventanaDias - 1));
             DateTime fin = DateTime.Now.AddMinutes(-5);
 

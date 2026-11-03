@@ -132,12 +132,20 @@
                         <h2 class="h5 mb-0">Descarga automática del SAT</h2>
                     </div>
 
-                    <div class="form-check form-switch m-0">
-                        <input class="form-check-input" type="checkbox" role="switch" id="descargaGeneral"
-                               checked="@(!DescargaPausada)" @onchange="CambiarPausa" />
-                        <label class="form-check-label fw-semibold" for="descargaGeneral">
-                            @(DescargaPausada ? "Pausada para todas las empresas" : "Encendida")
-                        </label>
+                    <div class="d-flex flex-wrap align-items-center gap-3">
+                        <button type="button" class="btn btn-sm btn-outline-primary text-nowrap"
+                                disabled="@(DescargaPausada || DescargaSat.VentanaForzada)" @onclick="ForzarVentana"
+                                title="Pide al SAT ya los CFDI de los últimos días de todas las empresas con descarga automática">
+                            <i class="bi bi-lightning-charge me-1"></i>@(DescargaSat.VentanaForzada ? "Ventana pedida…" : "Forzar ventana ahora")
+                        </button>
+
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input" type="checkbox" role="switch" id="descargaGeneral"
+                                   checked="@(!DescargaPausada)" @onchange="CambiarPausa" />
+                            <label class="form-check-label fw-semibold" for="descargaGeneral">
+                                @(DescargaPausada ? "Pausada para todas las empresas" : "Encendida")
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -784,6 +792,18 @@
         Exito = encendida
             ? "Descarga automática encendida: corre en la siguiente pasada para las empresas que la tienen activa."
             : "Descarga automática pausada para todas las empresas.";
+    }
+
+    private async Task ForzarVentana()
+    {
+        int empresas = AccesosSat.Values.Count(s => s is { DescargaAutomatica: true });
+
+        if (!await JS.InvokeAsync<bool>("confirm",
+                $"¿Pedir al SAT ahora los CFDI de los últimos días de las {empresas} empresas con descarga automática?"))
+            return;
+
+        DescargaSat.ForzarVentanaAhora();
+        Exito = $"Ventana pedida para {empresas} empresas: la descarga corre ya; el SAT tarda de minutos a horas en entregar cada paquete.";
     }
 
     private void CambiarEmpresa(EmpresaDto empresa, bool activa)
