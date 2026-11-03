@@ -404,14 +404,15 @@ public class SinubeService
                     continue;
                 }
 
-                // Pagos de clientes: SINUBE valida el serie-folio, no el UUID. Si otro depósito ya ocupa ese folio
-                // se intenta con las series alternas de la empresa (Herramientas), en orden; el XML de la bóveda
-                // no se modifica. Los folios ocupados conocidos se saltan; los demás se descubren por la respuesta.
+                // Clientes (facturas, notas y pagos): SINUBE valida el serie-folio, no el UUID. Si otro comprobante ya
+                // ocupa ese folio se intenta con las series alternas de la empresa (Herramientas), en orden; el XML de la
+                // bóveda no se modifica. Los folios de pagos ocupados conocidos (DbDeposito) se saltan; los demás se
+                // descubren por la respuesta de SINUBE.
                 List<string>? seriesIntento = null;
 
-                if (clientes && sinFolio is null && envio.TipoComprobante == "P" && configuracion.SeriesAlternasPagos.Count > 0)
+                if (clientes && sinFolio is null && configuracion.SeriesAlternasPagos.Count > 0)
                 {
-                    if (uuidsPagosEnSinube.Contains(envio.Uuid))
+                    if (envio.TipoComprobante == "P" && uuidsPagosEnSinube.Contains(envio.Uuid))
                     {
                         envio.Estatus = "EXISTE";
                         envio.Mensaje = "El pago ya está en SINUBE.";
@@ -420,9 +421,10 @@ public class SinubeService
                         continue;
                     }
 
-                    bool Ocupado(string serie) => pagosEnSinube?.ContainsKey(PagoSinube.SerieFolio(serie, envio.Folio)) == true;
+                    bool Ocupado(string serie) =>
+                        envio.TipoComprobante == "P" && pagosEnSinube?.ContainsKey(PagoSinube.SerieFolio(serie, envio.Folio)) == true;
 
-                    seriesIntento = new[] { envio.Serie }.Concat(configuracion.SeriesAlternasPagos)
+                    seriesIntento = new[] { envio.Serie }.Concat(configuracion.SeriesAlternasPara(envio.Serie))
                         .Distinct(StringComparer.OrdinalIgnoreCase)
                         .Where(s => !Ocupado(s))
                         .ToList();
@@ -745,10 +747,10 @@ public class SinubeService
 
     private static string FolioOcupado(SinubeEnvioDto envio, SinubeConfiguracionDto configuracion)
     {
-        List<string> alternas = configuracion.SeriesAlternasPagos;
+        List<string> alternas = configuracion.SeriesAlternasPara(envio.Serie);
         return alternas.Count == 0
-            ? $"El folio {envio.Serie}-{envio.Folio} ya lo tiene otro depósito en SINUBE. Configura las series alternas para pagos en Herramientas."
-            : $"El folio {envio.Folio} ya lo tiene otro depósito en SINUBE con la serie original y con {string.Join(", ", alternas)}. Agrega otra serie alterna en Herramientas.";
+            ? $"El folio {envio.Serie}-{envio.Folio} ya lo tiene otro comprobante en SINUBE. Configura las series alternas en Herramientas."
+            : $"El folio {envio.Folio} ya lo tiene otro comprobante en SINUBE con la serie original y con {string.Join(", ", alternas)}. Agrega otra serie alterna en Herramientas.";
     }
 
     private async Task EnviarClienteAsync(

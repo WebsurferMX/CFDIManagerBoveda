@@ -33,9 +33,10 @@ public class SinubeConfiguracionDto
     public bool ValidarIeps { get; set; } = true;
 
     /// <summary>
-    /// Series, separadas por coma y en orden, con las que se suben los complementos de pago de clientes cuyo
-    /// serie-folio ya ocupa otro pago en SINUBE (SINUBE valida el folio, no el UUID; p. ej. "COMFR,COMFRR").
-    /// Se usa la primera con el folio libre. Vacía: no se cambia.
+    /// Series, separadas por coma y en orden, con las que se suben los comprobantes de clientes (facturas, notas y
+    /// pagos) cuyo serie-folio ya ocupa otro en SINUBE (SINUBE valida el folio, no el UUID). Una serie fija
+    /// ("COMFR") o un sufijo de la serie original ("+R": NC- → NC-R). Se usa la primera con el folio libre.
+    /// Vacía: no se cambia. (El nombre de la columna viene de cuando solo aplicaba a pagos.)
     /// </summary>
     public string SerieAlternaPagos { get; set; } = "";
 
@@ -43,6 +44,14 @@ public class SinubeConfiguracionDto
     public List<string> SeriesAlternasPagos =>
         SerieAlternaPagos.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(s => s.ToUpperInvariant())
+            .Distinct()
+            .ToList();
+
+    /// <summary>Las series alternas ya resueltas para un comprobante de esa serie ("+R" se agrega a la serie).</summary>
+    public List<string> SeriesAlternasPara(string? serie) =>
+        SeriesAlternasPagos
+            .Select(s => s.StartsWith('+') ? (serie ?? "").Trim().ToUpperInvariant() + s[1..] : s)
+            .Where(s => s != "")
             .Distinct()
             .ToList();
 

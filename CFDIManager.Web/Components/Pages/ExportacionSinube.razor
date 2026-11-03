@@ -354,13 +354,13 @@
                     </div>
                 </div>
 
-                <h2 class="second-title"><i class="bi bi-receipt"></i> Pagos de clientes</h2>
+                <h2 class="second-title"><i class="bi bi-receipt"></i> Facturas, notas y pagos de clientes</h2>
 
                 <div class="form-grid">
                     <div class="field">
-                        <label>Series alternas para pagos con folio ocupado</label>
-                        <input class="form-control" @bind="Config.SerieAlternaPagos" placeholder="Vacío: no se cambia (p. ej. COMFR,COMFRR)" maxlength="100" />
-                        <small class="hint">Separadas por coma, en orden: si otro pago en SINUBE ya tiene la misma serie y folio, se usa la primera con ese folio libre. El XML de la bóveda no cambia.</small>
+                        <label>Series alternas cuando el folio ya existe</label>
+                        <input class="form-control" @bind="Config.SerieAlternaPagos" placeholder="Vacío: no se cambia (p. ej. +R,+RR o COMFR)" maxlength="100" />
+                        <small class="hint">Separadas por coma, en orden. "+R" agrega R a la serie original (NC- → NC-R); "COMFR" es una serie fija. Si SINUBE ya tiene esa serie y folio, se usa la primera libre. El XML de la bóveda no cambia.</small>
                     </div>
                 </div>
 
@@ -779,8 +779,8 @@
         bool EnSinube(string a) => enSinube.Contains(datos[a].Uuid);
         bool Ocupado(string a) => pagosEnSinube?.ContainsKey(PagoSinube.SerieFolio(datos[a].Serie, datos[a].Folio)) == true && !EnSinube(a);
 
-        List<string> alternas = config.SeriesAlternasPagos;
-        bool SeSubeConAlterna(string a) => alternas.Any(s => !pagosEnSinube!.ContainsKey(PagoSinube.SerieFolio(s, datos[a].Folio)));
+        bool SeSubeConAlterna(string a) =>
+            config.SeriesAlternasPara(datos[a].Serie).Any(s => !pagosEnSinube!.ContainsKey(PagoSinube.SerieFolio(s, datos[a].Folio)));
 
         List<string> pendientes = facturas.Where(a => !EnSinube(a) && !enviados.Contains(datos[a].Uuid)).ToList();
 
@@ -816,7 +816,8 @@
     /// <summary>Pagos de clientes que SINUBE ya tiene con esas series o con las series alternas: "SERIE|FOLIO" → UUID.</summary>
     private async Task<Dictionary<string, string>> PagosEnSinubeAsync(SinubeConfiguracionDto config, IEnumerable<string> series)
     {
-        List<PagoSinube> pagos = await DatosSinube.PagosClientesAsync(config, series.Concat(config.SeriesAlternasPagos));
+        List<string> originales = series.ToList();
+        List<PagoSinube> pagos = await DatosSinube.PagosClientesAsync(config, originales.Concat(originales.SelectMany(config.SeriesAlternasPara)));
         var porLlave = new Dictionary<string, string>();
 
         foreach (PagoSinube p in pagos)
