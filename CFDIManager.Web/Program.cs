@@ -121,6 +121,7 @@ builder.Services.AddSingleton<CFDIManager.Web.Services.Cif.ConstanciaFiscalServi
 
 // Opiniones de cumplimiento y acuses de declaraciones de cada empresa (Empresas → General / Declaraciones).
 builder.Services.AddSingleton<CFDIManager.Web.Services.Cif.ArchivosSatService>();
+builder.Services.AddScoped<CFDIManager.Web.Services.Cif.DiotBovedaService>();
 
 // Opinión y constancia por SAT Móvil (RFC + CIEC, sin captcha) y acuses de declaraciones
 // por el portal del SAT (con captcha; una sesión por pestaña del navegador).

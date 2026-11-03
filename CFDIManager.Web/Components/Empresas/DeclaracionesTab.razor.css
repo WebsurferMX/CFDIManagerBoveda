@@ -118,6 +118,14 @@
 }
 
 .dc-acciones button { color: #b91c1c; }
+.dc-acciones button.excel { color: #15803d; }
+.dc-acciones button:disabled { opacity: 0.35; cursor: default; }
+.dc-excel { padding-right: 0 !important; }
+
+.dc-dif { padding: 0.05rem 0.4rem; border-radius: 999px; font-weight: 600; }
+.dc-dif.cuadra { background: #dcfce7; color: #166534; }
+.dc-dif.difiere { background: #fef3c7; color: #92400e; }
+.dc-tabla .dc-sin-xml { color: #94a3b8; font-size: 0.72rem; text-align: center; }
 
 .dc-sat {
     display: flex;
@@ -184,6 +192,10 @@ html[data-theme="dark"] .dc-tabla td { border-bottom-color: #2a3b52; }
 html[data-theme="dark"] .dc-tabla th { background: #14212e; color: #b3bbc8; }
 html[data-theme="dark"] .dc-acciones a { color: #88a3ef; }
 html[data-theme="dark"] .dc-acciones button { color: #f09999; }
+html[data-theme="dark"] .dc-acciones button.excel { color: #86efac; }
+html[data-theme="dark"] .dc-dif.cuadra { background: #143b21; color: #c7f3d8; }
+html[data-theme="dark"] .dc-dif.difiere { background: #2e2410; color: #f5d68a; }
+html[data-theme="dark"] .dc-tabla .dc-sin-xml { color: #6b7a90; }
 
 html[data-theme="dark"] .dc-sat { border-color: #2b4d72; background: #112033; }
 html[data-theme="dark"] .dc-sat-ejercicio { color: #b3bbc8; }

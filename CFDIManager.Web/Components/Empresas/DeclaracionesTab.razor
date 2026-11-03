@@ -5,6 +5,7 @@
 
 @inject ArchivosSatService Archivos
 @inject DescargaArchivosSatService Descarga
+@inject DiotBovedaService DiotBoveda
 @inject IJSRuntime JS
 
 @* Acuses de la empresa por ejercicio: declaraciones mensuales y anual, y DIOT, cada una en su tarjeta. *@
@@ -202,7 +203,7 @@
             <div class="dc-barra">
                 <label>
                     Ejercicio
-                    <select class="form-select form-select-sm" @bind="EjercicioDiot">
+                    <select class="form-select form-select-sm" @bind="EjercicioDiot" @bind:after="CalcularBoveda">
                         @foreach (int anio in Ejercicios)
                         {
                             <option value="@anio">@anio</option>
@@ -262,6 +263,8 @@
                             }
                             <th class="num">Operaciones</th>
                             <th class="num">IVA pagado</th>
+                            <th class="num">IVA bóveda</th>
+                            <th class="num">Diferencia</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -283,6 +286,26 @@
                                 }
                                 <td class="num">@(d.Operaciones?.ToString("N0", Mx) ?? "—")</td>
                                 <td class="num">@(d.IvaPagado is decimal iva ? iva.ToString("C0", Mx) : "—")</td>
+                                @if (Bovedas.TryGetValue(d.Periodo, out DiotBoveda? b) && b.HayXml)
+                                {
+                                    decimal? dif = d.IvaPagado is decimal acuse ? acuse - b.Iva : null;
+                                    bool cuadra = dif is decimal x && Math.Abs(x) <= Math.Max(1, d.Operaciones ?? 1);
+                                    <td class="num" title="@($"{b.Operaciones} proveedores en la bóveda")">@b.Iva.ToString("C0", Mx)</td>
+                                    <td class="num">
+                                        <span class="dc-dif @(dif is null ? "" : cuadra ? "cuadra" : "difiere")"
+                                              title="@(b.PagosSinImpuestos > 0 ? $"{b.PagosSinImpuestos} complemento(s) sin impuestos por pago (Pagos 1.0) no se pudieron sumar" : "")">
+                                            @(dif is decimal y ? (cuadra ? "Cuadra" : y.ToString("C0", Mx)) : "—")
+                                        </span>
+                                    </td>
+                                }
+                                else
+                                {
+                                    <td class="num dc-sin-xml" colspan="2">Sin XML en la bóveda</td>
+                                }
+                                <td class="dc-acciones dc-excel">
+                                    <button type="button" class="excel" title="Excel de conciliación por proveedor" disabled="@(!Bovedas.ContainsKey(d.Periodo))"
+                                            @onclick="() => ExcelDiot(d)"><i class="bi bi-file-earmark-excel"></i></button>
+                                </td>
                                 @Acciones(d)
                             </tr>
                         }
@@ -320,7 +343,8 @@
     private string Error = "";
     private long? EmpresaCargada;
 
-    // DIOT: su propio ejercicio y periodo.
+    // DIOT: su propio ejercicio y periodo, y la DIOT reconstruida con la bóveda por mes (de los meses con acuse).
+    private Dictionary<int, DiotBoveda> Bovedas = [];
     private int EjercicioDiot = DateTime.Today.Year;
     private int PeriodoDiot = DateTime.Today.AddMonths(-1).Month;
     private bool CargandoDiot;
@@ -370,6 +394,7 @@
             Archivos.ReleerDiot(EmpresaId);
 
         Lista = EmpresaId > 0 ? Archivos.ObtenerDeclaraciones(EmpresaId) : [];
+        CalcularBoveda();
         PanelSat = false;
         Resultado = null;
         ErrorSat = "";
@@ -513,6 +538,24 @@
         }
     }
 
+    /// <summary>La DIOT de cada mes con acuse del ejercicio elegido, reconstruida con los XML de la bóveda.</summary>
+    private void CalcularBoveda()
+    {
+        Bovedas = EmpresaId <= 0
+            ? []
+            : Diot.Select(d => d.Periodo).Distinct().ToDictionary(m => m, m => DiotBoveda.Calcular(EmpresaId, EjercicioDiot, m));
+    }
+
+    private async Task ExcelDiot(DeclaracionSatDto acuse)
+    {
+        if (!Bovedas.TryGetValue(acuse.Periodo, out DiotBoveda? b))
+            return;
+
+        byte[] excel = DiotBoveda.GenerarExcel(Rfc, b, acuse);
+        await JS.InvokeVoidAsync("descargarArchivoBase64", $"{Rfc} DIOT {acuse.Ejercicio}-{acuse.Periodo:00} conciliacion.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Convert.ToBase64String(excel));
+    }
+
     private async Task CargarDiot(InputFileChangeEventArgs e)
     {
         CargandoDiot = true;
@@ -529,6 +572,7 @@
 
             Lista = Archivos.ObtenerDeclaraciones(EmpresaId);
             EjercicioDiot = d.Ejercicio;
+            CalcularBoveda();
         }
         catch (Exception ex)
         {
@@ -549,5 +593,6 @@
 
         Archivos.EliminarDeclaracion(EmpresaId, d.Id);
         Lista = Archivos.ObtenerDeclaraciones(EmpresaId);
+        CalcularBoveda();
     }
 }
