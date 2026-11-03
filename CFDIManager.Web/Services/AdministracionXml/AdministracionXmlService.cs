@@ -214,6 +214,20 @@ public class AdministracionXmlService
             }
         }
 
+        // Agrupado por mes: la hoja Por Mes como tabla con el dashboard de tendencia mensual.
+        if (reporte == "agrupado:mes")
+        {
+            List<AdminXmlFilaDto> seleccion = _repo.ObtenerSeleccionAdministracionXml(SinPestana(f));
+            bool recibidos = seleccion.Count > 0 && seleccion.All(x => x.Clasificacion == "RECIBIDO");
+
+            if (seleccion.Count > 0 && (recibidos || seleccion.All(x => x.Clasificacion != "RECIBIDO")))
+            {
+                (byte[] porMes, _) = ReporteGeneral.CrearPorMes(
+                    seleccion, new ReporteGeneral.Filtro(empresa.Rfc, recibidos ? "R" : "E", f.Ids.Count > 0 ? null : f.Anio, null), recibidos);
+                return (porMes, NombreReporte(empresa, f, reporte));
+            }
+        }
+
         bool general = reporte == "general";
 
         if (!general && reporte != "conceptos" && !reporte.StartsWith("agrupado:"))

@@ -158,7 +158,10 @@
                         {
                             <option value="agrupado:receptor">Agrupado por receptor</option>
                         }
-                        <option value="agrupado:mes">Agrupado por mes</option>
+                        @if (VariosMeses)
+                        {
+                            <option value="agrupado:mes">Agrupado por mes</option>
+                        }
                         <option value="agrupado:uso">Uso CFDI</option>
                         <option value="agrupado:metodo">Método de pago</option>
                         <option value="agrupado:tipo">Tipo</option>
@@ -1072,6 +1075,8 @@
     // Con un solo mes (sin acumular) se puede bajar al día; vacío = todo el mes.
     private bool MuestraDias => Anio is not null && MesesElegidos.Count == 1 && !Acumular;
 
+    private bool VariosMeses => MesesElegidos.Count > 1 || Acumular;
+
     // Se recalcula en cada consulta: el número de cada día sigue a la pestaña, la búsqueda y "Filtrar".
     private void CargarDias()
     {
@@ -1108,6 +1113,12 @@
 
     private Task Consultar()
     {
+        // Agrupado por mes solo aplica con varios meses (o acumulado).
+        if (TipoReporte == "agrupado:mes" && !VariosMeses)
+        {
+            TipoReporte = "general";
+        }
+
         try
         {
             Pagina = 0;
