@@ -36,9 +36,19 @@
                         }
                     </select>
                 </label>
+                <label class="d-flex align-items-center gap-2 fw-semibold mb-0">
+                    <i class="bi bi-calendar3"></i>Mes
+                    <select class="form-select form-select-sm w-auto" @bind="MesFiltro" disabled="@(Cargando || Ejercicio is null)">
+                        <option value="0">Todo el año</option>
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <option value="@m" disabled="@(Meses.Length == 12 && Meses[m - 1].Comprobantes == 0)">@NombreMes(m)</option>
+                        }
+                    </select>
+                </label>
                 @if (Ejercicio is not null)
                 {
-                    <span class="badge rounded-pill text-bg-light border"><i class="bi bi-file-earmark-check me-1"></i>@Ejercicio.Recibos.Count.ToString("N0") recibos</span>
+                    <span class="badge rounded-pill text-bg-light border"><i class="bi bi-file-earmark-check me-1"></i>@RecibosVista.Count.ToString("N0") recibos</span>
                     @if (Ejercicio.Cancelados > 0)
                     {
                         <span class="badge rounded-pill text-bg-danger-subtle border border-danger-subtle text-danger-emphasis">
@@ -83,7 +93,7 @@
                 {
                     <li class="nav-item">
                         <button type="button" class="nav-link @(Pestana == clave ? "active" : "")" @onclick="() => Pestana = clave">
-                            <i class="bi @icono me-1"></i>@titulo
+                            <i class="bi @icono me-1"></i>@TituloPestana(clave, titulo)
                         </button>
                     </li>
                 }
@@ -163,6 +173,7 @@
         Error = null;
         Seleccionado = null;
         EnteradoGuardado = false;
+        if (!recargar) MesFiltro = 0;
         StateHasChanged();
 
         try
@@ -214,11 +225,22 @@
 
     private decimal EnteradoTotal => Enterado.Sum(v => v ?? 0);
 
+    // Mes elegido arriba (0 = todo el año): lo usan el acumulado y Trabajadores; Detalle mensual siempre trae los 12.
+    private bool PorMes => MesFiltro is >= 1 and <= 12 && Meses.Length == 12;
+    private TotalesNomina Vista => PorMes ? Meses[MesFiltro - 1] : Total;
+    private List<ReciboNomina> RecibosVista => PorMes ? Ejercicio!.Recibos.Where(r => r.FechaPago.Month == MesFiltro).ToList() : Ejercicio!.Recibos;
+    private decimal EnteradoVista => PorMes ? Enterado[MesFiltro - 1] ?? 0 : EnteradoTotal;
+
+    private static string NombreMes(int m) => Mx.TextInfo.ToTitleCase(Mx.DateTimeFormat.GetMonthName(m));
+
+    private string TituloPestana(string clave, string titulo) =>
+        clave == "anual" && PorMes ? $"Acumulado de {NombreMes(MesFiltro).ToLower(Mx)}" : titulo;
+
     private string PeriodoConsiderado
     {
         get
         {
-            var meses = Ejercicio!.Recibos.Select(r => r.FechaPago.Month).Distinct().Order().ToList();
+            var meses = RecibosVista.Select(r => r.FechaPago.Month).Distinct().Order().ToList();
             string Nombre(int m) => Mx.TextInfo.ToTitleCase(Mx.DateTimeFormat.GetMonthName(m));
             return meses.Count == 0 ? "" : meses.Count == 1 ? $"{Nombre(meses[0])} {Anio}" : $"{Nombre(meses[0])}–{Nombre(meses[^1])} {Anio}";
         }
@@ -228,7 +250,7 @@
 
     private RenderFragment Anual() => __builder =>
     {
-        decimal diferencia = Total.IsrRetenido - EnteradoTotal;
+        decimal diferencia = Vista.IsrRetenido - EnteradoVista;
 
         <div class="card shadow-sm">
             <div class="card-body">
@@ -246,13 +268,13 @@
                     <div class="col-6 col-lg-2">
                         <div class="vn-dato">
                             <i class="bi bi-people text-success"></i>
-                            <div><div class="vn-etiqueta">Trabajadores</div><div class="fs-5 fw-bold">@Ejercicio.Trabajadores</div></div>
+                            <div><div class="vn-etiqueta">Trabajadores</div><div class="fs-5 fw-bold">@RecibosVista.Select(r => r.Rfc).Distinct().Count()</div></div>
                         </div>
                     </div>
                     <div class="col-6 col-lg-2">
                         <div class="vn-dato">
                             <i class="bi bi-file-earmark-text text-warning"></i>
-                            <div><div class="vn-etiqueta">Recibos vigentes</div><div class="fs-5 fw-bold">@Ejercicio.Recibos.Count.ToString("N0")</div></div>
+                            <div><div class="vn-etiqueta">Recibos vigentes</div><div class="fs-5 fw-bold">@RecibosVista.Count.ToString("N0")</div></div>
                         </div>
                     </div>
                     <div class="col-12 col-lg-3">
@@ -264,15 +286,15 @@
                 </div>
 
                 <div class="row g-2">
-                    <TarjetaTotal Ancho="col-6 col-lg" Titulo="Pagos de sueldos" Valor="@M(Total.SueldosGravados + Total.SueldosExentos)" Icono="bi-cash-stack" Color="success" />
-                    @if (Total.Asimilados != 0)
+                    <TarjetaTotal Ancho="col-6 col-lg" Titulo="Pagos de sueldos" Valor="@M(Vista.SueldosGravados + Vista.SueldosExentos)" Icono="bi-cash-stack" Color="success" />
+                    @if (Vista.Asimilados != 0)
                     {
-                        <TarjetaTotal Ancho="col-6 col-lg" Titulo="Asimilados" Valor="@M(Total.Asimilados)" Icono="bi-person-badge" Color="secondary" />
+                        <TarjetaTotal Ancho="col-6 col-lg" Titulo="Asimilados" Valor="@M(Vista.Asimilados)" Icono="bi-person-badge" Color="secondary" />
                     }
-                    <TarjetaTotal Ancho="col-6 col-lg" Titulo="ISR retenido" Valor="@M(Total.IsrRetenido)" Icono="bi-bank" Color="primary" />
-                    <TarjetaTotal Ancho="col-6 col-lg" Titulo="Subsidio neto" Valor="@M(Total.SubsidioNeto)" Icono="bi-gift" Color="warning" />
-                    <TarjetaTotal Ancho="col-6 col-lg" Titulo="PTU timbrada" Valor="@M(Total.Ptu)" Icono="bi-pie-chart" Color="info" />
-                    <TarjetaTotal Ancho="col-6 col-lg" Titulo="Neto pagado" Valor="@M(Total.Neto)" Icono="bi-wallet2" Color="success" />
+                    <TarjetaTotal Ancho="col-6 col-lg" Titulo="ISR retenido" Valor="@M(Vista.IsrRetenido)" Icono="bi-bank" Color="primary" />
+                    <TarjetaTotal Ancho="col-6 col-lg" Titulo="Subsidio neto" Valor="@M(Vista.SubsidioNeto)" Icono="bi-gift" Color="warning" />
+                    <TarjetaTotal Ancho="col-6 col-lg" Titulo="PTU timbrada" Valor="@M(Vista.Ptu)" Icono="bi-pie-chart" Color="info" />
+                    <TarjetaTotal Ancho="col-6 col-lg" Titulo="Neto pagado" Valor="@M(Vista.Neto)" Icono="bi-wallet2" Color="success" />
                 </div>
             </div>
         </div>
@@ -284,37 +306,37 @@
                     <div class="col-12 col-xl-6">
                         @Tabla("Pagos por sueldos y salarios",
                         [
-                            ("Trabajadores por sueldos y salarios", Total.TrabajadoresSueldos.ToString("N0"), false),
-                            ("Pagos gravados", M(Total.SueldosGravados), false),
-                            ("Pagos exentos", M(Total.SueldosExentos), false),
-                            ("Total", M(Total.SueldosGravados + Total.SueldosExentos), true)
+                            ("Trabajadores por sueldos y salarios", Vista.TrabajadoresSueldos.ToString("N0"), false),
+                            ("Pagos gravados", M(Vista.SueldosGravados), false),
+                            ("Pagos exentos", M(Vista.SueldosExentos), false),
+                            ("Total", M(Vista.SueldosGravados + Vista.SueldosExentos), true)
                         ])
                     </div>
                     <div class="col-12 col-xl-6">
                         @Tabla("Pagos exentos de sueldos",
                         [
-                            ("Aguinaldo exento", M(Total.AguinaldoExento), false),
-                            ("Prima vacacional exenta", M(Total.PrimaVacacionalExenta), false),
-                            ("Prima dominical exenta", M(Total.PrimaDominicalExenta), false),
-                            ("Otros exentos", M(Total.OtrosExentos), false),
-                            ("Total exentos", M(Total.SueldosExentos), true)
+                            ("Aguinaldo exento", M(Vista.AguinaldoExento), false),
+                            ("Prima vacacional exenta", M(Vista.PrimaVacacionalExenta), false),
+                            ("Prima dominical exenta", M(Vista.PrimaDominicalExenta), false),
+                            ("Otros exentos", M(Vista.OtrosExentos), false),
+                            ("Total exentos", M(Vista.SueldosExentos), true)
                         ])
                     </div>
                     <div class="col-12 col-xl-6">
                         @Tabla("Pagos timbrados de PTU",
                         [
-                            ("PTU gravada", M(Total.PtuGravada), false),
-                            ("PTU exenta", M(Total.PtuExenta), false),
-                            ("Total PTU timbrada", M(Total.Ptu), true)
+                            ("PTU gravada", M(Vista.PtuGravada), false),
+                            ("PTU exenta", M(Vista.PtuExenta), false),
+                            ("Total PTU timbrada", M(Vista.Ptu), true)
                         ])
                     </div>
                     <div class="col-12 col-xl-6">
                         @Tabla("Subsidio para el empleo",
                         [
-                            ("Subsidio causado (correspondió)", M(Total.SubsidioCausado), false),
-                            ("(-) Ajustes al subsidio", M(Total.AjusteSubsidio), false),
-                            ("Subsidio neto que correspondió", M(Total.SubsidioNeto), true),
-                            ("Subsidio pagado en efectivo", M(Total.SubsidioPagado), false)
+                            ("Subsidio causado (correspondió)", M(Vista.SubsidioCausado), false),
+                            ("(-) Ajustes al subsidio", M(Vista.AjusteSubsidio), false),
+                            ("Subsidio neto que correspondió", M(Vista.SubsidioNeto), true),
+                            ("Subsidio pagado en efectivo", M(Vista.SubsidioPagado), false)
                         ])
                     </div>
                 </div>
@@ -326,12 +348,12 @@
             <div class="card-body">
                 @Tabla(null,
                 [
-                    ("Pagos de sueldos (gravados)", M(Total.SueldosGravados), false),
-                    ("Pagos exentos de sueldos", M(Total.SueldosExentos), false),
-                    ("Pagos de asimilados a salarios", M(Total.Asimilados), false),
-                    ("Indemnizaciones", M(Total.Indemnizaciones), false),
-                    ("Jubilaciones y pensiones", M(Total.Jubilaciones), false),
-                    ("Total general", M(Total.TotalPagos), true)
+                    ("Pagos de sueldos (gravados)", M(Vista.SueldosGravados), false),
+                    ("Pagos exentos de sueldos", M(Vista.SueldosExentos), false),
+                    ("Pagos de asimilados a salarios", M(Vista.Asimilados), false),
+                    ("Indemnizaciones", M(Vista.Indemnizaciones), false),
+                    ("Jubilaciones y pensiones", M(Vista.Jubilaciones), false),
+                    ("Total general", M(Vista.TotalPagos), true)
                 ])
             </div>
         </details>
@@ -347,8 +369,8 @@
             <div class="card-body">
                 @Tabla(null,
                 [
-                    ("ISR retenido (sueldos, indemnizaciones y jubilaciones)", M(Total.IsrRetenido), false),
-                    ("ISR enterado (captura mensual en Detalle mensual)", M(EnteradoTotal), false),
+                    ("ISR retenido (sueldos, indemnizaciones y jubilaciones)", M(Vista.IsrRetenido), false),
+                    ("ISR enterado (captura mensual en Detalle mensual)", M(EnteradoVista), false),
                     ("Diferencia (retenido − enterado)", M(diferencia), true)
                 ])
             </div>
@@ -537,13 +559,6 @@
                         <input type="search" class="form-control" placeholder="RFC, nombre o número de empleado"
                                @bind="Busqueda" @bind:event="oninput" />
                     </div>
-                    <select class="form-select form-select-sm w-auto" @bind="MesFiltro">
-                        <option value="0">Todos los meses</option>
-                        @for (int m = 1; m <= 12; m++)
-                        {
-                            <option value="@m">@Mx.TextInfo.ToTitleCase(Mx.DateTimeFormat.GetMonthName(m))</option>
-                        }
-                    </select>
                     <span class="badge rounded-pill text-bg-light border align-self-center">@grupos.Count trabajadores</span>
                 </div>
 
