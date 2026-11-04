@@ -18,11 +18,11 @@ public static partial class ReporteGeneral
     /// <summary>
     /// De dónde leen sus fórmulas el dashboard de cuentas por pagar. Unica: facturas, notas y pagos en una sola tabla
     /// distinguidos por Tipo, con notas y pagos en negativo y lo pagado en Total; si no, las hojas del reporte general,
-    /// donde la hoja Pago trae un renglón por documento relacionado y lo pagado es ImpPagado.
+    /// donde la hoja Detalle Pagos trae un renglón por documento relacionado y lo pagado es ImpPagado.
     /// </summary>
     private sealed record FuenteCxp(string Facturas, string Notas, string Pagos, bool Unica, string Iva, string Origen)
     {
-        public static readonly FuenteCxp General = new("Table13", "Table1", "TablePago", false, "IVA 16%", "hojas Factura, NCredito y Pago");
+        public static readonly FuenteCxp General = new("Table13", "Table1", "TablePago", false, "IVA 16%", "hojas Factura, NCredito y Detalle Pagos");
         public static readonly FuenteCxp PorEmisor = new(TablaPorEmisor, TablaPorEmisor, TablaPorEmisor, true, "IVA", "hoja Por Emisor");
 
         private string Signo => Unica ? "-" : "";

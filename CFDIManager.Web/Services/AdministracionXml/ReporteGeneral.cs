@@ -51,6 +51,8 @@ public static partial class ReporteGeneral
             var filas = leidos.Where(x => x.Tipo == hoja.Tipo).SelectMany(x => hoja.Tipo == "P" ? FilasPago(x) : [new Fila(x)]).ToList();
             // Factura y NCredito siempre existen cuando hay dashboard: sus fórmulas usan Table13 y Table1 (y TablePago en CxP).
             if (filas.Count == 0 && hoja.Tipo is not ("I" or "E") && !(cxp && hoja.Tipo == "P")) continue;
+            if (hoja.Tipo == "P" && filas.Count > 0)
+                EscribirHoja(wb, HojaResumenPagos, leidos.Where(x => x.Tipo == "P").Select(x => new Fila(x)).ToList());
             EscribirHoja(wb, hoja, filas);
             if (filas.Count > 0) conDatos.Add(hoja.Nombre);
         }
@@ -110,6 +112,37 @@ public static partial class ReporteGeneral
             foreach (var docto in doctos) yield return new Fila(c, pago, docto);
         }
     }
+
+    private static IEnumerable<XElement> Doctos(XElement? pago) =>
+        pago?.Elements().Where(x => x.Name.LocalName == "DoctoRelacionado") ?? [];
+
+    private static XElement? PrimerDocto(XElement? pago) => Doctos(pago).FirstOrDefault();
+
+    // Resumen Pagos: un renglón por CFDI de pago (un CFDI puede traer varios nodos Pago).
+    private static string DePagos(Leido c, string atributo, Func<string, string>? catalogo = null) =>
+        string.Join(", ", c.Pagos.Select(p => c.A(p, atributo)).Where(v => v != "").Distinct().Select(v => catalogo?.Invoke(v) ?? v));
+
+    private static readonly Columna[] ResumenPago =
+    [
+        new("Serie", f => f.C.A(f.C.Root, "Serie")),
+        new("Folio", f => f.C.A(f.C.Root, "Folio")),
+        new("UUID", f => f.C.A(f.C.Timbre, "UUID")),
+        new("Estado SAT", f => f.C.E.EstadoSat ?? ""),
+        new("Fecha Emision", f => f.C.FechaCorta),
+        new("RFC Emisor", f => f.C.A(f.C.Emisor, "Rfc").ToUpperInvariant()),
+        new("Nombre Emisor", f => f.C.A(f.C.Emisor, "Nombre")),
+        new("RFC Receptor", f => f.C.ReceptorRfc),
+        new("Nombre Receptor", f => f.C.ReceptorNombre),
+        new("FechaPago", f => DePagos(f.C, "FechaPago")),
+        new("FormaDePagoP", f => DePagos(f.C, "FormaDePagoP", v => Catalogo(Catalogos.Forma, v))),
+        new("MonedaP", f => DePagos(f.C, "MonedaP")),
+        new("Num Operacion", f => DePagos(f.C, "NumOperacion")),
+        new("Facturas pagadas", f => (decimal)f.C.Pagos.Sum(p => Doctos(p).Count())),
+        new("Monto", f => f.C.Pagos.Sum(p => f.C.N(p, "Monto")), true),
+        new("Archivo XML", f => Path.GetFileName(f.C.E.Fila.Ruta)),
+    ];
+
+    private static readonly Hoja HojaResumenPagos = new("Resumen Pagos", "TableResumenPagos", "P", "7030A0", ResumenPago);
 
     private static readonly string[] TasasIeps = ["0.03", "0.06", "0.07", "0.08", "0.09", "0.265", "0.3", "0.53", "1.6"];
 
@@ -184,7 +217,8 @@ public static partial class ReporteGeneral
         new("FechaPago", f => f.C.A(f.Pago, "FechaPago")),
         new("FormaDePagoP", f => Catalogo(Catalogos.Forma, f.C.A(f.Pago, "FormaDePagoP"))),
         new("MonedaP", f => f.C.A(f.Pago, "MonedaP")),
-        new("Monto", f => f.C.N(f.Pago, "Monto"), true),
+        // Un pago con varias facturas ocupa varios renglones: el monto solo en el primero, para que el total no se infle.
+        new("Monto", f => f.Docto is null || f.Docto == PrimerDocto(f.Pago) ? f.C.N(f.Pago, "Monto") : null, true),
         new("UUIDRel", f => f.C.A(f.Docto, "IdDocumento").ToUpperInvariant()),
         new("SerieRel", f => f.C.A(f.Docto, "Serie")),
         new("FolioRel", f => f.C.A(f.Docto, "Folio")),
@@ -271,7 +305,8 @@ public static partial class ReporteGeneral
         new("Nomina", "Table2", "N", "375623", Nomina),
         new("NCredito", "Table1", "E", "C00000", Comprobante),
         new("Traslado", "TableTraslado", "T", "7F7F7F", Comprobante),
-        new("Pago", "TablePago", "P", "7030A0", Pago),
+        // Un renglón por factura pagada (documento relacionado); el resumen de un renglón por pago va antes.
+        new("Detalle Pagos", "TablePago", "P", "7030A0", Pago),
     ];
 
     private static void EscribirHoja(XLWorkbook wb, Hoja hoja, IReadOnlyList<Fila> filas)
