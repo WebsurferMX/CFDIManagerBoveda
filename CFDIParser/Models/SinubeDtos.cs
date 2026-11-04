@@ -40,20 +40,37 @@ public class SinubeConfiguracionDto
     /// </summary>
     public string SerieAlternaPagos { get; set; } = "";
 
+    /// <summary>
+    /// Igual que <see cref="SerieAlternaPagos"/> pero solo para XML Azulejeras, sobre la serie ya convertida
+    /// (72A → 72AA; con "+A,+AA": 72AAA y luego 72AAAA). No afecta la Importación a SINUBE normal.
+    /// </summary>
+    public string SerieAlternaAzulejeras { get; set; } = "";
+
     /// <summary><see cref="SerieAlternaPagos"/> como lista, en mayúsculas y sin repetidas.</summary>
-    public List<string> SeriesAlternasPagos =>
-        SerieAlternaPagos.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    public List<string> SeriesAlternasPagos => Lista(SerieAlternaPagos);
+
+    /// <summary>Series separadas por coma como lista, en mayúsculas y sin repetidas.</summary>
+    public static List<string> Lista(string series) =>
+        (series ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(s => s.ToUpperInvariant())
             .Distinct()
             .ToList();
 
-    /// <summary>Las series alternas ya resueltas para un comprobante de esa serie ("+R" se agrega a la serie).</summary>
-    public List<string> SeriesAlternasPara(string? serie) =>
-        SeriesAlternasPagos
-            .Select(s => s.StartsWith('+') ? (serie ?? "").Trim().ToUpperInvariant() + s[1..] : s)
-            .Where(s => s != "")
+    /// <summary>
+    /// Las series alternas ya resueltas para un comprobante de esa serie: "+R" se agrega a la serie y en el sufijo
+    /// "*" es la última letra de la serie ("+*": 72AA → 72AAA, 76EE → 76EEE; "+**": 72AAAA).
+    /// </summary>
+    public List<string> SeriesAlternasPara(string? serie)
+    {
+        string original = (serie ?? "").Trim().ToUpperInvariant();
+        string ultima = original.Length > 0 ? original[^1].ToString() : "";
+
+        return SeriesAlternasPagos
+            .Select(s => s.StartsWith('+') ? original + s[1..].Replace("*", ultima) : s)
+            .Where(s => s != "" && s != original)
             .Distinct()
             .ToList();
+    }
 
     // Parámetros de descarga / nombre de XML (pestaña "Descarga XMLs del SAT")
     public bool IncluirUuid { get; set; }

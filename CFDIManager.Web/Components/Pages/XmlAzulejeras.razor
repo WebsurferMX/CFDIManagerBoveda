@@ -287,6 +287,15 @@
                                         </div>
                                     }
                                 </div>
+                                <div class="col-lg-6">
+                                    <label class="fw-semibold mb-1" for="serieAlterna">Series alternas cuando el folio ya existe</label>
+                                    <input id="serieAlterna" class="form-control form-control-sm" @bind="ConfigSinube.SerieAlternaAzulejeras"
+                                           placeholder="Vacío: no se cambia (p. ej. +*,+** o +A)" maxlength="100" disabled="@Subiendo" />
+                                    @if (EjemploSerieAlterna is string ejemplo)
+                                    {
+                                        <div class="form-text">@ejemplo</div>
+                                    }
+                                </div>
                             </div>
                         </div>
 
@@ -488,6 +497,20 @@
     private CancellationTokenSource? CancelacionSinube;
     private string? FaltaSinube;
     private SinubeConfiguracionDto? ConfigSinube;
+
+    // "72AA → 72AAA → 72AAAA": orden en que se intenta la primera serie convertida si el folio ya existe.
+    private string? EjemploSerieAlterna
+    {
+        get
+        {
+            if (ConfigSinube is null || Resultado?.Detalles.FirstOrDefault(d => d.SerieNueva != "")?.SerieNueva is not string serie)
+                return null;
+
+            var copia = new SinubeConfiguracionDto { SerieAlternaPagos = ConfigSinube.SerieAlternaAzulejeras };
+            List<string> alternas = copia.SeriesAlternasPara(serie);
+            return alternas.Count == 0 ? null : string.Join(" → ", alternas.Prepend(serie.ToUpperInvariant()));
+        }
+    }
     private bool EnviarConIeps;
     private bool AnticiposConCodigoGenerico = true;
 
@@ -639,8 +662,13 @@
         try
         {
             // Los parámetros elegidos aquí quedan guardados, igual que en Importación a SINUBE.
-            SinubeConfiguracionDto configuracion = ConfigSinube;
-            Sinube.GuardarConfiguracion(configuracion, null);
+            Sinube.GuardarConfiguracion(ConfigSinube, null);
+
+            // Copia para el envío: las series alternas de Azulejeras (sobre la serie ya convertida, 72AA → 72AAA)
+            // en lugar de las de la Importación normal. La configuración guardada no cambia.
+            SinubeConfiguracionDto configuracion = System.Text.Json.JsonSerializer.Deserialize<SinubeConfiguracionDto>(
+                System.Text.Json.JsonSerializer.Serialize(ConfigSinube))!;
+            configuracion.SerieAlternaPagos = ConfigSinube.SerieAlternaAzulejeras;
             List<string> archivos = Revision.PorSubir;
             HashSet<string> yaEnSinube = Revision.YaEnSinube;
             List<string> anticipos = AnticiposPorSubir;
