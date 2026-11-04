@@ -436,7 +436,8 @@ td.sel { width: 30px; }
     display: grid;
     grid-column: 2;
     grid-row: 1;
-    grid-template-columns: repeat(2, minmax(8.5rem, 10.5rem));
+    /* Cada columna mide lo que necesita su tarjeta más ancha: el texto se ve completo. */
+    grid-template-columns: repeat(2, minmax(8.5rem, max-content));
     gap: .35rem;
 }
 
@@ -450,9 +451,9 @@ td.sel { width: 30px; }
     scrollbar-width: thin;
 }
 
-.zona-inferior.sin-detalles > .kpis .kpi { flex: 1 1 0; min-width: 8.5rem; }
+.zona-inferior.sin-detalles > .kpis .kpi { flex: 1 0 auto; min-width: 8.5rem; }
 
-.kpi-texto { min-width: 0; }
+.kpi-texto { flex: 1 1 auto; }
 
 /* Degradado del color del tipo desde la esquina, borde del mismo tono y sombra ligera. */
 .kpi {
@@ -486,28 +487,29 @@ td.sel { width: 30px; }
     font-size: .7rem;
 }
 
+/* Nombre y número en flex y sin recortes: la tarjeta toma el ancho de su texto. */
 .kpi-titulo {
-    overflow: hidden;
+    display: flex;
+    align-items: center;
+    gap: .25rem;
     color: var(--bs-secondary-color);
     font-size: .6rem;
     font-weight: 600;
     letter-spacing: .02em;
-    text-overflow: ellipsis;
     text-transform: uppercase;
     white-space: nowrap;
 }
 
 .kpi-titulo .cantidad {
-    margin-left: .15rem;
+    flex: 0 0 auto;
     padding: 0 .3rem;
     border-radius: 1rem;
     background: var(--tono-fondo);
     color: var(--tono-texto);
+    font-variant-numeric: tabular-nums;
 }
 
 .kpi-valor {
-    overflow: hidden;
-    text-overflow: ellipsis;
     color: var(--tono-texto, var(--bs-emphasis-color));
     font-size: .78rem;
     font-weight: 700;
@@ -637,7 +639,7 @@ td.sel { width: 30px; }
 /* Pantalla angosta: los totales bajan debajo del detalle, en 3 columnas. */
 @media (max-width: 900px) {
     .zona-inferior { grid-template-columns: minmax(0, 1fr); }
-    .zona-inferior > .kpis { grid-column: 1; grid-row: 2; grid-template-columns: repeat(auto-fill, minmax(8.5rem, 1fr)); }
+    .zona-inferior > .kpis { grid-column: 1; grid-row: 2; grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr)); }
 }
 
 /* El morado no tiene variables propias en Bootstrap 5.3: tonos para el modo oscuro. */
