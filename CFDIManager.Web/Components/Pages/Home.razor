@@ -68,6 +68,23 @@
     }
     else
     {
+        <ul class="nav nav-pills mb-3 paginas">
+            @foreach (var (clave, titulo, icono) in Paginas)
+            {
+                <li class="nav-item">
+                    <button type="button" class="nav-link @(Pagina == clave ? "active" : "")" @onclick="() => Pagina = clave">
+                        <i class="ti @icono me-1"></i>@titulo
+                    </button>
+                </li>
+            }
+        </ul>
+
+        @if (Pagina == "iva")
+        {
+            @ProyeccionIva()
+        }
+        else
+        {
         @* ---------- Indicadores ---------- *@
         <div class="row row-cards mb-3">
             <div class="col-sm-6 col-xl-3">
@@ -135,58 +152,6 @@
             </div>
         </div>
 
-        @* ---------- Impuestos y previo de IVA ---------- *@
-        <div class="card grupo mb-3" style="--color-tipo: var(--tblr-azure)">
-            <div class="card-body py-2">
-                <div class="row g-2">
-                    @foreach (GrupoImpuestos grupo in Impuestos)
-                    {
-                        <div class="col-xl-6 d-flex align-items-center gap-2">
-                            <span class="badge bg-@grupo.Color-lt clave">@grupo.Clave</span>
-                            <div class="row g-2 flex-fill">
-                                @foreach (Impuesto i in grupo.Renglones)
-                                {
-                                    <div class="col-4">
-                                        <div class="d-flex align-items-center gap-2"
-                                             title="Facturas PUE y notas de crédito: @Moneda(i.Importe.Facturas)&#10;Complementos de pago: @Moneda(i.Importe.Pagos)">
-                                            <span class="avatar avatar-xs @i.Claro"><i class="ti @i.Icono"></i></span>
-                                            <div>
-                                                <div class="subheader">@i.Nombre</div>
-                                                <div class="fw-bold">@Moneda(i.Importe.Total)</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                }
-                            </div>
-                        </div>
-                    }
-                </div>
-            </div>
-            <div class="card-body py-2 border-top">
-                <div class="d-flex flex-wrap align-items-center gap-2 previo">
-                    <span class="badge bg-@(IvaPorPagar >= 0 ? "red" : "green")-lt clave">PREVIO IVA</span>
-                    <div title="IVA trasladado: @Moneda(Datos.IvaTrasladadoEmitidos.Total)&#10;IVA que me retuvieron: @Moneda(Datos.IvaRetenidoEmitidos.Total)">
-                        <div class="subheader">IVA cobrado</div>
-                        <div class="fw-bold">@Moneda(IvaCobrado)</div>
-                    </div>
-                    <span class="operador">−</span>
-                    <div>
-                        <div class="subheader">IVA acreditable</div>
-                        <div class="fw-bold">@Moneda(Datos.IvaTrasladadoRecibidos.Total)</div>
-                    </div>
-                    <span class="operador">=</span>
-                    <div>
-                        <div class="subheader">@(IvaPorPagar >= 0 ? "IVA por pagar" : "Saldo a favor")</div>
-                        <div class="fw-bold @(IvaPorPagar >= 0 ? "text-red" : "text-green")">@Moneda(Math.Abs(IvaPorPagar))</div>
-                    </div>
-                    <div class="ms-auto text-end">
-                        <div class="subheader">Retenciones de IVA por enterar</div>
-                        <div class="fw-bold">@Moneda(Datos.IvaRetenidoRecibidos.Total)</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         @* ---------- Emitidos y recibidos por tipo ---------- *@
         <div class="row row-cards">
             @foreach (Grupo grupo in Grupos)
@@ -236,38 +201,22 @@
                             </div>
                         </div>
 
-                        <div class="table-responsive">
-                            <table class="table table-sm table-vcenter card-table">
-                                <thead>
-                                    <tr>
-                                        <th>Tipo</th>
-                                        <th class="text-end">CFDI</th>
-                                        <th class="text-end">%</th>
-                                        <th class="text-end">Importe</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach (Renglon r in grupo.Renglones)
-                                    {
-                                        <tr>
-                                            <td>
-                                                <div class="d-flex align-items-center gap-2">
-                                                    <span class="avatar avatar-xs @r.Claro"><i class="ti @r.Icono"></i></span>
-                                                    <span>@r.Nombre</span>
-                                                </div>
-                                            </td>
-                                            <td class="text-end">@r.Cantidad.ToString("N0")</td>
-                                            <td class="text-end text-secondary">@Porcentaje(r.Cantidad, grupo.Total).ToString("0.#")%</td>
-                                            <td class="text-end fw-bold">@(r.Importe is decimal importe ? Moneda(importe) : "—")</td>
-                                        </tr>
-                                    }
-                                </tbody>
-                            </table>
+                        <div class="card-body pt-0">
+                            <div class="row g-2">
+                                @foreach (Renglon r in grupo.Renglones)
+                                {
+                                    <div class="col-6 col-md-4 @(r.Nombre == "Facturas" ? "col-md-8" : "")">
+                                        @Kpi(r.Nombre, r.Importe is decimal importe ? Moneda(importe) : "—",
+                                             $"{r.Cantidad:N0} CFDI · {Porcentaje(r.Cantidad, grupo.Total):0.#}%", r.Icono, r.Tono, r.Cantidad == 0)
+                                    </div>
+                                }
+                            </div>
                         </div>
                     </div>
                 </div>
             }
         </div>
+        }
     }
 </div>
 
@@ -299,7 +248,7 @@
 
     // Un renglón por tipo, siempre en el orden Facturas, Nómina, Notas de crédito, Traslados, Pagos.
     // Los traslados no llevan importe.
-    private sealed record Renglon(string Icono, string Nombre, string Fondo, string Claro, long Cantidad, decimal? Importe);
+    private sealed record Renglon(string Icono, string Nombre, string Fondo, string Tono, long Cantidad, decimal? Importe);
 
     private sealed record Grupo(string Clave, string Insignia, string Titulo, string Descripcion,
                                 string EtiquetaNeto, decimal Neto, long Total, List<Renglon> Renglones);
@@ -328,32 +277,104 @@
                                            long traslados,
                                            long pagos, decimal importePagos) =>
     [
-        new("ti-file-invoice", "Facturas", "bg-blue", "bg-blue-lt", facturas, importeFacturas),
-        new("ti-users", "Nómina", "bg-green", "bg-green-lt", nominas, importeNominas),
-        new("ti-receipt-refund", "Notas de crédito", "bg-red", "bg-red-lt", notas, importeNotas),
-        new("ti-truck", "Traslados", "bg-yellow", "bg-yellow-lt", traslados, null),
-        new("ti-cash", "Pagos", "bg-purple", "bg-purple-lt", pagos, importePagos)
+        new("ti-file-invoice", "Facturas", "bg-blue", "azul", facturas, importeFacturas),
+        new("ti-users", "Nómina", "bg-green", "verde", nominas, importeNominas),
+        new("ti-receipt-refund", "Notas de crédito", "bg-red", "rojo", notas, importeNotas),
+        new("ti-truck", "Traslados", "bg-yellow", "ambar", traslados, null),
+        new("ti-cash", "Pagos", "bg-purple", "morado", pagos, importePagos)
     ];
 
-    private sealed record Impuesto(string Icono, string Nombre, string Claro, ImpuestoDashboardDto Importe);
+    // ---------- Páginas ----------
 
-    private sealed record GrupoImpuestos(string Clave, string Color, List<Impuesto> Renglones);
-
-    private IEnumerable<GrupoImpuestos> Impuestos =>
+    private static readonly (string Clave, string Titulo, string Icono)[] Paginas =
     [
-        new("EMITIDOS", "blue",
-        [
-            new("ti-receipt-tax", "IVA trasladado", "bg-blue-lt", Datos.IvaTrasladadoEmitidos),
-            new("ti-receipt-2", "IVA retenido", "bg-orange-lt", Datos.IvaRetenidoEmitidos),
-            new("ti-building-bank", "ISR retenido", "bg-purple-lt", Datos.IsrRetenidoEmitidos)
-        ]),
-        new("RECIBIDOS", "teal",
-        [
-            new("ti-receipt-tax", "IVA acreditable", "bg-teal-lt", Datos.IvaTrasladadoRecibidos),
-            new("ti-receipt-2", "IVA retenido", "bg-orange-lt", Datos.IvaRetenidoRecibidos),
-            new("ti-building-bank", "ISR retenido", "bg-purple-lt", Datos.IsrRetenidoRecibidos)
-        ])
+        ("resumen", "Resumen", "ti-layout-dashboard"),
+        ("iva", "Proyección de IVA", "ti-receipt-tax")
     ];
+
+    private string Pagina = "resumen";
+
+    /// <summary>KPI con fondo degradado del tono (azul, teal, verde, rojo, ambar, morado, naranja, gris).</summary>
+    private static RenderFragment Kpi(string titulo, string valor, string detalle, string icono, string tono, bool apagado = false, string? ayuda = null) => __builder =>
+    {
+        <div class="kpi-degradado tono-@tono @(apagado ? "apagado" : "")" title="@ayuda">
+            <div class="kpi-icono"><i class="ti @icono"></i></div>
+            <div class="kpi-titulo">@titulo</div>
+            <div class="kpi-valor">@valor</div>
+            <div class="kpi-detalle">@detalle</div>
+        </div>
+    };
+
+    // Desglose de un impuesto: facturas PUE y notas de crédito por un lado, complementos de pago por otro.
+    private static string Desglose(ImpuestoDashboardDto i) => $"PUE y NC {Moneda(i.Facturas)} · Pagos {Moneda(i.Pagos)}";
+
+    // Impuestos que retuve a mis proveedores: los entero yo.
+    private decimal RetencionesPorEnterar => Datos.IvaRetenidoRecibidos.Total + Datos.IsrRetenidoRecibidos.Total;
+
+    private decimal TotalAPagar => Math.Max(IvaPorPagar, 0) + RetencionesPorEnterar;
+
+    private RenderFragment ProyeccionIva() => __builder =>
+    {
+        <div class="row row-cards mb-3">
+            <div class="col-xl-6">
+                <div class="card h-100 grupo" style="--color-tipo: var(--tblr-blue)">
+                    <div class="card-header">
+                        <div>
+                            <h3 class="card-title"><span class="badge bg-blue-lt me-2">EMITIDOS</span>Impuestos de lo que facturé</h3>
+                            <div class="card-subtitle">IVA trasladado a mis clientes y lo que ellos me retuvieron</div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2">
+                            <div class="col-md-4">@Kpi("IVA trasladado", Moneda(Datos.IvaTrasladadoEmitidos.Total), Desglose(Datos.IvaTrasladadoEmitidos), "ti-receipt-tax", "azul")</div>
+                            <div class="col-md-4">@Kpi("IVA que me retuvieron", Moneda(Datos.IvaRetenidoEmitidos.Total), Desglose(Datos.IvaRetenidoEmitidos), "ti-receipt-2", "naranja")</div>
+                            <div class="col-md-4">@Kpi("ISR que me retuvieron", Moneda(Datos.IsrRetenidoEmitidos.Total), Desglose(Datos.IsrRetenidoEmitidos), "ti-building-bank", "morado")</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-6">
+                <div class="card h-100 grupo" style="--color-tipo: var(--tblr-teal)">
+                    <div class="card-header">
+                        <div>
+                            <h3 class="card-title"><span class="badge bg-teal-lt me-2">RECIBIDOS</span>Impuestos de lo que me facturaron</h3>
+                            <div class="card-subtitle">IVA acreditable y lo que retuve a mis proveedores</div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2">
+                            <div class="col-md-4">@Kpi("IVA acreditable", Moneda(Datos.IvaTrasladadoRecibidos.Total), Desglose(Datos.IvaTrasladadoRecibidos), "ti-receipt-tax", "teal")</div>
+                            <div class="col-md-4">@Kpi("IVA que retuve", Moneda(Datos.IvaRetenidoRecibidos.Total), Desglose(Datos.IvaRetenidoRecibidos), "ti-receipt-2", "naranja")</div>
+                            <div class="col-md-4">@Kpi("ISR que retuve", Moneda(Datos.IsrRetenidoRecibidos.Total), Desglose(Datos.IsrRetenidoRecibidos), "ti-building-bank", "morado")</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card grupo" style="--color-tipo: var(--tblr-@(IvaPorPagar >= 0 ? "red" : "green"))">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title"><span class="badge bg-@(IvaPorPagar >= 0 ? "red" : "green")-lt me-2">PROYECCIÓN</span>IVA del periodo</h3>
+                    <div class="card-subtitle">@FechaInicio.ToString("dd/MM/yyyy") al @FechaFin.ToString("dd/MM/yyyy")</div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap flex-xl-nowrap align-items-stretch gap-2 proyeccion">
+                    <div class="paso">@Kpi("IVA cobrado", Moneda(IvaCobrado), $"Trasladado {Moneda(Datos.IvaTrasladadoEmitidos.Total)} − retenido {Moneda(Datos.IvaRetenidoEmitidos.Total)}", "ti-cash-register", "azul")</div>
+                    <span class="operador">−</span>
+                    <div class="paso">@Kpi("IVA acreditable", Moneda(Datos.IvaTrasladadoRecibidos.Total), Desglose(Datos.IvaTrasladadoRecibidos), "ti-receipt-tax", "teal")</div>
+                    <span class="operador">=</span>
+                    <div class="paso">@Kpi(IvaPorPagar >= 0 ? "IVA por pagar" : "Saldo a favor de IVA", Moneda(Math.Abs(IvaPorPagar)),
+                                          IvaCobrado == 0 ? "Sin IVA cobrado" : $"{Math.Abs(IvaPorPagar) / IvaCobrado:P1} del IVA cobrado", IvaPorPagar >= 0 ? "ti-arrow-up-right" : "ti-arrow-down-left", IvaPorPagar >= 0 ? "rojo" : "verde")</div>
+                    <span class="operador">+</span>
+                    <div class="paso">@Kpi("Retenciones por enterar", Moneda(RetencionesPorEnterar), $"IVA {Moneda(Datos.IvaRetenidoRecibidos.Total)} · ISR {Moneda(Datos.IsrRetenidoRecibidos.Total)}", "ti-building-bank", "ambar")</div>
+                    <span class="operador">=</span>
+                    <div class="paso">@Kpi("Total estimado a pagar", Moneda(TotalAPagar), IvaPorPagar >= 0 ? "IVA por pagar más retenciones" : "Solo retenciones: el IVA queda a favor", "ti-calculator", "gris")</div>
+                </div>
+            </div>
+        </div>
+    };
 
     protected override void OnInitialized()
     {

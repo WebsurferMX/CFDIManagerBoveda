@@ -61,3 +61,76 @@
 .resumen .grupo > .card-header {
     background: linear-gradient(90deg, color-mix(in srgb, var(--color-tipo) 14%, transparent) 0%, transparent 70%);
 }
+
+/* ---------- KPI con fondo degradado ---------- */
+
+.resumen .kpi-degradado {
+    position: relative;
+    height: 100%;
+    padding: .7rem .9rem;
+    overflow: hidden;
+    border-radius: .75rem;
+    color: #fff;
+    background: linear-gradient(135deg, var(--k1) 0%, var(--k2) 100%);
+    box-shadow: 0 .45rem 1rem color-mix(in srgb, var(--k1) 35%, transparent);
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+
+.resumen .kpi-degradado:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 .7rem 1.4rem color-mix(in srgb, var(--k1) 45%, transparent);
+}
+
+/* Icono grande y tenue en la esquina. */
+.resumen .kpi-degradado .kpi-icono {
+    position: absolute;
+    top: .35rem;
+    right: .6rem;
+    font-size: 2.1rem;
+    opacity: .28;
+}
+
+.resumen .kpi-degradado .kpi-titulo {
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    opacity: .92;
+}
+
+.resumen .kpi-degradado .kpi-valor {
+    font-size: 1.25rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.resumen .kpi-degradado .kpi-detalle {
+    font-size: .72rem;
+    opacity: .88;
+}
+
+/* Tipo sin CFDI en el periodo. */
+.resumen .kpi-degradado.apagado { filter: saturate(.25); opacity: .55; }
+
+.resumen .tono-azul { --k1: #1d4ed8; --k2: #3b82f6; }
+.resumen .tono-teal { --k1: #0f766e; --k2: #14b8a6; }
+.resumen .tono-verde { --k1: #15803d; --k2: #22c55e; }
+.resumen .tono-rojo { --k1: #b91c1c; --k2: #ef4444; }
+.resumen .tono-ambar { --k1: #b45309; --k2: #f59e0b; }
+.resumen .tono-naranja { --k1: #c2410c; --k2: #fb923c; }
+.resumen .tono-morado { --k1: #6d28d9; --k2: #a855f7; }
+.resumen .tono-gris { --k1: #1e293b; --k2: #475569; }
+
+/* ---------- Proyección de IVA: KPI = KPI − KPI ... ---------- */
+
+.resumen .proyeccion .paso { flex: 1 1 11rem; min-width: 11rem; }
+
+.resumen .proyeccion .operador {
+    align-self: center;
+    font-size: 1.5rem;
+    font-weight: 300;
+    color: var(--tblr-secondary);
+}
+
+.resumen .paginas .nav-link { font-weight: 600; }
