@@ -34,7 +34,41 @@
             </select>
         </div>
 
-        <button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" @onclick="Analizar" disabled="@Analizando">
+        <div class="selector-empresas">
+            <label class="form-label small fw-semibold mb-1">Empresas</label>
+            <button type="button" class="form-select text-start" @onclick="() => VerSelector = !VerSelector" disabled="@Analizando">
+                @TextoSeleccion
+            </button>
+            @if (VerSelector)
+            {
+                <div class="selector-fondo" @onclick="() => VerSelector = false"></div>
+                <div class="selector-panel card shadow">
+                    <div class="card-header p-2 d-flex gap-2 align-items-center">
+                        <input type="search" class="form-control form-control-sm" placeholder="RFC o nombre"
+                               @bind="BuscarEmpresa" @bind:event="oninput" />
+                        <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" @onclick="MarcarVisibles">Todas</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" @onclick="DesmarcarVisibles">Ninguna</button>
+                    </div>
+                    <div class="list-group list-group-flush selector-lista">
+                        @foreach (EmpresaDto e in EmpresasVisibles)
+                        {
+                            <label class="list-group-item list-group-item-action d-flex align-items-center gap-2">
+                                <input type="checkbox" class="form-check-input m-0" checked="@Elegidas.Contains(e.EmpresaId)"
+                                       @onchange="v => Marcar(e.EmpresaId, v.Value is true)" />
+                                <span class="font-monospace small">@e.Rfc</span>
+                                <span class="small text-truncate">@e.NombreParaMostrar</span>
+                            </label>
+                        }
+                    </div>
+                    <div class="card-footer p-2 d-flex align-items-center">
+                        <span class="small text-body-secondary">@Elegidas.Count de @Empresas.Count</span>
+                        <button type="button" class="btn btn-sm btn-primary ms-auto" @onclick="() => VerSelector = false">Listo</button>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" @onclick="Analizar" disabled="@(Analizando || Elegidas.Count == 0)">
             @if (Analizando)
             {
                 <span class="spinner-border spinner-border-sm"></span>
@@ -171,15 +205,43 @@
 
     private int ConAviso => (Filas ?? []).Where(f => f.Aviso is not null).Select(f => f.Empresa.EmpresaId).Distinct().Count();
 
-    protected override void OnInitialized()
+    // Empresas a analizar: por omisión todas las permitidas al usuario.
+    private List<EmpresaDto> Empresas = [];
+    private HashSet<long> Elegidas = [];
+    private bool VerSelector;
+    private string BuscarEmpresa = "";
+
+    private IEnumerable<EmpresaDto> EmpresasVisibles =>
+        Empresas.Where(e => BuscarEmpresa.Trim() is var b && (b == "" ||
+            e.Rfc.Contains(b, StringComparison.OrdinalIgnoreCase) || e.NombreParaMostrar.Contains(b, StringComparison.OrdinalIgnoreCase)));
+
+    private string TextoSeleccion =>
+        Elegidas.Count == Empresas.Count ? $"Todas ({Empresas.Count})"
+        : Elegidas.Count == 0 ? "Ninguna"
+        : Elegidas.Count == 1 ? Empresas.First(e => Elegidas.Contains(e.EmpresaId)).NombreParaMostrar
+        : $"{Elegidas.Count} de {Empresas.Count}";
+
+    protected override async Task OnInitializedAsync()
     {
         Anio = Periodo.Anio;
         Mes = Periodo.Mes;
+        Empresas = (await Acceso.ObtenerEmpresasPermitidasAsync()).OrderBy(e => e.Rfc).ToList();
+        Elegidas = Empresas.Select(e => e.EmpresaId).ToHashSet();
     }
+
+    private void Marcar(long id, bool marcada)
+    {
+        if (marcada) Elegidas.Add(id); else Elegidas.Remove(id);
+    }
+
+    private void MarcarVisibles() => Elegidas.UnionWith(EmpresasVisibles.Select(e => e.EmpresaId));
+
+    private void DesmarcarVisibles() => Elegidas.ExceptWith(EmpresasVisibles.Select(e => e.EmpresaId));
 
     private async Task Analizar()
     {
         Error = null;
+        VerSelector = false;
         Analizando = true;
         Avance = "Leyendo empresas…";
         Cancelacion = new CancellationTokenSource();
@@ -193,7 +255,7 @@
 
         try
         {
-            List<EmpresaDto> empresas = (await Acceso.ObtenerEmpresasPermitidasAsync()).OrderBy(e => e.Rfc).ToList();
+            List<EmpresaDto> empresas = Empresas.Where(e => Elegidas.Contains(e.EmpresaId)).ToList();
             Filas = await Pendientes.AnalizarAsync(empresas, new DateTime(anio, mes, 1), progreso, Cancelacion.Token);
             AnioAnalizado = anio;
             MesAnalizado = mes;

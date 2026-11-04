@@ -59,3 +59,41 @@
 .tabla .avance {
     min-width: 7rem;
 }
+
+/* Selector de empresas: lista con casillas que se abre debajo del botón. */
+.selector-empresas {
+    position: relative;
+    min-width: 16rem;
+}
+
+.selector-empresas > .form-select {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    max-width: 22rem;
+}
+
+.selector-fondo {
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+}
+
+.selector-panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 1045;
+    width: 26rem;
+    margin-top: .25rem;
+}
+
+.selector-lista {
+    max-height: 18rem;
+    overflow-y: auto;
+}
+
+.selector-lista .list-group-item {
+    cursor: pointer;
+    padding: .35rem .75rem;
+}
