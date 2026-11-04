@@ -35,33 +35,31 @@ public static class ResumenImagen
         Paleta p = claro ? Clara : Oscura;
         juntas &= secciones.Count > 1;
 
+        // Compacta: lienzo chico a 100 dpi (juntas ≈ 780 px de ancho, una sección ≈ 400 px), letra proporcionalmente
+        // más grande que en una imagen reducida y sin pie ni fecha de generación.
         return Document.Create(doc => doc.Page(page =>
         {
-            page.ContinuousSize(juntas ? 1480 : 760);
+            page.ContinuousSize(juntas ? 562 : 290);
             page.Margin(0);
             page.PageColor(p.Fondo);
-            page.DefaultTextStyle(t => t.FontSize(9).FontColor(p.Texto));
+            page.DefaultTextStyle(t => t.FontSize(7).FontColor(p.Texto));
 
-            page.Content().Padding(22).Column(col =>
+            page.Content().Padding(10).Column(col =>
             {
-                col.Spacing(14);
+                col.Spacing(8);
 
-                col.Item().Row(row =>
+                col.Item().Column(c =>
                 {
-                    row.RelativeItem().Column(c =>
-                    {
-                        c.Item().Text("RESUMEN DE CFDI").FontSize(8).Bold().FontColor(p.Acento).LetterSpacing(0.12f);
-                        c.Item().Text(empresa).FontSize(16).Bold();
-                        c.Item().Text($"{rfc} · {periodo}").FontSize(9.5f).FontColor(p.Tenue);
-                    });
-                    row.AutoItem().AlignBottom().Text($"Generado {DateTime.Now:dd/MM/yyyy HH:mm}").FontSize(7.5f).FontColor(p.Tenue);
+                    c.Item().Text("RESUMEN DE CFDI").FontSize(5.5f).Bold().FontColor(p.Acento).LetterSpacing(0.1f);
+                    c.Item().Text(empresa).FontSize(10.5f).Bold();
+                    c.Item().Text($"{rfc} · {periodo}").FontSize(6.5f).FontColor(p.Tenue);
                 });
 
                 if (juntas)
                 {
                     col.Item().Row(row =>
                     {
-                        row.Spacing(14);
+                        row.Spacing(8);
                         foreach (var s in secciones)
                             row.RelativeItem().Element(e => PintarSeccion(e, s, p));
                     });
@@ -71,10 +69,8 @@ public static class ResumenImagen
                     foreach (var s in secciones)
                         col.Item().Element(e => PintarSeccion(e, s, p));
                 }
-
-                col.Item().Text("CFDI Manager · Administración de XML").FontSize(7).FontColor(p.Pie);
             });
-        })).GenerateImages(new ImageGenerationSettings { ImageFormat = ImageFormat.Png, RasterDpi = 75 }).First();
+        })).GenerateImages(new ImageGenerationSettings { ImageFormat = ImageFormat.Png, RasterDpi = 100 }).First();
     }
 
     private static void PintarSeccion(IContainer contenedor, Seccion s, Paleta p)
@@ -90,31 +86,28 @@ public static class ResumenImagen
             ("ARCHIVOS XML", null, t.Archivos.ToString("N0", Mx), "#94A3B8"),
         ];
 
-        contenedor.Background(p.Tarjeta).Border(1).BorderColor(p.Borde).CornerRadius(10).Padding(14).Column(col =>
+        contenedor.Background(p.Tarjeta).Border(0.75f).BorderColor(p.Borde).CornerRadius(6).Padding(7).Column(col =>
         {
-            col.Spacing(10);
-            col.Item().Row(row =>
+            col.Spacing(5);
+            col.Item().Text(text =>
             {
-                row.RelativeItem().Text(text =>
-                {
-                    text.Span(s.Titulo).FontSize(12).Bold();
-                    text.Span($"  {s.Subtitulo}").FontSize(9).FontColor(p.Tenue);
-                });
-                row.AutoItem().AlignMiddle().Text(text =>
-                {
-                    text.Span("Vigente ").FontSize(8.5f).FontColor(p.Tenue);
-                    text.Span(Moneda(t.Vigente)).FontSize(9).Bold().FontColor(p.Vigente);
-                    text.Span("    Cancelado ").FontSize(8.5f).FontColor(p.Tenue);
-                    text.Span(Moneda(t.Cancelado)).FontSize(9).Bold().FontColor(p.Cancelado);
-                });
+                text.Span(s.Titulo).FontSize(8.5f).Bold();
+                text.Span($"  {s.Subtitulo}").FontSize(6.5f).FontColor(p.Tenue);
+            });
+            col.Item().Text(text =>
+            {
+                text.Span("Vigente ").FontSize(6).FontColor(p.Tenue);
+                text.Span(Moneda(t.Vigente)).FontSize(6.5f).Bold().FontColor(p.Vigente);
+                text.Span("   Cancelado ").FontSize(6).FontColor(p.Tenue);
+                text.Span(Moneda(t.Cancelado)).FontSize(6.5f).Bold().FontColor(p.Cancelado);
             });
 
-            // Dos filas de tres tarjetas.
-            foreach (var fila in tarjetas.Chunk(3))
+            // Tres filas de dos tarjetas: el importe necesita el ancho.
+            foreach (var fila in tarjetas.Chunk(2))
             {
                 col.Item().Row(row =>
                 {
-                    row.Spacing(10);
+                    row.Spacing(5);
                     foreach (var k in fila)
                         row.RelativeItem().Element(e => PintarTarjeta(e, k.Titulo, k.Cantidad, k.Valor, k.Color, p));
                 });
@@ -127,19 +120,19 @@ public static class ResumenImagen
         bool vacia = cantidad == 0;
 
         contenedor.Background(Mezcla(p.Tarjeta, color, p.Tinte)).Border(1).BorderColor(Mezcla(p.Tarjeta, color, vacia ? 0.25f : 0.55f))
-            .CornerRadius(8).Row(row =>
+            .CornerRadius(5).Row(row =>
             {
                 // Franja de color a la izquierda.
-                row.ConstantItem(4).Background(vacia ? Mezcla(p.Tarjeta, color, 0.35f) : color);
-                row.RelativeItem().PaddingVertical(9).PaddingHorizontal(11).Column(c =>
+                row.ConstantItem(2.5f).Background(vacia ? Mezcla(p.Tarjeta, color, 0.35f) : color);
+                row.RelativeItem().PaddingVertical(4).PaddingHorizontal(6).Column(c =>
                 {
                     c.Item().Text(text =>
                     {
-                        text.Span(titulo).FontSize(8).Bold().FontColor(p.Tenue);
+                        text.Span(titulo).FontSize(5.5f).Bold().FontColor(p.Tenue);
                         if (cantidad is int n)
-                            text.Span($"  {n.ToString("N0", Mx)}").FontSize(8).Bold().FontColor(vacia ? p.Tenue : color);
+                            text.Span($"  {n.ToString("N0", Mx)}").FontSize(5.5f).Bold().FontColor(vacia ? p.Tenue : color);
                     });
-                    c.Item().PaddingTop(2).Text(valor).FontSize(14).Bold().FontColor(vacia ? p.Tenue : p.Texto);
+                    c.Item().Text(valor).FontSize(9.5f).Bold().FontColor(vacia ? p.Tenue : p.Texto);
                 });
             });
     }
