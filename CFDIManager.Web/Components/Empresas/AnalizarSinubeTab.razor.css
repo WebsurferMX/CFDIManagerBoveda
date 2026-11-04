@@ -73,23 +73,25 @@
     max-width: 22rem;
 }
 
+/* Ventana flotante centrada (la tarjeta de Empresas recorta lo que sobresale de ella). */
 .selector-fondo {
     position: fixed;
     inset: 0;
     z-index: 1040;
+    background: rgb(0 0 0 / 35%);
 }
 
 .selector-panel {
-    position: absolute;
-    top: 100%;
-    left: 0;
+    position: fixed;
+    top: 12vh;
+    left: 50%;
     z-index: 1045;
-    width: 26rem;
-    margin-top: .25rem;
+    width: min(30rem, calc(100vw - 2rem));
+    translate: -50% 0;
 }
 
 .selector-lista {
-    max-height: 18rem;
+    max-height: 55vh;
     overflow-y: auto;
 }
 
