@@ -65,8 +65,9 @@
 /* ---------- KPI con fondo degradado ---------- */
 
 .resumen .kpi-degradado {
-    /* Base oscura con el color del tipo bien presente; --k2 es el acento (franja, icono). */
-    --base: #182130;
+    /* Grafito casi neutro con apenas un tinte del tipo; el color va en la franja y el icono (--k2). */
+    --base: #1d2229;
+    --base2: #2c3038;
     position: relative;
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
@@ -75,20 +76,20 @@
     height: 100%;
     padding: .8rem 1rem;
     overflow: hidden;
-    border: 1px solid color-mix(in srgb, var(--k2) 35%, rgb(255 255 255 / 10%));
+    border: 1px solid rgb(255 255 255 / 12%);
     border-left: 4px solid var(--k2);
     border-radius: .85rem;
     color: #fff;
     background:
-        radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--k2) 30%, transparent) 0%, transparent 60%),
-        linear-gradient(135deg,
-            color-mix(in srgb, var(--k1) 45%, var(--base)) 0%,
-            color-mix(in srgb, var(--k1) 25%, var(--base)) 100%);
+        radial-gradient(90% 140% at 0% 50%, color-mix(in srgb, var(--k2) 12%, transparent) 0%, transparent 65%),
+        linear-gradient(110deg,
+            color-mix(in srgb, var(--k1) 14%, var(--base)) 0%,
+            color-mix(in srgb, var(--k1) 4%, var(--base2)) 100%);
     /* Relieve: filo claro arriba, canto oscuro abajo y sombra suave. */
     box-shadow:
-        inset 0 1px 0 rgb(255 255 255 / 12%),
+        inset 0 1px 0 rgb(255 255 255 / 10%),
         inset 0 -2px 0 rgb(0 0 0 / 25%),
-        0 4px 0 -1px color-mix(in srgb, var(--k1) 40%, #000),
+        0 4px 0 -1px #11151a,
         0 .75rem 1.4rem -.25rem rgb(0 0 0 / 30%);
     transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
 }
@@ -99,7 +100,7 @@
     box-shadow:
         inset 0 1px 0 rgb(255 255 255 / 15%),
         inset 0 -2px 0 rgb(0 0 0 / 25%),
-        0 6px 0 -1px color-mix(in srgb, var(--k1) 40%, #000),
+        0 6px 0 -1px #11151a,
         0 1.1rem 1.8rem -.25rem rgb(0 0 0 / 35%);
 }
 
@@ -113,12 +114,12 @@
     place-items: center;
     width: 2.75rem;
     height: 2.75rem;
-    border: 1px solid color-mix(in srgb, var(--k2) 55%, transparent);
+    border: 1px solid color-mix(in srgb, var(--k2) 40%, transparent);
     border-radius: 50%;
     font-size: 1.3rem;
-    color: color-mix(in srgb, var(--k2) 75%, #fff);
-    background: color-mix(in srgb, var(--k2) 22%, transparent);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), 0 0 0 4px color-mix(in srgb, var(--k2) 10%, transparent);
+    color: var(--k2);
+    background: color-mix(in srgb, var(--k2) 14%, transparent);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 8%);
 }
 
 .resumen .kpi-degradado .kpi-titulo {
