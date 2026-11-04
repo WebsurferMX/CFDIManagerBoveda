@@ -53,7 +53,8 @@
 .form-card {
     padding: 1rem;
     position: sticky;
-    top: 1rem;
+    /* Debajo de la barra superior fija. */
+    top: 6rem;
 }
 
 .list-card {
