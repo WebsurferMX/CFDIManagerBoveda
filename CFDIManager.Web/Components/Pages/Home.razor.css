@@ -65,7 +65,7 @@
 /* ---------- KPI con fondo degradado ---------- */
 
 .resumen .kpi-degradado {
-    --k3: color-mix(in srgb, var(--k1) 65%, #000);
+    --k3: color-mix(in srgb, var(--k1) 80%, #000);
     position: relative;
     height: 100%;
     padding: .75rem .95rem .8rem;
@@ -137,14 +137,14 @@
 /* Tipo sin CFDI en el periodo. */
 .resumen .kpi-degradado.apagado { filter: saturate(.35); opacity: .7; }
 
-.resumen .tono-azul { --k1: #1d4ed8; --k2: #3b82f6; }
-.resumen .tono-teal { --k1: #0f766e; --k2: #14b8a6; }
-.resumen .tono-verde { --k1: #15803d; --k2: #22c55e; }
-.resumen .tono-rojo { --k1: #b91c1c; --k2: #ef4444; }
-.resumen .tono-ambar { --k1: #b45309; --k2: #f59e0b; }
-.resumen .tono-naranja { --k1: #c2410c; --k2: #fb923c; }
-.resumen .tono-morado { --k1: #6d28d9; --k2: #a855f7; }
-.resumen .tono-gris { --k1: #1e293b; --k2: #475569; }
+.resumen .tono-azul { --k1: #3b5ea8; --k2: #7196d8; }
+.resumen .tono-teal { --k1: #2f7f78; --k2: #66b6ad; }
+.resumen .tono-verde { --k1: #3f7f55; --k2: #74b88b; }
+.resumen .tono-rojo { --k1: #a94848; --k2: #d98282; }
+.resumen .tono-ambar { --k1: #a57430; --k2: #d8aa65; }
+.resumen .tono-naranja { --k1: #ad6240; --k2: #dc9773; }
+.resumen .tono-morado { --k1: #6a52a0; --k2: #a089d0; }
+.resumen .tono-gris { --k1: #3d4859; --k2: #6f7e94; }
 
 /* ---------- Proyección de IVA: KPI = KPI − KPI ... ---------- */
 
