@@ -28,9 +28,15 @@
 .vn-seccion[open] > summary::after { transform: rotate(180deg); }
 .vn-seccion:not([open]) > summary { border-bottom: 0; }
 
+/* El total de la sección va a la derecha, separado del título; la flecha queda junto a él. */
+.vn-seccion > summary .vn-total { margin-left: auto; padding-left: 1rem; }
+.vn-seccion > summary:has(.vn-total)::after { margin-left: 0; }
+
 .vn-tabla { font-size: 0.85rem; }
 
-.vn-mensual { font-size: 0.78rem; white-space: nowrap; }
+/* Columnas fijas: Total y los 12 meses del mismo ancho, sin importar qué mes trae los importes más grandes. */
+.vn-mensual { font-size: 0.78rem; white-space: nowrap; table-layout: fixed; min-width: calc(15rem + 13 * 6.25rem); }
+.vn-mensual th.vn-concepto { width: 15rem; }
 .vn-mensual th { font-size: 0.7rem; text-transform: uppercase; }
 
 /* El concepto queda fijo al desplazar los meses. */
@@ -40,12 +46,12 @@
     z-index: 1;
     min-width: 15rem;
     background: var(--bs-body-bg);
-    white-space: pre;
+    white-space: pre-wrap;
 }
 
 .vn-mensual tr.table-light .vn-concepto { background: var(--bs-tertiary-bg); }
 
-.vn-enterado { min-width: 6.5rem; font-size: 0.75rem; }
+.vn-enterado { width: 100%; min-width: 0; font-size: 0.75rem; }
 
 .vn-busqueda { max-width: 360px; }
 
