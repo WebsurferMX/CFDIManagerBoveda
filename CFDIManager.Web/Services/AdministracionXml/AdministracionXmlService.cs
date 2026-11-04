@@ -244,6 +244,16 @@ public class AdministracionXmlService
             }
         }
 
+        // Agrupado por uso de CFDI: la hoja Por Uso CFDI como tabla, su resumen por uso y un dashboard que lee solo de ellas.
+        if (reporte == "agrupado:uso")
+        {
+            List<AdminXmlFilaDto> seleccion = _repo.ObtenerSeleccionAdministracionXml(SinPestana(f));
+            bool recibidos = seleccion.Count > 0 && seleccion.All(x => x.Clasificacion == "RECIBIDO");
+            (byte[] porUso, _) = ReporteGeneral.CrearPorUso(
+                seleccion, new ReporteGeneral.Filtro(empresa.Rfc, recibidos ? "R" : "E", f.Ids.Count > 0 ? null : f.Anio, mesFiltro), recibidos);
+            return (porUso, NombreReporte(empresa, f, reporte));
+        }
+
         bool general = reporte == "general";
 
         if (!general && reporte != "conceptos" && !reporte.StartsWith("agrupado:"))
