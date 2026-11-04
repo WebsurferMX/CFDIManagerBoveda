@@ -109,7 +109,7 @@ public partial class PostgreSqlRepository
             SELECT DISTINCT EXTRACT(YEAR FROM fecha_emision)::int AS valor
             FROM cfdi
             WHERE empresa_id = @empresa_id
-              AND clasificacion = @clasificacion
+              AND " + ClasificacionAdminXml("cfdi") + @"
             ORDER BY valor DESC;",
             cmd =>
             {
@@ -127,7 +127,7 @@ public partial class PostgreSqlRepository
             SELECT DISTINCT EXTRACT(MONTH FROM fecha_emision)::int AS valor
             FROM cfdi
             WHERE empresa_id = @empresa_id
-              AND clasificacion = @clasificacion
+              AND " + ClasificacionAdminXml("cfdi") + @"
               AND fecha_emision >= @inicio
               AND fecha_emision < @fin
             ORDER BY valor;",
@@ -158,7 +158,7 @@ public partial class PostgreSqlRepository
             SELECT DISTINCT EXTRACT(DAY FROM fecha_emision)::int
             FROM cfdi
             WHERE empresa_id = @empresa_id
-              AND clasificacion = @clasificacion
+              AND " + ClasificacionAdminXml("cfdi") + @"
               AND fecha_emision >= @inicio
               AND fecha_emision < @fin;", conn))
         {
@@ -267,7 +267,8 @@ public partial class PostgreSqlRepository
             {
                 CfdiId = dr.GetInt64(dr.GetOrdinal("cfdi_id")),
                 Uuid = Texto(dr, "uuid"),
-                Clasificacion = Texto(dr, "clasificacion"),
+                // Un traslado propio guardado del otro lado se muestra con el lado consultado.
+                Clasificacion = filtro.Ids.Count == 0 && filtro.Clasificacion != "" ? filtro.Clasificacion : Texto(dr, "clasificacion"),
                 TipoCfdi = Texto(dr, "tipo_cfdi"),
                 Version = Texto(dr, "version_cfdi"),
                 FechaEmision = dr.GetDateTime(dr.GetOrdinal("fecha_emision")),
@@ -687,6 +688,15 @@ public partial class PostgreSqlRepository
         return resultado;
     }
 
+    /// <summary>
+    /// Del lado elegido (emitidos o recibidos), más los traslados propios (emisor = receptor = la empresa) guardados del
+    /// otro lado: se emiten a sí mismos, así que se ven en los dos, igual que se suben a SINUBE como cliente y proveedor.
+    /// </summary>
+    private static string ClasificacionAdminXml(string alias) =>
+        $"({alias}.clasificacion = @clasificacion OR ({alias}.tipo_cfdi = 'T' AND EXISTS (" +
+        $"SELECT 1 FROM personas_fiscales em_p, personas_fiscales re_p WHERE em_p.persona_id = {alias}.emisor_id " +
+        $"AND re_p.persona_id = {alias}.receptor_id AND UPPER(em_p.rfc) = UPPER(re_p.rfc))))";
+
     private static string CondicionesAdminXml(
         NpgsqlCommand cmd,
         AdminXmlFiltroDto f,
@@ -708,7 +718,7 @@ public partial class PostgreSqlRepository
             return w.ToString();
         }
 
-        w.Append(" AND c.clasificacion = @clasificacion");
+        w.Append(" AND ").Append(ClasificacionAdminXml("c"));
         cmd.Parameters.AddWithValue("@clasificacion", f.Clasificacion);
 
         if (f.Anio is int anio)
