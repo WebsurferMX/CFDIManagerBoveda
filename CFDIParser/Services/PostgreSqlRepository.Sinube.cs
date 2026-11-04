@@ -250,7 +250,10 @@ public partial class PostgreSqlRepository
 
     private const string PrefijoConfirmado = "Confirmado por el usuario: ya está en SINUBE. ";
 
-    /// <summary>UUID que el usuario marcó como "ya en SINUBE" (con Marcar … como ya en SINUBE).</summary>
+    /// <summary>
+    /// UUID registrados como "ya en SINUBE" (EXISTE): los que marcó el usuario y los que la app dio por existentes
+    /// porque SINUBE respondió "ya existe" (puede ser otro comprobante con el mismo serie-folio).
+    /// </summary>
     public HashSet<string> ObtenerUuidsConfirmadosSinube(long empresaId, string tipo)
     {
         using var cn = new NpgsqlConnection(_connectionString);
@@ -258,11 +261,10 @@ public partial class PostgreSqlRepository
 
         using var cmd = new NpgsqlCommand(@"
             SELECT uuid FROM sinube_envios
-            WHERE empresa_id = @empresa_id AND tipo = @tipo AND estatus = 'EXISTE' AND mensaje LIKE @prefijo || '%';", cn);
+            WHERE empresa_id = @empresa_id AND tipo = @tipo AND estatus = 'EXISTE';", cn);
 
         cmd.Parameters.AddWithValue("empresa_id", empresaId);
         cmd.Parameters.AddWithValue("tipo", tipo);
-        cmd.Parameters.AddWithValue("prefijo", PrefijoConfirmado);
 
         var uuids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -275,8 +277,8 @@ public partial class PostgreSqlRepository
     }
 
     /// <summary>
-    /// Deshace "Marcar como ya en SINUBE": regresan al rechazo original de SINUBE ("ya existe" ese serie-folio)
-    /// y vuelven a quedar por subir.
+    /// Quita la marca "ya en SINUBE" (EXISTE), la haya puesto el usuario o la app: regresan al rechazo de SINUBE
+    /// ("ya existe" ese serie-folio) y vuelven a quedar por subir.
     /// </summary>
     public int QuitarYaEnSinube(long empresaId, string tipo, IEnumerable<string> uuids)
     {
@@ -286,10 +288,10 @@ public partial class PostgreSqlRepository
         using var cmd = new NpgsqlCommand(@"
             UPDATE sinube_envios
             SET estatus = 'ERROR',
-                mensaje = SUBSTRING(mensaje FROM LENGTH(@prefijo) + 1),
+                mensaje = CASE WHEN mensaje LIKE @prefijo || '%' THEN SUBSTRING(mensaje FROM LENGTH(@prefijo) + 1) ELSE mensaje END,
                 fecha_envio = NOW()
             WHERE empresa_id = @empresa_id AND tipo = @tipo AND UPPER(uuid) = ANY(@uuids)
-              AND estatus = 'EXISTE' AND mensaje LIKE @prefijo || '%';", cn);
+              AND estatus = 'EXISTE';", cn);
 
         cmd.Parameters.AddWithValue("empresa_id", empresaId);
         cmd.Parameters.AddWithValue("tipo", tipo);

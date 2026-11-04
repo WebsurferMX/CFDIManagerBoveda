@@ -716,7 +716,7 @@
                 </div>
             }
 
-            @* Marcados a mano como "ya en SINUBE" que SINUBE no tiene con su UUID (p. ej. folio repetido). *@
+            @* Marcados como "ya en SINUBE" (por el usuario o por un "ya existe" de SINUBE) que SINUBE no tiene con su UUID: folio repetido. *@
             @if (r.ConfirmadosSinEncontrar.Count > 0 && !Enviando)
             {
                 <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0 small">
@@ -875,7 +875,8 @@
         return new RevisionSinube
         {
             ConfirmadosSinEncontrar = facturas
-                .Where(a => confirmados.Contains(datos[a].Uuid) && !EnSinube(a))
+                // Los pagos de clientes no siempre se pueden consultar por UUID en SINUBE: no se avisan.
+                .Where(a => confirmados.Contains(datos[a].Uuid) && !EnSinube(a) && !(clientes && datos[a].Tipo == "P"))
                 .Select(a => (datos[a].Uuid, datos[a].Serie, datos[a].Folio))
                 .OrderBy(x => x.Serie).ThenBy(x => x.Folio)
                 .ToList(),
