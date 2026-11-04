@@ -13,7 +13,7 @@ Cómo se genera la app y cómo se instala o actualiza el servicio `CFDIManager` 
 | Servicio | `CFDIManager` ("CFDI Manager"), inicio automático, corre como SYSTEM y se reinicia solo si falla |
 | Programa | `C:\CFDIManager\CFDIManager.Web.exe` |
 | Configuración del servidor | `C:\CFDIManager\appsettings.Production.json`: puerto, contraseña de PostgreSQL y `CFDI_CLAVE_MAESTRA`. Solo la pueden leer SYSTEM y Administradores |
-| Datos | `C:\CFDIManager\Storage` (XML, e.firmas, descargas SAT, CIF, etc.), o la carpeta definida en Configuración → Herramientas |
+| Datos | `C:\CFDIManagerDatos\Storage` (XML, e.firmas, descargas SAT, CIF, etc.), fuera de la carpeta del programa. Se define por equipo en Configuración → Herramientas (clave `carpeta_storage:<EQUIPO>`); sin configurar, la app usa `Storage` junto al programa |
 | Base de datos | PostgreSQL, base `cfdi_manager`. Las tablas y columnas nuevas se crean solas al arrancar |
 | Dirección | `http://localhost:5000` en el servidor; desde la red, `http://<IP del servidor>:5000`; por Tailscale, `http://100.104.146.61:5000` |
 
@@ -80,7 +80,9 @@ powershell -ExecutionPolicy Bypass -File .\herramientas\Diagnostico-Equipo.ps1
    dotnet publish CFDIManager.Web\CFDIManager.Web.csproj -c Release -o C:\CFDIManager
    ```
 
-2. Copia la carpeta `Storage` del equipo de origen a `C:\CFDIManager\Storage`, **sin** `Storage\Llaves`.
+2. Copia la carpeta `Storage` del equipo de origen a `C:\CFDIManagerDatos\Storage`, **sin** `Storage\Llaves`, y
+   configúrala en Configuración → Herramientas para ese equipo. Si las rutas de los XML en la base apuntan a otra
+   carpeta, actualízalas (`cfdi.ruta_xml`, `storage_archivos.ruta`, `empresas.ruta_xml`).
 3. Cierra Visual Studio / VS Code si tienen la app corriendo.
 4. Abre PowerShell **como administrador** en la carpeta del proyecto y ejecuta:
 
