@@ -691,6 +691,7 @@
         ("Herramientas",
         [
             ("Exportar a Excel", "bi-file-earmark-excel", "verde", () => Exportar(TipoReporte)),
+            ("Imagen del resumen", "bi-image", "morado", ImagenResumen),
             ("Enviar por correo", "bi-envelope-paper", "azul", PrepararCorreo),
             ("Abrir XML", "bi-filetype-xml", "azul", Sincrona(AbrirXml)),
             ("Generar PDF", "bi-file-earmark-pdf", "rojo", GenerarPdf),
@@ -1515,6 +1516,59 @@
     }
 
     private void CerrarModal() => Modal = "";
+
+    /// <summary>PNG con los totales del periodo de emitidos (ingresos) y recibidos (egresos), sin pestaña ni búsqueda.</summary>
+    private async Task ImagenResumen()
+    {
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa)
+            return;
+
+        try
+        {
+            AdminXmlFiltroDto Para(string clasificacion)
+            {
+                AdminXmlFiltroDto f = FiltroSinPestana();
+                f.Clasificacion = clasificacion;
+                f.Busqueda = "";
+                f.Filtrar = "";
+                return f;
+            }
+
+            string periodo = TextoPeriodo();
+            byte[] png = await Task.Run(() => CFDIManager.Web.Services.AdministracionXml.ResumenImagen.Generar(
+                empresa.NombreParaMostrar, empresa.Rfc, periodo,
+                [
+                    new("Emitidos", "ingresos", Repo.ObtenerTotalesAdministracionXml(Para("EMITIDO"))),
+                    new("Recibidos", "egresos", Repo.ObtenerTotalesAdministracionXml(Para("RECIBIDO")))
+                ]));
+
+            string nombre = $"{empresa.Rfc} Resumen {periodo.Replace("–", "a").Replace(",", "")}.png";
+            await JS.InvokeVoidAsync("descargarArchivoBase64", nombre, "image/png", Convert.ToBase64String(png));
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+        }
+    }
+
+    /// <summary>"Octubre 2026", "Septiembre – Octubre 2026", "Octubre 2026 · días 1, 2" o "Enero – Octubre 2026 (acumulado)".</summary>
+    private string TextoPeriodo()
+    {
+        string Mes(int m) => Cultura.TextInfo.ToTitleCase(Cultura.DateTimeFormat.GetMonthName(m));
+        List<int> meses = MesesElegidos.Order().ToList();
+
+        if (Anio is not int anio || meses.Count == 0)
+            return Anio?.ToString() ?? "";
+
+        if (Acumular)
+            return $"Enero – {Mes(meses[^1])} {anio} (acumulado)";
+
+        string texto = meses.Count == 1 ? $"{Mes(meses[0])} {anio}"
+            : meses.Count <= 3 ? $"{string.Join(", ", meses.Select(Mes))} {anio}"
+            : $"{Mes(meses[0])} – {Mes(meses[^1])} {anio}";
+
+        return MuestraDias && DiasElegidos.Count > 0 ? $"{texto} · días {string.Join(", ", DiasElegidos.Order())}" : texto;
+    }
 
     private AdminXmlFiltroDto FiltroSinPestana()
     {
