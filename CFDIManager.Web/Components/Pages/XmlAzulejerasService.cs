@@ -165,6 +165,9 @@ public sealed class XmlAzulejerasService
             {
                 EquivalenciaSerie? regla = Regla(reglas, g.Key);
                 List<CfdiConsultaDto> publico = g.Where(EsPublicoGeneral).ToList();
+                List<CfdiConsultaDto> conRfc = regla is not null && CambiaSerie(regla, g.Key)
+                    ? g.Where(c => !EsPublicoGeneral(c) && !EsNomina(c)).ToList()
+                    : [];
 
                 return new SerieAzulejeraDto
                 {
@@ -172,6 +175,8 @@ public sealed class XmlAzulejerasService
                     PorTipo = g.GroupBy(c => c.TipoCfdi).ToDictionary(t => t.Key, t => t.Count()),
                     PublicoGeneral = publico.Count,
                     ImportePublicoGeneral = publico.Sum(c => c.Total),
+                    ConRfc = conRfc.Count,
+                    ImporteConRfc = conRfc.Sum(c => c.Total),
                     SerieNueva = regla?.SerieNueva ?? "",
                     NombreReceptor = regla?.NombreReceptor ?? ""
                 };
@@ -180,6 +185,12 @@ public sealed class XmlAzulejerasService
             .ThenBy(s => s.Serie, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
+
+    private static bool EsNomina(CfdiConsultaDto c) => c.TipoCfdi.Equals("N", StringComparison.OrdinalIgnoreCase);
+
+    // La regla cambia la serie (72A → 72AA); las que solo cambian el nombre (serie "*") no tocan a clientes con RFC.
+    private static bool CambiaSerie(EquivalenciaSerie regla, string serie) =>
+        !string.Equals(regla.SerieNueva, serie, StringComparison.OrdinalIgnoreCase);
 
     // A público general y que no sea nómina: la nómina no se modifica ni se sube a SINUBE.
     private static bool EsPublicoGeneral(CfdiConsultaDto c) =>
@@ -211,10 +222,14 @@ public sealed class XmlAzulejerasService
             resultado.Leidos++;
             resultado.ImporteTotal += cfdi.Total;
 
-            // Solo público general de las series elegidas que tienen equivalencia.
-            if (!EsPublicoGeneral(cfdi) ||
+            // Series elegidas con equivalencia: a público general cambian serie y nombre del receptor; a clientes con
+            // RFC solo la serie (en SINUBE toda la serie de la sucursal va con la serie convertida, p. ej. 72AA).
+            bool publico = EsPublicoGeneral(cfdi);
+
+            if (EsNomina(cfdi) ||
                 !series.Contains(cfdi.Serie.Trim()) ||
-                Regla(reglas, cfdi.Serie.Trim()) is not { } equivalencia)
+                Regla(reglas, cfdi.Serie.Trim()) is not { } equivalencia ||
+                (!publico && !CambiaSerie(equivalencia, cfdi.Serie.Trim())))
             {
                 resultado.SinCambios++;
                 resultado.ImporteSinCambios += cfdi.Total;
@@ -230,7 +245,7 @@ public sealed class XmlAzulejerasService
                 SerieOriginal = cfdi.Serie,
                 SerieNueva = equivalencia.SerieNueva ?? cfdi.Serie,
                 NombreOriginal = cfdi.NombreReceptor,
-                NombreNuevo = equivalencia.NombreReceptor,
+                NombreNuevo = publico ? equivalencia.NombreReceptor : cfdi.NombreReceptor,
                 Total = cfdi.Total
             };
 
@@ -250,7 +265,8 @@ public sealed class XmlAzulejerasService
                     throw new InvalidOperationException("El XML no es un CFDI válido.");
 
                 comprobante.SetAttributeValue("Serie", equivalencia.SerieNueva);
-                receptor.SetAttributeValue("Nombre", equivalencia.NombreReceptor);
+                if (publico)
+                    receptor.SetAttributeValue("Nombre", equivalencia.NombreReceptor);
 
                 string archivo = Path.Combine(carpeta, $"{(cfdi.UUID != "" ? cfdi.UUID : cfdi.CfdiId.ToString())}.xml");
                 xml.Save(archivo, SaveOptions.DisableFormatting);

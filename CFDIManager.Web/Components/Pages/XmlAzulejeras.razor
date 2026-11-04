@@ -123,8 +123,8 @@
                 <div class="d-flex flex-wrap gap-2 small">
                     <span class="badge rounded-pill text-bg-secondary">@Series.Sum(s => s.Total).ToString("N0") emitidos</span>
                     <span class="badge rounded-pill text-bg-secondary">@Series.Count serie(s)</span>
-                    <span class="badge rounded-pill text-bg-primary">Se modificarán @elegidas.Sum(s => s.PublicoGeneral).ToString("N0")</span>
-                    <span class="badge rounded-pill text-bg-success">@Moneda(elegidas.Sum(s => s.ImportePublicoGeneral))</span>
+                    <span class="badge rounded-pill text-bg-primary">Se modificarán @elegidas.Sum(s => s.Modificables).ToString("N0")</span>
+                    <span class="badge rounded-pill text-bg-success">@Moneda(elegidas.Sum(s => s.ImporteModificables))</span>
                 </div>
             </div>
 
@@ -145,13 +145,15 @@
                             <th class="text-end">Total</th>
                             <th class="text-end">Público general</th>
                             <th class="text-end">Importe público general</th>
+                            <th class="text-end">Con RFC</th>
+                            <th class="text-end">Importe con RFC</th>
                             <th>Se convierte a</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach (SerieAzulejeraDto s in Series)
                         {
-                            bool convertible = s.TieneEquivalencia && s.PublicoGeneral > 0;
+                            bool convertible = s.TieneEquivalencia && s.Modificables > 0;
 
                             <tr class="@(convertible ? "" : "text-body-secondary")">
                                 <td class="text-center">
@@ -167,6 +169,8 @@
                                 <td class="text-end fw-semibold">@s.Total.ToString("N0")</td>
                                 <td class="text-end fw-semibold text-primary-emphasis">@s.PublicoGeneral.ToString("N0")</td>
                                 <td class="text-end">@Moneda(s.ImportePublicoGeneral)</td>
+                                <td class="text-end fw-semibold text-primary-emphasis">@(s.ConRfc > 0 ? s.ConRfc.ToString("N0") : "—")</td>
+                                <td class="text-end">@(s.ConRfc > 0 ? Moneda(s.ImporteConRfc) : "—")</td>
                                 <td>
                                     @if (s.TieneEquivalencia)
                                     {
@@ -193,6 +197,8 @@
                             <td class="text-end">@Series.Sum(s => s.Total).ToString("N0")</td>
                             <td class="text-end">@Series.Sum(s => s.PublicoGeneral).ToString("N0")</td>
                             <td class="text-end">@Moneda(Series.Sum(s => s.ImportePublicoGeneral))</td>
+                            <td class="text-end">@Series.Sum(s => s.ConRfc).ToString("N0")</td>
+                            <td class="text-end">@Moneda(Series.Sum(s => s.ImporteConRfc))</td>
                             <td></td>
                         </tr>
                     </tfoot>
@@ -575,7 +581,7 @@
             Series = await Task.Run(() => Servicio.Analizar(empresa, FechaInicio, FechaFin));
 
             // Por omisión, todas las series que se pueden convertir.
-            SeriesElegidas = Series.Where(s => s.TieneEquivalencia && s.PublicoGeneral > 0)
+            SeriesElegidas = Series.Where(s => s.TieneEquivalencia && s.Modificables > 0)
                 .Select(s => s.Serie).ToHashSet(StringComparer.OrdinalIgnoreCase);
         }
         catch (Exception ex)
@@ -589,7 +595,7 @@
     }
 
     private IEnumerable<SerieAzulejeraDto> Convertibles =>
-        Series?.Where(s => s.TieneEquivalencia && s.PublicoGeneral > 0) ?? [];
+        Series?.Where(s => s.TieneEquivalencia && s.Modificables > 0) ?? [];
 
     private void ElegirTodas(bool incluir) =>
         SeriesElegidas = incluir

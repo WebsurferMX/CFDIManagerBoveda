@@ -57,6 +57,16 @@ public sealed class SerieAzulejeraDto
 
     public decimal ImportePublicoGeneral { get; set; }
 
+    /// <summary>Comprobantes a clientes con RFC (sin nómina) de una serie que se convierte: solo cambian de serie.</summary>
+    public int ConRfc { get; set; }
+
+    public decimal ImporteConRfc { get; set; }
+
+    /// <summary>Lo que se modifica de la serie: público general más clientes con RFC.</summary>
+    public int Modificables => PublicoGeneral + ConRfc;
+
+    public decimal ImporteModificables => ImportePublicoGeneral + ImporteConRfc;
+
     /// <summary>Serie a la que se convierte; vacía si la serie no tiene equivalencia.</summary>
     public string SerieNueva { get; set; } = "";
 
