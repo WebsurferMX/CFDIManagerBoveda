@@ -43,7 +43,7 @@ public static partial class ReporteGeneral
 
         public string SumaPagado(string criterios = "") => Unica
             ? $"-SUMIFS({Pagos}[Total],{Pagos}[Tipo],\"Pago\"{criterios})"
-            : criterios == "" ? $"SUM({Pagos}[ImpPagado])" : $"SUMIFS({Pagos}[ImpPagado]{criterios})";
+            : criterios == "" ? $"SUBTOTAL(109,{Pagos}[ImpPagado])" : $"SUMIFS({Pagos}[ImpPagado]{criterios})";
 
         public string CuentaPagos(string? rfc = null) => Unica
             ? $"COUNTIFS({Pagos}[Tipo],\"Pago\"{(rfc is null ? "" : De(Pagos, rfc))})"

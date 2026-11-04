@@ -315,17 +315,45 @@ public static partial class ReporteGeneral
         ws.SetTabColor(XLColor.FromHtml("#" + hoja.Tab));
         var columnas = hoja.Columnas;
         for (var c = 0; c < columnas.Length; c++) ws.Cell(1, c + 1).Value = columnas[c].Titulo;
-        for (var r = 0; r < filas.Count; r++)
+
+        // Detalle Pagos: cada pago es un grupo del esquema (sus facturas pagadas) con un renglón "Total pago …" de
+        // SUBTOTAL. Ese renglón no lleva UUID ni RFC, así que las fórmulas del dashboard no lo cuentan, y el total de
+        // la tabla (SUBTOTAL) no lo suma dos veces.
+        var agrupar = hoja.Tabla == "TablePago";
+        var r = 2;
+        foreach (var grupo in agrupar ? filas.GroupBy(f => f.C) : filas.Select(f => new[] { f }.GroupBy(_ => f.C).First()))
+        {
+            var inicio = r;
+            foreach (var fila in grupo)
+            {
+                for (var c = 0; c < columnas.Length; c++)
+                    ws.Cell(r, c + 1).Value = columnas[c].Valor(fila) switch
+                    {
+                        null => Blank.Value,
+                        decimal d => d,
+                        string s => s,
+                        var o => XLCellValue.FromObject(o, Inv)
+                    };
+                r++;
+            }
+            if (!agrupar) continue;
+
+            ws.Rows(inicio, r - 1).Group();
+            var c0 = grupo.Key;
+            var serieFolio = $"{c0.A(c0.Root, "Serie")}-{c0.A(c0.Root, "Folio")}".Trim('-');
+            ws.Cell(r, 1).Value = $"Total pago {serieFolio}";
             for (var c = 0; c < columnas.Length; c++)
-                ws.Cell(r + 2, c + 1).Value = columnas[c].Valor(filas[r]) switch
-                {
-                    null => Blank.Value,
-                    decimal d => d,
-                    string s => s,
-                    var o => XLCellValue.FromObject(o, Inv)
-                };
+            {
+                if (!columnas[c].Dinero) continue;
+                ws.Cell(r, c + 1).FormulaA1 = $"SUBTOTAL(9,{ws.Cell(inicio, c + 1).Address}:{ws.Cell(r - 1, c + 1).Address})";
+            }
+            ws.Range(r, 1, r, columnas.Length).Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.FromHtml("#E9DDF5"));
+            r++;
+        }
+        if (agrupar && r > 2) ws.Rows(2, r - 1).Group();
+
         // Una tabla de Excel necesita al menos una fila de datos; si no hay CFDI queda una fila vacía.
-        var table = ws.Range(1, 1, Math.Max(2, filas.Count + 1), columnas.Length).CreateTable(hoja.Tabla);
+        var table = ws.Range(1, 1, Math.Max(2, r - 1), columnas.Length).CreateTable(hoja.Tabla);
         table.Theme = XLTableTheme.TableStyleMedium8;
         table.ShowTotalsRow = true;
         for (var c = 0; c < columnas.Length; c++)

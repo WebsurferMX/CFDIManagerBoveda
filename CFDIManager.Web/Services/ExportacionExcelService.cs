@@ -227,7 +227,10 @@ public sealed class ExportacionExcelService
         CrearHojaTipo(libro, registros, "N", "Nomina", "#7C3AED");
         CrearHojaTipo(libro, registros, "E", "Egresos", "#DC2626");
         CrearHojaTipo(libro, registros, "T", "Traslados", "#475569");
-        CrearHojaTipo(libro, registros, "P", "Pagos", "#0891B2");
+        // Pagos: un renglón por pago y, aparte, uno por cada factura que paga (documento relacionado).
+        CrearHojaTipo(libro, registros, "P", "Resumen Pagos", "#0891B2");
+        CrearDetallePagos(libro, registros.Where(x => string.Equals(x.Tipo, "P", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(x => x.FechaEmision).ThenBy(x => x.UUID).ToList());
         CrearHojaConceptos(libro, conceptos);
 
         using var memoria = new MemoryStream();
@@ -328,6 +331,130 @@ public sealed class ExportacionExcelService
         }
 
         CrearDetalle(libro, nombreHoja, grupo, color);
+    }
+
+    /// <summary>
+    /// Detalle Pagos: lee cada XML de pago y escribe un renglón por documento relacionado (factura pagada).
+    /// El monto del pago va solo en su primer renglón para que el total de la columna no se infle.
+    /// </summary>
+    private static void CrearDetallePagos(XLWorkbook libro, List<CfdiExportacionDto> pagos)
+    {
+        if (pagos.Count == 0)
+        {
+            return;
+        }
+
+        static string A(System.Xml.Linq.XElement? e, string nombre) =>
+            e?.Attributes().FirstOrDefault(a => a.Name.LocalName == nombre)?.Value.Trim() ?? "";
+        static decimal? N(System.Xml.Linq.XElement? e, string nombre) =>
+            decimal.TryParse(A(e, nombre), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out decimal v) ? v : null;
+
+        string[] encabezados =
+        {
+            "Serie", "Folio", "UUID", "Estado SAT", "Fecha Emision", "RFC Emisor", "Nombre Emisor", "RFC Receptor",
+            "Nombre Receptor", "FechaPago", "FormaDePagoP", "MonedaP", "Monto", "UUID Factura", "Serie Factura",
+            "Folio Factura", "MonedaDR", "NumParcialidad", "ImpSaldoAnt", "ImpPagado", "ImpSaldoInsoluto", "Num Operacion"
+        };
+        int[] dinero = { 13, 19, 20, 21 };
+
+        IXLWorksheet hoja = libro.Worksheets.Add("Detalle Pagos");
+        hoja.ShowGridLines = false;
+        hoja.Range(1, 1, 1, encabezados.Length).Merge();
+        hoja.Cell(1, 1).Value = "CFDI DETALLE PAGOS · UN RENGLÓN POR FACTURA PAGADA";
+        hoja.Cell(1, 1).Style.Font.SetBold().Font.SetFontSize(15).Font.SetFontColor(XLColor.White)
+            .Fill.SetBackgroundColor(XLColor.FromHtml("#0E7490")).Alignment.SetHorizontal(XLAlignmentHorizontalValues.Center);
+
+        const int filaEncabezado = 3;
+        for (int i = 0; i < encabezados.Length; i++)
+        {
+            hoja.Cell(filaEncabezado, i + 1).Value = encabezados[i];
+        }
+
+        int fila = filaEncabezado + 1;
+        foreach (CfdiExportacionDto x in pagos)
+        {
+            int inicio = fila;
+            System.Xml.Linq.XElement raiz;
+            try
+            {
+                raiz = System.Xml.Linq.XDocument.Load(x.ArchivoXml).Root!;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Xml.XmlException or ArgumentException)
+            {
+                // XML movido o ilegible: el pago queda solo en Resumen Pagos.
+                continue;
+            }
+
+            foreach (var pago in raiz.Descendants().Where(e => e.Name.LocalName == "Pago" && e.Parent?.Name.LocalName == "Pagos"))
+            {
+                var doctos = pago.Elements().Where(e => e.Name.LocalName == "DoctoRelacionado").ToList();
+                var renglones = doctos.Count == 0 ? new List<System.Xml.Linq.XElement?> { null } : doctos.Cast<System.Xml.Linq.XElement?>().ToList();
+
+                for (int i = 0; i < renglones.Count; i++)
+                {
+                    var d = renglones[i];
+                    Texto(hoja.Cell(fila, 1), x.Serie);
+                    Texto(hoja.Cell(fila, 2), x.Folio);
+                    Texto(hoja.Cell(fila, 3), x.UUID);
+                    Texto(hoja.Cell(fila, 4), x.EstadoSat);
+                    Fecha(hoja.Cell(fila, 5), x.FechaEmision);
+                    Texto(hoja.Cell(fila, 6), x.RfcEmisor);
+                    Texto(hoja.Cell(fila, 7), x.NombreEmisor);
+                    Texto(hoja.Cell(fila, 8), x.RfcReceptor);
+                    Texto(hoja.Cell(fila, 9), x.NombreReceptor);
+                    Texto(hoja.Cell(fila, 10), A(pago, "FechaPago"));
+                    Texto(hoja.Cell(fila, 11), A(pago, "FormaDePagoP"));
+                    Texto(hoja.Cell(fila, 12), A(pago, "MonedaP"));
+                    if (i == 0 && N(pago, "Monto") is decimal monto) hoja.Cell(fila, 13).Value = monto;
+                    Texto(hoja.Cell(fila, 14), A(d, "IdDocumento").ToUpperInvariant());
+                    Texto(hoja.Cell(fila, 15), A(d, "Serie"));
+                    Texto(hoja.Cell(fila, 16), A(d, "Folio"));
+                    Texto(hoja.Cell(fila, 17), A(d, "MonedaDR"));
+                    Texto(hoja.Cell(fila, 18), A(d, "NumParcialidad"));
+                    if (N(d, "ImpSaldoAnt") is decimal ant) hoja.Cell(fila, 19).Value = ant;
+                    if (N(d, "ImpPagado") is decimal pagado) hoja.Cell(fila, 20).Value = pagado;
+                    if (N(d, "ImpSaldoInsoluto") is decimal insoluto) hoja.Cell(fila, 21).Value = insoluto;
+                    Texto(hoja.Cell(fila, 22), A(pago, "NumOperacion"));
+                    fila++;
+                }
+            }
+
+            if (fila == inicio)
+            {
+                continue;
+            }
+
+            // Cada pago es un grupo del esquema con su renglón "Total pago …" (SUBTOTAL: el total de la tabla no lo
+            // suma dos veces).
+            hoja.Rows(inicio, fila - 1).Group();
+            hoja.Cell(fila, 1).Value = $"Total pago {$"{x.Serie}-{x.Folio}".Trim('-')}";
+            foreach (int c in dinero)
+            {
+                hoja.Cell(fila, c).FormulaA1 = $"SUBTOTAL(9,{hoja.Cell(inicio, c).Address}:{hoja.Cell(fila - 1, c).Address})";
+            }
+            hoja.Range(fila, 1, fila, encabezados.Length).Style.Font.SetBold().Fill.SetBackgroundColor(XLColor.FromHtml("#CFFAFE"));
+            fila++;
+        }
+
+        if (fila > filaEncabezado + 1)
+        {
+            hoja.Rows(filaEncabezado + 1, fila - 1).Group();
+        }
+
+        // Una tabla de Excel necesita al menos una fila de datos.
+        var tabla = hoja.Range(filaEncabezado, 1, Math.Max(filaEncabezado + 1, fila - 1), encabezados.Length).CreateTable("TablaDetallePagos");
+        tabla.ShowTotalsRow = true;
+        tabla.Field(0).TotalsRowLabel = "Totales";
+        foreach (int c in dinero)
+        {
+            tabla.Field(c - 1).TotalsRowFunction = XLTotalsRowFunction.Sum;
+            hoja.Column(c).Style.NumberFormat.Format = "$#,##0.00";
+        }
+
+        hoja.SheetView.FreezeRows(filaEncabezado);
+        hoja.SheetView.FreezeColumns(3);
+        hoja.Columns().AdjustToContents(filaEncabezado, Math.Min(fila, 400), 8, 42);
+        hoja.PageSetup.PageOrientation = XLPageOrientation.Landscape;
     }
 
     private static void CrearDetalle(
@@ -441,7 +568,7 @@ public sealed class ExportacionExcelService
 
         int ultimaFila = fila - 1;
         hoja.Range(filaEncabezado, 1, ultimaFila, encabezados.Length)
-            .CreateTable($"Tabla{nombreHoja}");
+            .CreateTable($"Tabla{nombreHoja.Replace(" ", "")}");
 
         hoja.SheetView.FreezeRows(filaEncabezado);
         hoja.SheetView.FreezeColumns(3);
@@ -614,7 +741,8 @@ public sealed class ExportacionExcelService
     {
         if (!string.IsNullOrWhiteSpace(valor))
         {
-            celda.Value = valor;
+            // Una celda de Excel admite hasta 32,767 caracteres (pasa con CFDI de cientos de conceptos).
+            celda.Value = valor.Length > 32767 ? valor[..32766] + "…" : valor;
         }
     }
 
