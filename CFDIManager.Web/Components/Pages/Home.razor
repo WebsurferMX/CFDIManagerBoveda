@@ -86,69 +86,20 @@
         else
         {
         @* ---------- Indicadores ---------- *@
-        <div class="row row-cards mb-3">
+        <div class="row row-cards mb-3 kpis-principales">
             <div class="col-sm-6 col-xl-3">
-                <div class="card card-sm h-100 kpi" style="--color-tipo: var(--tblr-blue)">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center gap-3">
-                            <span class="avatar bg-blue text-white"><i class="ti ti-trending-up"></i></span>
-                            <div>
-                                <div class="subheader">Facturación neta</div>
-                                <div class="h2 mb-0">@Moneda(Datos.FacturacionNeta)</div>
-                                <div class="text-secondary small">Facturas menos notas de crédito</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                @Kpi("Facturación neta", Moneda(Datos.FacturacionNeta), "Facturas menos notas de crédito", "ti-trending-up", "azul")
             </div>
-
             <div class="col-sm-6 col-xl-3">
-                <div class="card card-sm h-100 kpi" style="--color-tipo: var(--tblr-teal)">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center gap-3">
-                            <span class="avatar bg-teal text-white"><i class="ti ti-shopping-cart"></i></span>
-                            <div>
-                                <div class="subheader">Compras netas</div>
-                                <div class="h2 mb-0">@Moneda(Datos.ComprasNetas)</div>
-                                <div class="text-secondary small">Facturas recibidas menos notas de crédito</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                @Kpi("Compras netas", Moneda(Datos.ComprasNetas), "Facturas recibidas menos notas de crédito", "ti-shopping-cart", "teal")
             </div>
-
             <div class="col-sm-6 col-xl-3">
-                <div class="card card-sm h-100 kpi" style="--color-tipo: var(--tblr-@(Diferencia >= 0 ? "green" : "red"))">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center gap-3">
-                            <span class="avatar @(Diferencia >= 0 ? "bg-green" : "bg-red") text-white">
-                                <i class="ti @(Diferencia >= 0 ? "ti-arrow-up-right" : "ti-arrow-down-right")"></i>
-                            </span>
-                            <div>
-                                <div class="subheader">Ventas − compras</div>
-                                <div class="h2 mb-0 @(Diferencia >= 0 ? "text-green" : "text-red")">@Moneda(Diferencia)</div>
-                                <div class="text-secondary small">Facturación neta menos compras netas</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                @Kpi("Ventas − compras", Moneda(Diferencia), "Facturación neta menos compras netas",
+                     Diferencia >= 0 ? "ti-arrow-up-right" : "ti-arrow-down-right", Diferencia >= 0 ? "verde" : "rojo")
             </div>
-
             <div class="col-sm-6 col-xl-3">
-                <div class="card card-sm h-100 kpi" style="--color-tipo: var(--tblr-azure)">
-                    <div class="card-body">
-                        <div class="d-flex align-items-center gap-3">
-                            <span class="avatar bg-azure text-white"><i class="ti ti-files"></i></span>
-                            <div>
-                                <div class="subheader">CFDI del periodo</div>
-                                <div class="h2 mb-0">@((Datos.CfdiEmitidos + Datos.CfdiRecibidos).ToString("N0"))</div>
-                                <div class="text-secondary small">
-                                    @Datos.CfdiEmitidos.ToString("N0") emitidos · @Datos.CfdiRecibidos.ToString("N0") recibidos
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                @Kpi("CFDI del periodo", (Datos.CfdiEmitidos + Datos.CfdiRecibidos).ToString("N0"),
+                     $"{Datos.CfdiEmitidos:N0} emitidos · {Datos.CfdiRecibidos:N0} recibidos", "ti-files", "morado")
             </div>
         </div>
 

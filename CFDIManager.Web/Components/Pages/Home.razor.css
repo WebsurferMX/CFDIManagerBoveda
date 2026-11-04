@@ -65,29 +65,53 @@
 /* ---------- KPI con fondo degradado ---------- */
 
 .resumen .kpi-degradado {
+    --k3: color-mix(in srgb, var(--k1) 65%, #000);
     position: relative;
     height: 100%;
-    padding: .7rem .9rem;
+    padding: .75rem .95rem .8rem;
     overflow: hidden;
-    border-radius: .75rem;
+    border: 1px solid rgb(255 255 255 / 18%);
+    border-radius: .85rem;
     color: #fff;
-    background: linear-gradient(135deg, var(--k1) 0%, var(--k2) 100%);
-    box-shadow: 0 .45rem 1rem color-mix(in srgb, var(--k1) 35%, transparent);
-    transition: transform .15s ease, box-shadow .15s ease;
+    text-shadow: 0 1px 2px rgb(0 0 0 / 28%);
+    /* Brillo arriba a la izquierda sobre un degradado de tres tonos: claro, base y oscuro. */
+    background:
+        radial-gradient(120% 90% at 0% 0%, rgb(255 255 255 / 30%) 0%, rgb(255 255 255 / 0%) 55%),
+        linear-gradient(155deg, var(--k2) 0%, var(--k1) 55%, var(--k3) 100%);
+    /* Relieve: filo claro arriba, canto oscuro abajo y sombra suave del color. */
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 40%),
+        inset 0 -3px 0 rgb(0 0 0 / 20%),
+        0 4px 0 -1px var(--k3),
+        0 .75rem 1.4rem -.2rem color-mix(in srgb, var(--k1) 50%, transparent);
+    transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
 }
 
 .resumen .kpi-degradado:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 .7rem 1.4rem color-mix(in srgb, var(--k1) 45%, transparent);
+    transform: translateY(-3px);
+    filter: brightness(1.05);
+    box-shadow:
+        inset 0 1px 0 rgb(255 255 255 / 45%),
+        inset 0 -3px 0 rgb(0 0 0 / 20%),
+        0 6px 0 -1px var(--k3),
+        0 1.1rem 1.8rem -.2rem color-mix(in srgb, var(--k1) 60%, transparent);
 }
 
-/* Icono grande y tenue en la esquina. */
+.resumen .kpi-degradado:active { transform: translateY(1px); }
+
+/* Icono en una ficha de vidrio con relieve. */
 .resumen .kpi-degradado .kpi-icono {
     position: absolute;
-    top: .35rem;
-    right: .6rem;
-    font-size: 2.1rem;
-    opacity: .28;
+    top: .6rem;
+    right: .7rem;
+    display: grid;
+    place-items: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    border-radius: 50%;
+    font-size: 1.35rem;
+    background: linear-gradient(145deg, rgb(255 255 255 / 32%), rgb(255 255 255 / 8%));
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 45%), 0 3px 6px rgb(0 0 0 / 22%);
 }
 
 .resumen .kpi-degradado .kpi-titulo {
@@ -111,7 +135,7 @@
 }
 
 /* Tipo sin CFDI en el periodo. */
-.resumen .kpi-degradado.apagado { filter: saturate(.25); opacity: .55; }
+.resumen .kpi-degradado.apagado { filter: saturate(.35); opacity: .7; }
 
 .resumen .tono-azul { --k1: #1d4ed8; --k2: #3b82f6; }
 .resumen .tono-teal { --k1: #0f766e; --k2: #14b8a6; }
@@ -134,3 +158,8 @@
 }
 
 .resumen .paginas .nav-link { font-weight: 600; }
+
+/* Indicadores principales: un poco más grandes que los de cada tipo. */
+.resumen .kpis-principales .kpi-degradado { padding: 1rem 1.15rem; }
+.resumen .kpis-principales .kpi-valor { font-size: 1.6rem; }
+.resumen .kpis-principales .kpi-icono { width: 3rem; height: 3rem; font-size: 1.6rem; }
