@@ -364,6 +364,20 @@ td.sel { width: 30px; }
 
 /* El detalle crece con las partidas: encabezado + hasta 3 renglones, después scroll. */
 .detalles .detalle-cuerpo { max-height: 6.4rem; }
+.detalles .relacionados { max-height: 8.5rem; }
+
+.detalles.con-relacionados { grid-template-columns: minmax(0, 1fr) 360px; }
+
+.relacionados {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.relacionados .card-header { font-size: .78rem; font-weight: 600; }
+.relacionados .list-group { overflow: auto; }
 
 .relacionados .list-group-item {
     display: flex;
@@ -625,6 +639,7 @@ td.sel { width: 30px; }
 @media (max-width: 900px) {
     .zona-inferior { grid-template-columns: minmax(0, 1fr); }
     .zona-inferior > .kpis { grid-column: 1; grid-row: 2; grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr)); }
+    .detalles.con-relacionados { grid-template-columns: 1fr; }
 }
 
 /* El morado no tiene variables propias en Bootstrap 5.3: tonos para el modo oscuro. */
