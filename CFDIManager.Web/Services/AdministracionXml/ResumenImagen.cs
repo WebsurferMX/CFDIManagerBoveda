@@ -74,7 +74,7 @@ public static class ResumenImagen
 
                 col.Item().Text("CFDI Manager · Administración de XML").FontSize(7).FontColor(p.Pie);
             });
-        })).GenerateImages(new ImageGenerationSettings { ImageFormat = ImageFormat.Png, RasterDpi = 150 }).First();
+        })).GenerateImages(new ImageGenerationSettings { ImageFormat = ImageFormat.Png, RasterDpi = 75 }).First();
     }
 
     private static void PintarSeccion(IContainer contenedor, Seccion s, Paleta p)
