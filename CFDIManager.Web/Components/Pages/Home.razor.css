@@ -82,8 +82,8 @@
     background:
         radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--k2) 30%, transparent) 0%, transparent 60%),
         linear-gradient(135deg,
-            color-mix(in srgb, var(--k1) 62%, var(--base)) 0%,
-            color-mix(in srgb, var(--k1) 38%, var(--base)) 100%);
+            color-mix(in srgb, var(--k1) 45%, var(--base)) 0%,
+            color-mix(in srgb, var(--k1) 25%, var(--base)) 100%);
     /* Relieve: filo claro arriba, canto oscuro abajo y sombra suave. */
     box-shadow:
         inset 0 1px 0 rgb(255 255 255 / 12%),
