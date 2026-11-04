@@ -871,21 +871,26 @@
         List<string> porSubir = pendientes.Except(bloqueados).ToList();
         HashSet<string> confirmados = Repo.ObtenerUuidsConfirmadosSinube(empresa.EmpresaId, clientes ? "C" : "P");
 
+        // Marcados como ya en SINUBE (EXISTE) que SINUBE no tiene con su UUID: no cuentan como subidos.
+        HashSet<string> sinEncontrar = facturas
+            .Where(a => confirmados.Contains(datos[a].Uuid) && !EnSinube(a) && !(clientes && datos[a].Tipo == "P"))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        bool Arriba(string a) => EnSinube(a) || (enviados.Contains(datos[a].Uuid) && !sinEncontrar.Contains(a));
+
         (string Tipo, string Nombre)[] porTipo =
             [("I", "Facturas"), ("E", "Notas de crédito"), ("N", "Nómina"), ("P", "Pagos"), ("T", "Traslados")];
 
         return new RevisionSinube
         {
-            ConfirmadosSinEncontrar = facturas
-                // Los pagos de clientes no siempre se pueden consultar por UUID en SINUBE: no se avisan.
-                .Where(a => confirmados.Contains(datos[a].Uuid) && !EnSinube(a) && !(clientes && datos[a].Tipo == "P"))
+            // Los pagos de clientes no siempre se pueden consultar por UUID en SINUBE: no se avisan.
+            ConfirmadosSinEncontrar = sinEncontrar
                 .Select(a => (datos[a].Uuid, datos[a].Serie, datos[a].Folio))
                 .OrderBy(x => x.Serie).ThenBy(x => x.Folio)
                 .ToList(),
             Desglose = porTipo
                 .Select(t => (t.Tipo, t.Nombre,
                     archivos.Count(a => datos[a].Tipo == t.Tipo),
-                    facturas.Count(a => datos[a].Tipo == t.Tipo && (EnSinube(a) || enviados.Contains(datos[a].Uuid))),
+                    facturas.Count(a => datos[a].Tipo == t.Tipo && Arriba(a)),
                     porSubir.Count(a => datos[a].Tipo == t.Tipo)))
                 .Where(x => x.Item3 > 0)
                 .ToList(),
@@ -894,7 +899,7 @@
             Nomina = archivos.Count - facturas.Count,
             // Lo que SINUBE confirma y lo que la app ya subió (o el usuario confirmó): SINUBE no siempre deja
             // consultar los pagos importados por UUID.
-            EnSinube = facturas.Count(a => EnSinube(a) || enviados.Contains(datos[a].Uuid)),
+            EnSinube = facturas.Count(Arriba),
             EnviadosAntes = 0,
             PagosSerieAlterna = ocupados.Count - bloqueados.Count,
             PagosFolioOcupado = bloqueados.Count,
