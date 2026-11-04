@@ -163,9 +163,10 @@ builder.Services.AddSingleton<DescargasTemporales>();
 // Community: gratuita para organizaciones con ingresos anuales menores a 1 millón de USD.
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
 
-// Por omisión QuestPDF busca fuentes en toda la carpeta de la app, que incluye Storage (cientos de miles de XML y
-// PDF): al pasar de 100,000 archivos se niega a generar. La app no trae fuentes propias; bastan las del sistema.
-QuestPDF.Settings.FontDiscoveryPaths.Clear();
+// Por omisión QuestPDF busca fuentes en toda la carpeta de la app (FontDiscoveryPath): si ahí queda Storage, con
+// cientos de miles de XML y PDF, al pasar de 100,000 archivos se niega a generar. La app no trae fuentes propias;
+// bastan las incluidas en QuestPDF y las del sistema (vacío = no revisa ninguna carpeta).
+QuestPDF.Settings.FontDiscoveryPath = string.Empty;
 
 builder.Services.AddScoped<EmpresaContext>();
 
