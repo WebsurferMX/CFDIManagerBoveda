@@ -364,20 +364,6 @@ td.sel { width: 30px; }
 
 /* El detalle crece con las partidas: encabezado + hasta 3 renglones, después scroll. */
 .detalles .detalle-cuerpo { max-height: 6.4rem; }
-.detalles .relacionados { max-height: 8.5rem; }
-
-.detalles.con-relacionados { grid-template-columns: minmax(0, 1fr) 360px; }
-
-.relacionados {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-}
-
-.relacionados .card-header { font-size: .78rem; font-weight: 600; }
-.relacionados .list-group { overflow: auto; }
 
 .relacionados .list-group-item {
     display: flex;
@@ -632,7 +618,6 @@ td.sel { width: 30px; }
     .rejilla-card { min-height: 420px; }
     .herramientas { margin-top: 0; }
     .detalles,
-    .detalles.con-relacionados { grid-template-columns: 1fr; height: auto; }
     .aviso { right: 16px; }
 }
 

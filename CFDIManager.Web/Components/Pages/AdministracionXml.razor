@@ -336,7 +336,7 @@
 
             @if (MostrarDetalles)
             {
-                <div class="detalles @(Relacionados.Count > 0 ? "con-relacionados" : "")">
+                <div class="detalles">
                     <div class="card shadow-sm detalle-tablas">
                         <div class="card-header bg-body-tertiary py-0 px-2">
                             <ul class="nav nav-tabs card-header-tabs">
@@ -344,6 +344,16 @@
                                 {
                                     <li class="nav-item">
                                         <button type="button" class="nav-link @(Det == clave ? "active" : "")" @onclick="() => CambiarDetalle(clave)">@titulo</button>
+                                    </li>
+                                }
+                                @* Solo cuando el comprobante relaciona otros CFDI o algún CFDI lo relaciona a él. *@
+                                @if (Relacionados.Count > 0)
+                                {
+                                    <li class="nav-item">
+                                        <button type="button" class="nav-link @(Det == "relacionados" ? "active" : "")" @onclick='() => CambiarDetalle("relacionados")'>
+                                            Relacionados
+                                            <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis ms-1">@Relacionados.Count</span>
+                                        </button>
                                     </li>
                                 }
                             </ul>
@@ -400,6 +410,39 @@
                                     }
                                 </div>
                             }
+                            else if (Det == "relacionados")
+                            {
+                                <ul class="list-group list-group-flush relacionados">
+                            @foreach (var grupo in Relacionados.GroupBy(r => r.RelacionaAEste))
+                            {
+                                <li class="list-group-item grupo">@(grupo.Key ? "Lo relacionan" : "Este CFDI relaciona")</li>
+                                @foreach (CfdiRelacionadoDto r in grupo)
+                                {
+                                    <li class="list-group-item @(r.RelacionaAEste && r.TipoRelacion == "04" ? "sustituido" : "")">
+                                        <span class="tipo-relacion" title="Tipo de relación @r.TipoRelacion · @NombreTipoRelacion(r.TipoRelacion)">
+                                            @r.TipoRelacion · @(r.RelacionaAEste ? NombreRelacionInversa(r.TipoRelacion) : NombreTipoRelacion(r.TipoRelacion))
+                                        </span>
+                                        @if (r.EnBase)
+                                        {
+                                            <span class="datos">
+                                                @r.TipoCfdi · @(string.IsNullOrEmpty(r.Serie) ? "" : r.Serie + " ")@r.Folio
+                                                · @r.FechaEmision?.ToString("dd/MM/yyyy") · $@r.Total.ToString("N2")
+                                                @if (r.EstadoSat.StartsWith("Cancel", StringComparison.OrdinalIgnoreCase))
+                                                {
+                                                    <span class="badge bg-danger-subtle text-danger-emphasis ms-1">Cancelado</span>
+                                                }
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="datos text-body-secondary">No está en la bóveda</span>
+                                        }
+                                        <span class="font-monospace uuid" title="@r.UUID">@r.UUID</span>
+                                    </li>
+                                }
+                            }
+                                </ul>
+                            }
                             else
                             {
                                 <table class="table table-sm table-striped mb-0">
@@ -418,47 +461,6 @@
                             }
                         </div>
                     </div>
-
-                    @* Solo cuando el comprobante seleccionado relaciona otros CFDI o algún CFDI lo relaciona a él. *@
-                    @if (Relacionados.Count > 0)
-                    {
-                        <div class="card shadow-sm relacionados">
-                            <div class="card-header bg-body-tertiary py-1 px-2">
-                                <i class="bi bi-link-45deg me-1"></i>Relacionados
-                                <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis ms-1">@Relacionados.Count</span>
-                            </div>
-                            <ul class="list-group list-group-flush">
-                                @foreach (var grupo in Relacionados.GroupBy(r => r.RelacionaAEste))
-                                {
-                                    <li class="list-group-item grupo">@(grupo.Key ? "Lo relacionan" : "Este CFDI relaciona")</li>
-                                    @foreach (CfdiRelacionadoDto r in grupo)
-                                    {
-                                        <li class="list-group-item @(r.RelacionaAEste && r.TipoRelacion == "04" ? "sustituido" : "")">
-                                            <span class="tipo-relacion" title="Tipo de relación @r.TipoRelacion · @NombreTipoRelacion(r.TipoRelacion)">
-                                                @r.TipoRelacion · @(r.RelacionaAEste ? NombreRelacionInversa(r.TipoRelacion) : NombreTipoRelacion(r.TipoRelacion))
-                                            </span>
-                                            @if (r.EnBase)
-                                            {
-                                                <span class="datos">
-                                                    @r.TipoCfdi · @(string.IsNullOrEmpty(r.Serie) ? "" : r.Serie + " ")@r.Folio
-                                                    · @r.FechaEmision?.ToString("dd/MM/yyyy") · $@r.Total.ToString("N2")
-                                                    @if (r.EstadoSat.StartsWith("Cancel", StringComparison.OrdinalIgnoreCase))
-                                                    {
-                                                        <span class="badge bg-danger-subtle text-danger-emphasis ms-1">Cancelado</span>
-                                                    }
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <span class="datos text-body-secondary">No está en la bóveda</span>
-                                            }
-                                            <span class="font-monospace uuid" title="@r.UUID">@r.UUID</span>
-                                        </li>
-                                    }
-                                }
-                            </ul>
-                        </div>
-                    }
                 </div>
             }
             </div>
@@ -747,7 +749,7 @@
     private bool Acumular;
     private string Busqueda = "";
     private string Filtrar = "";
-    private string Pestana = "facturas";
+    private string Pestana = "";
     private string TipoReporte = "general";
 
     // ---------- tabla ----------
@@ -1287,6 +1289,12 @@
         ActivaId = x?.CfdiId ?? 0;
         Conceptos = x is null ? new() : Repo.ObtenerConceptosCfdi(EmpresaContext.EmpresaId, x.CfdiId);
         Relacionados = x is null ? new() : Repo.ObtenerRelacionadosCfdi(EmpresaContext.EmpresaId, x.CfdiId);
+
+        // La pestaña Relacionados solo existe cuando el comprobante tiene relacionados.
+        if (Det == "relacionados" && Relacionados.Count == 0)
+        {
+            Det = "conceptos";
+        }
         ImpuestosLocales = new();
         ComplementosDetalle = new();
         CargarXmlVista();
@@ -1404,6 +1412,23 @@
         Aviso = texto;
         AvisoError = error;
         CarpetaAviso = carpeta;
+
+        // Los avisos de éxito se quitan solos; los errores se quedan hasta cerrarlos.
+        if (!error)
+        {
+            _ = OcultarAvisoAsync(texto);
+        }
+    }
+
+    private async Task OcultarAvisoAsync(string texto)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(6));
+
+        if (Aviso == texto && !AvisoError)
+        {
+            Aviso = "";
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private bool RequiereActiva()
@@ -1510,7 +1535,6 @@
             (string ruta, byte[] contenido) = await Task.Run(() => Admin.GuardarExcel(empresa, f, reporte));
             await JS.InvokeVoidAsync("descargarArchivoBase64", Path.GetFileName(ruta),
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Convert.ToBase64String(contenido));
-            Avisar($"Guardado en {ruta}", carpeta: Path.GetDirectoryName(ruta)!);
         }
         catch (Exception ex)
         {
