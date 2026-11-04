@@ -110,7 +110,7 @@ public sealed class TotalesNomina(IReadOnlyCollection<ReciboNomina> recibos)
 /// Visor de nóminas: los recibos de nómina emitidos de la bóveda acumulados por ejercicio y mes según su FechaPago
 /// (criterio del visor del SAT), sin cancelados. El ISR enterado se captura por mes y se guarda por empresa.
 /// </summary>
-public class VisorNominaService(PostgreSqlRepository repo, IMemoryCache cache)
+public partial class VisorNominaService(PostgreSqlRepository repo, IMemoryCache cache)
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
     private static readonly TimeSpan Vigencia = TimeSpan.FromMinutes(5);
@@ -372,12 +372,12 @@ public class VisorNominaService(PostgreSqlRepository repo, IMemoryCache cache)
 
         // Recibos.
         var wr = libro.AddWorksheet("Recibos");
-        string[] encR = ["FECHA PAGO", "TIPO", "RFC", "NOMBRE", "UUID", "SUELDOS GRAVADOS", "SUELDOS EXENTOS", "PTU", "PERCEPCIONES", "OTROS PAGOS", "DEDUCCIONES", "ISR", "SUBSIDIO NETO", "NETO"];
+        string[] encR = ["FECHA PAGO", "MES", "TIPO", "RFC", "NOMBRE", "DEPARTAMENTO", "UUID", "SUELDOS GRAVADOS", "SUELDOS EXENTOS", "PTU", "PERCEPCIONES", "OTROS PAGOS", "DEDUCCIONES", "ISR", "SUBSIDIO NETO", "NETO"];
         for (int i = 0; i < encR.Length; i++) wr.Cell(1, i + 1).Value = encR[i];
         int fr = 2;
         foreach (var x in ej.Recibos.OrderBy(x => x.FechaPago).ThenBy(x => x.Nombre))
         {
-            object[] v = [x.FechaPago, x.TipoNomina == "E" ? "Extraordinaria" : "Ordinaria", x.Rfc, x.Nombre, x.Uuid, x.SueldosGravados + x.Asimilados,
+            object[] v = [x.FechaPago, x.FechaPago.Month, x.TipoNomina == "E" ? "Extraordinaria" : "Ordinaria", x.Rfc, x.Nombre, x.Departamento, x.Uuid, x.SueldosGravados + x.Asimilados,
                 x.SueldosExentos, x.PtuGravada + x.PtuExenta, x.TotalPercepciones, x.TotalOtrosPagos, x.TotalDeducciones, x.IsrRetenido, x.SubsidioCausado - x.AjusteSubsidio, x.Neto];
             for (int i = 0; i < v.Length; i++) wr.Cell(fr, i + 1).Value = XLCellValue.FromObject(v[i], Inv);
             fr++;
@@ -386,15 +386,18 @@ public class VisorNominaService(PostgreSqlRepository repo, IMemoryCache cache)
         tr.Theme = XLTableTheme.TableStyleMedium2;
         tr.ShowTotalsRow = true;
         tr.Field("FECHA PAGO").TotalsRowLabel = "TOTAL";
-        foreach (string c in encR[5..]) tr.Field(c).TotalsRowFunction = XLTotalsRowFunction.Sum;
+        foreach (string c in encR[7..]) tr.Field(c).TotalsRowFunction = XLTotalsRowFunction.Sum;
         wr.Column(1).Style.NumberFormat.Format = "dd/mm/yyyy";
-        wr.Columns(6, 14).Style.NumberFormat.Format = moneda;
+        wr.Columns(8, 16).Style.NumberFormat.Format = moneda;
         wr.Columns().AdjustToContents(1, Math.Min(fr, 300), 8, 50);
         wr.SheetView.FreezeRows(1);
 
-        ws.SetTabActive();
+        // Dashboard al frente: lee solo de las tablas Recibos y Trabajadores y del ISR enterado de Detalle mensual.
+        var dashboard = EscribirDashboard(libro, ej, r - 1);
+        dashboard.SetTabActive();
         using var memoria = new MemoryStream();
         libro.SaveAs(memoria);
+        AgregarGraficoDashboard(memoria);
         return memoria.ToArray();
     }
 }
