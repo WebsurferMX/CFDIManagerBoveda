@@ -311,10 +311,15 @@ public partial class PostgreSqlRepository
         using var cn = new NpgsqlConnection(_connectionString);
         cn.Open();
 
+        // Los traslados propios (emisor = receptor) se suben como cliente y como proveedor, estén donde estén.
         using var cmd = new NpgsqlCommand(@"
-            SELECT UPPER(uuid), TRIM(tipo_cfdi) FROM cfdi
-            WHERE empresa_id = @empresa_id AND clasificacion = @clasificacion AND tipo_cfdi <> 'N'
-              AND fecha_emision >= @desde AND fecha_emision < @hasta;", cn);
+            SELECT UPPER(c.uuid), TRIM(c.tipo_cfdi) FROM cfdi c
+            LEFT JOIN personas_fiscales em ON em.persona_id = c.emisor_id
+            LEFT JOIN personas_fiscales re ON re.persona_id = c.receptor_id
+            WHERE c.empresa_id = @empresa_id AND c.tipo_cfdi <> 'N'
+              AND c.fecha_emision >= @desde AND c.fecha_emision < @hasta
+              AND (c.clasificacion = @clasificacion
+                   OR (c.tipo_cfdi = 'T' AND UPPER(em.rfc) = UPPER(re.rfc)));", cn);
 
         cmd.Parameters.AddWithValue("empresa_id", empresaId);
         cmd.Parameters.AddWithValue("clasificacion", emitidos ? "EMITIDO" : "RECIBIDO");
@@ -329,6 +334,39 @@ public partial class PostgreSqlRepository
             resultado.Add((dr.GetString(0), dr.GetString(1)));
 
         return resultado;
+    }
+
+    /// <summary>
+    /// Rutas de los traslados propios (emisor = receptor = la empresa) del periodo guardados del otro lado:
+    /// <paramref name="guardadosComoEmitidos"/> true = en Emitidos (le faltan a proveedores); false = en Recibidos.
+    /// </summary>
+    public List<string> ObtenerRutasTrasladosPropios(long empresaId, bool guardadosComoEmitidos, DateTime desde, DateTime hasta)
+    {
+        using var cn = new NpgsqlConnection(_connectionString);
+        cn.Open();
+
+        using var cmd = new NpgsqlCommand(@"
+            SELECT c.ruta_xml FROM cfdi c
+            JOIN personas_fiscales em ON em.persona_id = c.emisor_id
+            JOIN personas_fiscales re ON re.persona_id = c.receptor_id
+            WHERE c.empresa_id = @empresa_id AND c.clasificacion = @clasificacion AND c.tipo_cfdi = 'T'
+              AND UPPER(em.rfc) = UPPER(re.rfc)
+              AND c.fecha_emision >= @desde AND c.fecha_emision < @hasta
+              AND COALESCE(c.ruta_xml, '') <> '';", cn);
+
+        cmd.Parameters.AddWithValue("empresa_id", empresaId);
+        cmd.Parameters.AddWithValue("clasificacion", guardadosComoEmitidos ? "EMITIDO" : "RECIBIDO");
+        cmd.Parameters.AddWithValue("desde", desde);
+        cmd.Parameters.AddWithValue("hasta", hasta);
+
+        var rutas = new List<string>();
+
+        using var dr = cmd.ExecuteReader();
+
+        while (dr.Read())
+            rutas.Add(RutaXmlLocal.Resolver(dr.GetString(0)));
+
+        return rutas;
     }
 
     public void RegistrarEnvioSinube(SinubeEnvioDto envio)

@@ -162,6 +162,7 @@
                                 <label><input type="checkbox" @bind="IncluirIngreso" @bind:after="LimpiarRevision" disabled="@Enviando" /> Ingreso</label>
                                 <label><input type="checkbox" @bind="IncluirEgreso" @bind:after="LimpiarRevision" disabled="@Enviando" /> Egreso</label>
                                 <label><input type="checkbox" @bind="IncluirPago" @bind:after="LimpiarRevision" disabled="@Enviando" /> Pago</label>
+                                <label><input type="checkbox" @bind="IncluirTraslado" @bind:after="LimpiarRevision" disabled="@Enviando" /> Traslado</label>
                             </div>
                             <small class="hint">Los XML de más de 900,000 caracteres se envían sin conceptos (XML reducido).</small>
                         </div>
@@ -525,6 +526,7 @@
     private bool IncluirIngreso = true;
     private bool IncluirEgreso = true;
     private bool IncluirPago = true;
+    private bool IncluirTraslado = true;
     private bool Reenviar;
     private bool EnviarConIeps;
     private bool SoloProblemas;
@@ -563,7 +565,7 @@
 
     private bool PuedeEnviar =>
         !Enviando && FaltaConfiguracion is null && PeriodoTexto != ""
-        && (Clientes || IncluirIngreso || IncluirEgreso || IncluirPago)
+        && (Clientes || IncluirIngreso || IncluirEgreso || IncluirPago || IncluirTraslado)
         && (!SinFolio || LlaveFoliador != "");
 
     private string CarpetaActual =>
@@ -828,7 +830,7 @@
 
     private async Task<RevisionSinube> ConsultarRevisionAsync(EmpresaDto empresa, SinubeConfiguracionDto config, bool clientes, DateTime periodo)
     {
-        List<string> archivos = Sinube.Archivos(empresa, clientes, periodo);
+        List<string> archivos = Sinube.ArchivosSinube(empresa, clientes, periodo);
         HashSet<string> enSinube = await DatosSinube.UuidsEnSinubeAsync(config, clientes, [periodo]);
         HashSet<string> enviados = Reenviar ? [] : Sinube.UuidsEnviados(empresa, clientes);
         HashSet<string> yaExisten = Repo.ObtenerUuidsYaExistenSinube(empresa.EmpresaId, clientes ? "C" : "P");
@@ -980,13 +982,14 @@
             CargarHistorial();
     }
 
-    /// <summary>Tipos de comprobante marcados en proveedores (Ingreso, Egreso, Pago).</summary>
+    /// <summary>Tipos de comprobante marcados en proveedores (Ingreso, Egreso, Pago, Traslado).</summary>
     private HashSet<string> TiposSeleccionados()
     {
         HashSet<string> tipos = [];
         if (IncluirIngreso) tipos.Add("I");
         if (IncluirEgreso) tipos.Add("E");
         if (IncluirPago) tipos.Add("P");
+        if (IncluirTraslado) tipos.Add("T");
         return tipos;
     }
 
@@ -1003,7 +1006,7 @@
         Procesados = 0;
 
         // Revisado en SINUBE: solo los pendientes; sin revisar, toda la carpeta del periodo.
-        List<string> archivos = Revision?.PorSubir ?? Sinube.Archivos(empresa, Clientes, periodo);
+        List<string> archivos = Revision?.PorSubir ?? Sinube.ArchivosSinube(empresa, Clientes, periodo);
         IReadOnlySet<string>? yaEnSinube = Revision?.YaEnSinube;
         Total = archivos.Count;
 

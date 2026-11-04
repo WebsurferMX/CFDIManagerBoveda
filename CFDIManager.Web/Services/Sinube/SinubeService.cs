@@ -289,6 +289,24 @@ public class SinubeService
             : [];
     }
 
+    /// <summary>
+    /// Lo que se sube a SINUBE de ese lado: la carpeta del periodo más los traslados propios (emisor = receptor = la
+    /// empresa) guardados del otro lado. Esos traslados se registran en SINUBE como cliente y como proveedor.
+    /// </summary>
+    public List<string> ArchivosSinube(EmpresaDto empresa, bool clientes, DateTime periodo)
+    {
+        List<string> archivos = Archivos(empresa, clientes, periodo);
+        var nombres = archivos.Select(Path.GetFileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (string ruta in _repo.ObtenerRutasTrasladosPropios(empresa.EmpresaId, guardadosComoEmitidos: !clientes, periodo, periodo.AddMonths(1)))
+        {
+            if (File.Exists(ruta) && nombres.Add(Path.GetFileName(ruta)))
+                archivos.Add(ruta);
+        }
+
+        return archivos;
+    }
+
     // ───────────── Envío ─────────────
 
     /// <summary>
@@ -312,7 +330,7 @@ public class SinubeService
         Func<SinubeEnvioDto, int, int, Task> progreso,
         CancellationToken cancelacion,
         SinubeSinFolioDto? sinFolio = null) =>
-        EnviarArchivosAsync(empresa, configuracion, clientes, Archivos(empresa, clientes, periodo), tiposComprobante,
+        EnviarArchivosAsync(empresa, configuracion, clientes, ArchivosSinube(empresa, clientes, periodo), tiposComprobante,
             reenviar, enviarConAdvertenciaIeps, progreso, cancelacion, sinFolio);
 
     /// <summary>
