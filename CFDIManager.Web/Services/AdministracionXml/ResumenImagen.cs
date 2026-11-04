@@ -22,10 +22,12 @@ public static class ResumenImagen
 
     public sealed record Seccion(string Titulo, string Subtitulo, AdminXmlTotalesDto Totales);
 
-    public static byte[] Generar(string empresa, string rfc, string periodo, IReadOnlyList<Seccion> secciones) =>
+    /// <param name="juntas">Con dos secciones: una junto a la otra (imagen ancha) en lugar de una debajo de la otra.</param>
+    public static byte[] Generar(string empresa, string rfc, string periodo, IReadOnlyList<Seccion> secciones, bool juntas = false) =>
         Document.Create(doc => doc.Page(page =>
         {
-            page.ContinuousSize(760);
+            juntas &= secciones.Count > 1;
+            page.ContinuousSize(juntas ? 1480 : 760);
             page.Margin(0);
             page.PageColor(Fondo);
             page.DefaultTextStyle(t => t.FontSize(9).FontColor(Colors.White));
@@ -45,8 +47,20 @@ public static class ResumenImagen
                     row.AutoItem().AlignBottom().Text($"Generado {DateTime.Now:dd/MM/yyyy HH:mm}").FontSize(7.5f).FontColor(TextoTenue);
                 });
 
-                foreach (var s in secciones)
-                    col.Item().Element(e => PintarSeccion(e, s));
+                if (juntas)
+                {
+                    col.Item().Row(row =>
+                    {
+                        row.Spacing(14);
+                        foreach (var s in secciones)
+                            row.RelativeItem().Element(e => PintarSeccion(e, s));
+                    });
+                }
+                else
+                {
+                    foreach (var s in secciones)
+                        col.Item().Element(e => PintarSeccion(e, s));
+                }
 
                 col.Item().Text("CFDI Manager · Administración de XML").FontSize(7).FontColor("#64748B");
             });

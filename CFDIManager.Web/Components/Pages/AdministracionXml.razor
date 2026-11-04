@@ -516,7 +516,7 @@
     <Modal Visible="@(Modal != "")"
            Titulo="@TituloModal"
            Icono="@IconoModal"
-           Tamano="@(Modal is "columnas" or "renombrar" or "red" ? "modal-lg" : "modal-xl")"
+           Tamano="@(Modal is "columnas" or "renombrar" or "red" or "imagen" ? "modal-lg" : "modal-xl")"
            OnCerrar="CerrarModal">
         @switch (Modal)
         {
@@ -670,6 +670,32 @@
                     en appsettings.json y reinicia la aplicación.
                 </p>
                 break;
+
+            case "imagen":
+                <div class="d-flex flex-column gap-2 mb-3">
+                    @foreach (var (clave, titulo, icono) in FormasImagen)
+                    {
+                        <label class="border rounded-3 p-2 px-3 d-flex align-items-center gap-2 @(FormaImagen == clave ? "border-primary bg-primary-subtle" : "")" style="cursor:pointer">
+                            <input type="radio" class="form-check-input m-0" name="forma-imagen" checked="@(FormaImagen == clave)" @onchange="() => FormaImagen = clave" />
+                            <i class="bi @icono"></i>@titulo
+                        </label>
+                    }
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="small text-body-secondary">@TextoPeriodo()</span>
+                    <button type="button" class="btn btn-primary ms-auto" @onclick="ImagenResumen" disabled="@GenerandoImagen">
+                        @if (GenerandoImagen)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-download me-1"></i>
+                        }
+                        Descargar imagen
+                    </button>
+                </div>
+                break;
         }
     </Modal>
 </div>
@@ -691,7 +717,7 @@
         ("Herramientas",
         [
             ("Exportar a Excel", "bi-file-earmark-excel", "verde", () => Exportar(TipoReporte)),
-            ("Imagen del resumen", "bi-image", "morado", ImagenResumen),
+            ("Imagen del resumen", "bi-image", "morado", Sincrona(() => AbrirModal("imagen"))),
             ("Enviar por correo", "bi-envelope-paper", "azul", PrepararCorreo),
             ("Abrir XML", "bi-filetype-xml", "azul", Sincrona(AbrirXml)),
             ("Generar PDF", "bi-file-earmark-pdf", "rojo", GenerarPdf),
@@ -728,6 +754,7 @@
         "series" => "bi-123",
         "complemento" => "bi-braces",
         "red" => "bi-hdd-network",
+        "imagen" => "bi-image",
         _ => "bi-window"
     };
 
@@ -1505,6 +1532,9 @@
                 case "red":
                     TituloModal = "Dirección de datos";
                     break;
+                case "imagen":
+                    TituloModal = "Imagen del resumen";
+                    break;
             }
 
             Modal = modal;
@@ -1517,11 +1547,24 @@
 
     private void CerrarModal() => Modal = "";
 
-    /// <summary>PNG con los totales del periodo de emitidos (ingresos) y recibidos (egresos), sin pestaña ni búsqueda.</summary>
+    private static readonly (string Clave, string Titulo, string Icono)[] FormasImagen =
+    [
+        ("emitidos", "Solo emitidos (ingresos)", "bi-box-arrow-up-right"),
+        ("recibidos", "Solo recibidos (egresos)", "bi-box-arrow-in-down-left"),
+        ("juntas", "Emitidos y recibidos, uno junto al otro", "bi-layout-split"),
+        ("debajo", "Emitidos y recibidos, uno debajo del otro", "bi-layout-three-columns")
+    ];
+
+    private string FormaImagen = "debajo";
+    private bool GenerandoImagen;
+
+    /// <summary>PNG con los totales del periodo de emitidos (ingresos) y/o recibidos (egresos), sin pestaña ni búsqueda.</summary>
     private async Task ImagenResumen()
     {
         if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa)
             return;
+
+        GenerandoImagen = true;
 
         try
         {
@@ -1535,19 +1578,29 @@
             }
 
             string periodo = TextoPeriodo();
-            byte[] png = await Task.Run(() => CFDIManager.Web.Services.AdministracionXml.ResumenImagen.Generar(
-                empresa.NombreParaMostrar, empresa.Rfc, periodo,
-                [
-                    new("Emitidos", "ingresos", Repo.ObtenerTotalesAdministracionXml(Para("EMITIDO"))),
-                    new("Recibidos", "egresos", Repo.ObtenerTotalesAdministracionXml(Para("RECIBIDO")))
-                ]));
+            string forma = FormaImagen;
+            var secciones = new List<CFDIManager.Web.Services.AdministracionXml.ResumenImagen.Seccion>();
 
-            string nombre = $"{empresa.Rfc} Resumen {periodo.Replace("–", "a").Replace(",", "")}.png";
+            if (forma != "recibidos")
+                secciones.Add(new("Emitidos", "ingresos", Repo.ObtenerTotalesAdministracionXml(Para("EMITIDO"))));
+            if (forma != "emitidos")
+                secciones.Add(new("Recibidos", "egresos", Repo.ObtenerTotalesAdministracionXml(Para("RECIBIDO"))));
+
+            byte[] png = await Task.Run(() => CFDIManager.Web.Services.AdministracionXml.ResumenImagen.Generar(
+                empresa.NombreParaMostrar, empresa.Rfc, periodo, secciones, juntas: forma == "juntas"));
+
+            string lado = forma switch { "emitidos" => " Emitidos", "recibidos" => " Recibidos", _ => "" };
+            string nombre = $"{empresa.Rfc} Resumen{lado} {periodo.Replace("–", "a").Replace(",", "")}.png";
             await JS.InvokeVoidAsync("descargarArchivoBase64", nombre, "image/png", Convert.ToBase64String(png));
+            CerrarModal();
         }
         catch (Exception ex)
         {
             Avisar(ex.Message, error: true);
+        }
+        finally
+        {
+            GenerandoImagen = false;
         }
     }
 
