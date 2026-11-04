@@ -1586,8 +1586,10 @@
             if (forma != "emitidos")
                 secciones.Add(new("Recibidos", "egresos", Repo.ObtenerTotalesAdministracionXml(Para("RECIBIDO"))));
 
+            // La imagen sigue el tema que el usuario tiene en la app (claro u oscuro).
+            bool claro = await JS.InvokeAsync<string>("cfdiTheme.current") == "light";
             byte[] png = await Task.Run(() => CFDIManager.Web.Services.AdministracionXml.ResumenImagen.Generar(
-                empresa.NombreParaMostrar, empresa.Rfc, periodo, secciones, juntas: forma == "juntas"));
+                empresa.NombreParaMostrar, empresa.Rfc, periodo, secciones, juntas: forma == "juntas", claro: claro));
 
             string lado = forma switch { "emitidos" => " Emitidos", "recibidos" => " Recibidos", _ => "" };
             string nombre = $"{empresa.Rfc} Resumen{lado} {periodo.Replace("–", "a").Replace(",", "")}.png";
