@@ -231,6 +231,8 @@
     private List<ReciboNomina> RecibosVista => PorMes ? Ejercicio!.Recibos.Where(r => r.FechaPago.Month == MesFiltro).ToList() : Ejercicio!.Recibos;
     private decimal EnteradoVista => PorMes ? Enterado[MesFiltro - 1] ?? 0 : EnteradoTotal;
 
+    private IEnumerable<int> IndicesMeses => PorMes ? [MesFiltro - 1] : Enumerable.Range(0, 12);
+
     private static string NombreMes(int m) => Mx.TextInfo.ToTitleCase(Mx.DateTimeFormat.GetMonthName(m));
 
     private string TituloPestana(string clave, string titulo) =>
@@ -426,14 +428,15 @@
         [
             ("Subsidio causado (correspondió)", t => t.SubsidioCausado, true, false),
             ("(-) Ajustes al subsidio", t => t.AjusteSubsidio, true, false),
-            ("Subsidio pagado en efectivo", t => t.SubsidioPagado, true, true)
+            ("Subsidio pagado en efectivo", t => t.SubsidioPagado, true, false),
+            ("Subsidio neto que correspondió", t => t.SubsidioNeto, true, true)
         ])
 
         <details class="card shadow-sm vn-seccion" open>
             <summary class="card-header fw-semibold"><i class="bi bi-bank me-2 text-primary"></i>ISR retenido y enterado</summary>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-sm align-middle mb-2 vn-mensual">
+                    <table class="table table-sm align-middle mb-2 vn-mensual @(PorMes ? "vn-un-mes" : "")">
                         @EncabezadoMeses()
                         <tbody>
                             @FilaMensual("ISR retenido", t => t.IsrRetenido, true, true)
@@ -442,8 +445,11 @@
                             @FilaMensual("(-) Reintegro de ISR retenido en exceso", t => t.ReintegroIsr, true, false)
                             <tr>
                                 <td class="vn-concepto">ISR enterado</td>
-                                <td class="text-end font-monospace fw-bold">@M(EnteradoTotal)</td>
-                                @for (int m = 0; m < 12; m++)
+                                @if (!PorMes)
+                                {
+                                    <td class="text-end font-monospace fw-bold">@M(EnteradoTotal)</td>
+                                }
+                                @foreach (int m in IndicesMeses)
                                 {
                                     int i = m;
                                     <td><input type="number" step="0.01" class="form-control form-control-sm text-end vn-enterado"
@@ -453,8 +459,11 @@
                             </tr>
                             <tr class="fw-bold table-light">
                                 <td class="vn-concepto">Diferencia (retenido − enterado)</td>
-                                <td class="text-end font-monospace">@M(Total.IsrRetenido - EnteradoTotal)</td>
-                                @for (int m = 0; m < 12; m++)
+                                @if (!PorMes)
+                                {
+                                    <td class="text-end font-monospace">@M(Total.IsrRetenido - EnteradoTotal)</td>
+                                }
+                                @foreach (int m in IndicesMeses)
                                 {
                                     decimal? dif = Enterado[m] is decimal e ? Meses[m].IsrRetenido - e : null;
                                     <td class="text-end font-monospace @(dif is > 1 ? "text-warning-emphasis" : dif is < -1 ? "text-danger" : "")">@(dif is decimal d ? M(d) : "")</td>
@@ -479,8 +488,11 @@
         <thead>
             <tr>
                 <th class="vn-concepto">Concepto</th>
-                <th class="text-end">Total</th>
-                @for (int m = 1; m <= 12; m++)
+                @if (!PorMes)
+                {
+                    <th class="text-end">Total</th>
+                }
+                @foreach (int m in IndicesMeses.Select(i => i + 1))
                 {
                     <th class="text-end @(Meses[m - 1].Comprobantes == 0 ? "text-body-tertiary" : "")">@Mes(m)</th>
                 }
@@ -493,8 +505,11 @@
         string F(decimal v) => dinero ? M(v) : v.ToString("N0");
         <tr class="@(resaltar ? "fw-bold table-light" : "")">
             <td class="vn-concepto">@concepto</td>
-            <td class="text-end font-monospace">@F(valor(Total))</td>
-            @for (int m = 0; m < 12; m++)
+            @if (!PorMes)
+            {
+                <td class="text-end font-monospace">@F(valor(Total))</td>
+            }
+            @foreach (int m in IndicesMeses)
             {
                 decimal v = valor(Meses[m]);
                 <td class="text-end font-monospace @(v == 0 ? "text-body-tertiary" : "")">@F(v)</td>
@@ -508,11 +523,11 @@
         <details class="card shadow-sm vn-seccion" open="@abierta">
             <summary class="card-header fw-semibold d-flex justify-content-between">
                 <span><i class="bi @icono me-2 @color"></i>@titulo</span>
-                <span class="font-monospace vn-total">@M(filas[^1].Valor(Total))</span>
+                <span class="font-monospace vn-total">@M(filas[^1].Valor(Vista))</span>
             </summary>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-sm align-middle mb-0 vn-mensual">
+                    <table class="table table-sm align-middle mb-0 vn-mensual @(PorMes ? "vn-un-mes" : "")">
                         @EncabezadoMeses()
                         <tbody>
                             @foreach (var f in filas)
@@ -644,7 +659,7 @@
                         <div class="row g-2 mb-3">
                             <TarjetaTotal Ancho="col-6 col-lg-3" Titulo="Percepciones" Valor="@M(recibos.Sum(r => r.TotalPercepciones))" Icono="bi-cash-stack" Color="success" />
                             <TarjetaTotal Ancho="col-6 col-lg-3" Titulo="ISR retenido" Valor="@M(recibos.Sum(r => r.IsrRetenido))" Icono="bi-bank" Color="primary" />
-                            <TarjetaTotal Ancho="col-6 col-lg-3" Titulo="Subsidio" Valor="@M(recibos.Sum(r => r.SubsidioPagado))" Icono="bi-gift" Color="warning" />
+                            <TarjetaTotal Ancho="col-6 col-lg-3" Titulo="Subsidio neto" Valor="@M(recibos.Sum(r => r.SubsidioCausado - r.AjusteSubsidio))" Icono="bi-gift" Color="warning" />
                             <TarjetaTotal Ancho="col-6 col-lg-3" Titulo="Neto pagado" Valor="@M(recibos.Sum(r => r.Neto))" Icono="bi-wallet2" Color="success" />
                         </div>
                         <div class="table-responsive">

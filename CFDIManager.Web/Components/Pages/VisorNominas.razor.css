@@ -37,6 +37,9 @@
 /* Columnas fijas: Total y los 12 meses del mismo ancho, sin importar qué mes trae los importes más grandes. */
 .vn-mensual { font-size: 0.78rem; white-space: nowrap; table-layout: fixed; min-width: calc(15rem + 13 * 6.25rem); }
 .vn-mensual th.vn-concepto { width: 15rem; }
+/* Con un solo mes elegido: concepto y la columna de ese mes. */
+.vn-mensual.vn-un-mes { min-width: 0; width: auto; max-width: 36rem; }
+.vn-mensual.vn-un-mes th.vn-concepto { width: 24rem; }
 .vn-mensual th { font-size: 0.7rem; text-transform: uppercase; }
 
 /* El concepto queda fijo al desplazar los meses. */

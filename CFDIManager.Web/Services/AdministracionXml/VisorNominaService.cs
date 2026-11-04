@@ -350,14 +350,14 @@ public class VisorNominaService(PostgreSqlRepository repo, IMemoryCache cache)
 
         // Trabajadores.
         var wt = libro.AddWorksheet("Trabajadores");
-        string[] enc = ["RFC", "NOMBRE", "CURP", "NO. EMPLEADO", "DEPARTAMENTO", "PUESTO", "RECIBOS", "PERCEPCIONES", "ISR RETENIDO", "SUBSIDIO", "NETO PAGADO"];
+        string[] enc = ["RFC", "NOMBRE", "CURP", "NO. EMPLEADO", "DEPARTAMENTO", "PUESTO", "RECIBOS", "PERCEPCIONES", "ISR RETENIDO", "SUBSIDIO NETO", "NETO PAGADO"];
         for (int i = 0; i < enc.Length; i++) wt.Cell(1, i + 1).Value = enc[i];
         int f = 2;
         foreach (var g in ej.Recibos.GroupBy(x => x.Rfc).OrderBy(g => g.First().Nombre))
         {
             var u = g.OrderByDescending(x => x.FechaPago).First();
             object[] v = [g.Key, u.Nombre, u.Curp, u.NumEmpleado, u.Departamento, u.Puesto, g.Count(),
-                g.Sum(x => x.TotalPercepciones), g.Sum(x => x.IsrRetenido), g.Sum(x => x.SubsidioPagado), g.Sum(x => x.Neto)];
+                g.Sum(x => x.TotalPercepciones), g.Sum(x => x.IsrRetenido), g.Sum(x => x.SubsidioCausado - x.AjusteSubsidio), g.Sum(x => x.Neto)];
             for (int i = 0; i < v.Length; i++) wt.Cell(f, i + 1).Value = XLCellValue.FromObject(v[i], Inv);
             f++;
         }
@@ -365,20 +365,20 @@ public class VisorNominaService(PostgreSqlRepository repo, IMemoryCache cache)
         tt.Theme = XLTableTheme.TableStyleMedium2;
         tt.ShowTotalsRow = true;
         tt.Field("RFC").TotalsRowLabel = "TOTAL";
-        foreach (string c in new[] { "RECIBOS", "PERCEPCIONES", "ISR RETENIDO", "SUBSIDIO", "NETO PAGADO" }) tt.Field(c).TotalsRowFunction = XLTotalsRowFunction.Sum;
+        foreach (string c in new[] { "RECIBOS", "PERCEPCIONES", "ISR RETENIDO", "SUBSIDIO NETO", "NETO PAGADO" }) tt.Field(c).TotalsRowFunction = XLTotalsRowFunction.Sum;
         wt.Columns(8, 11).Style.NumberFormat.Format = moneda;
         wt.Columns().AdjustToContents(1, Math.Min(f, 300), 8, 50);
         wt.SheetView.FreezeRows(1);
 
         // Recibos.
         var wr = libro.AddWorksheet("Recibos");
-        string[] encR = ["FECHA PAGO", "TIPO", "RFC", "NOMBRE", "UUID", "SUELDOS GRAVADOS", "SUELDOS EXENTOS", "PTU", "PERCEPCIONES", "OTROS PAGOS", "DEDUCCIONES", "ISR", "SUBSIDIO", "NETO"];
+        string[] encR = ["FECHA PAGO", "TIPO", "RFC", "NOMBRE", "UUID", "SUELDOS GRAVADOS", "SUELDOS EXENTOS", "PTU", "PERCEPCIONES", "OTROS PAGOS", "DEDUCCIONES", "ISR", "SUBSIDIO NETO", "NETO"];
         for (int i = 0; i < encR.Length; i++) wr.Cell(1, i + 1).Value = encR[i];
         int fr = 2;
         foreach (var x in ej.Recibos.OrderBy(x => x.FechaPago).ThenBy(x => x.Nombre))
         {
             object[] v = [x.FechaPago, x.TipoNomina == "E" ? "Extraordinaria" : "Ordinaria", x.Rfc, x.Nombre, x.Uuid, x.SueldosGravados + x.Asimilados,
-                x.SueldosExentos, x.PtuGravada + x.PtuExenta, x.TotalPercepciones, x.TotalOtrosPagos, x.TotalDeducciones, x.IsrRetenido, x.SubsidioPagado, x.Neto];
+                x.SueldosExentos, x.PtuGravada + x.PtuExenta, x.TotalPercepciones, x.TotalOtrosPagos, x.TotalDeducciones, x.IsrRetenido, x.SubsidioCausado - x.AjusteSubsidio, x.Neto];
             for (int i = 0; i < v.Length; i++) wr.Cell(fr, i + 1).Value = XLCellValue.FromObject(v[i], Inv);
             fr++;
         }
