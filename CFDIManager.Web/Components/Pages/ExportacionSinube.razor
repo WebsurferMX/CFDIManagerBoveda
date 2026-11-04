@@ -648,6 +648,15 @@
         /// </summary>
         public List<string> YaExistenSinConfirmar { get; init; } = [];
 
+        /// <summary>
+        /// Marcados por el usuario como "ya en SINUBE" que SINUBE no tiene con su UUID: puede ser otro comprobante con
+        /// el mismo serie-folio. Se puede quitar la marca para que vuelvan a quedar por subir.
+        /// </summary>
+        public List<(string Uuid, string Serie, string Folio)> ConfirmadosSinEncontrar { get; init; } = [];
+
+        /// <summary>Por tipo de comprobante: XML del periodo, ya en SINUBE y por subir.</summary>
+        public List<(string Tipo, string Nombre, int Xml, int EnSinube, int PorSubir)> Desglose { get; init; } = [];
+
         /// <summary>Pagos de clientes en SINUBE (DbRecepcionPagosXML) por "SERIE|FOLIO" → UUID, para el envío.</summary>
         public Dictionary<string, string>? PagosEnSinube { get; init; }
 
@@ -706,7 +715,74 @@
                     </button>
                 </div>
             }
+
+            @* Marcados a mano como "ya en SINUBE" que SINUBE no tiene con su UUID (p. ej. folio repetido). *@
+            @if (r.ConfirmadosSinEncontrar.Count > 0 && !Enviando)
+            {
+                <div class="alert alert-warning d-flex flex-wrap align-items-center gap-2 py-2 px-3 mb-0 small">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <span>
+                        Marcados como ya en SINUBE, pero SINUBE no los tiene con su UUID:
+                        <b>@string.Join(", ", r.ConfirmadosSinEncontrar.Select(c => $"{c.Serie}{c.Folio}"))</b>
+                    </span>
+                    <button type="button" class="btn btn-sm btn-outline-warning ms-auto" @onclick="() => QuitarYaEnSinube(r)">
+                        <i class="bi bi-arrow-counterclockwise me-1"></i>Quitar marca de @r.ConfirmadosSinEncontrar.Count.ToString("N0")
+                    </button>
+                </div>
+            }
+
+            @if (r.Desglose.Count > 0)
+            {
+                <div class="table-responsive desglose-revision">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>Tipo</th>
+                                <th class="text-end">XML</th>
+                                <th class="text-end">Ya en SINUBE</th>
+                                <th class="text-end">Por subir</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var d in r.Desglose)
+                            {
+                                bool nominaNoSeSube = Clientes && d.Tipo == "N";
+                                <tr>
+                                    <td>@d.Nombre</td>
+                                    <td class="text-end">@d.Xml.ToString("N0")</td>
+                                    @if (nominaNoSeSube)
+                                    {
+                                        <td colspan="2" class="text-end text-body-secondary">no se sube</td>
+                                    }
+                                    else
+                                    {
+                                        <td class="text-end">@d.EnSinube.ToString("N0")</td>
+                                        <td class="text-end fw-semibold @(d.PorSubir > 0 ? "text-warning-emphasis" : "text-success")">@d.PorSubir.ToString("N0")</td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
         </text>;
+
+    private async Task QuitarYaEnSinube(RevisionSinube r)
+    {
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa || Config is null || !TryPeriodo(PeriodoTexto, out DateTime periodo))
+            return;
+
+        Repo.QuitarYaEnSinube(empresa.EmpresaId, Clientes ? "C" : "P", r.ConfirmadosSinEncontrar.Select(c => c.Uuid));
+
+        try
+        {
+            Revision = await ConsultarRevisionAsync(empresa, Config, Clientes, periodo);
+        }
+        catch (Exception ex)
+        {
+            Error = $"No se pudo consultar SINUBE: {ex.Message}";
+        }
+    }
 
     private async Task MarcarYaEnSinube(RevisionSinube r)
     {
@@ -790,9 +866,26 @@
 
         List<string> ocupados = pendientes.Where(a => datos[a].Tipo == "P" && Ocupado(a)).ToList();
         List<string> bloqueados = ocupados.Where(a => !SeSubeConAlterna(a)).ToList();
+        List<string> porSubir = pendientes.Except(bloqueados).ToList();
+        HashSet<string> confirmados = Repo.ObtenerUuidsConfirmadosSinube(empresa.EmpresaId, clientes ? "C" : "P");
+
+        (string Tipo, string Nombre)[] porTipo =
+            [("I", "Facturas"), ("E", "Notas de crédito"), ("N", "Nómina"), ("P", "Pagos"), ("T", "Traslados")];
 
         return new RevisionSinube
         {
+            ConfirmadosSinEncontrar = facturas
+                .Where(a => confirmados.Contains(datos[a].Uuid) && !EnSinube(a))
+                .Select(a => (datos[a].Uuid, datos[a].Serie, datos[a].Folio))
+                .OrderBy(x => x.Serie).ThenBy(x => x.Folio)
+                .ToList(),
+            Desglose = porTipo
+                .Select(t => (t.Tipo, t.Nombre,
+                    archivos.Count(a => datos[a].Tipo == t.Tipo),
+                    facturas.Count(a => datos[a].Tipo == t.Tipo && (EnSinube(a) || enviados.Contains(datos[a].Uuid))),
+                    porSubir.Count(a => datos[a].Tipo == t.Tipo)))
+                .Where(x => x.Item3 > 0)
+                .ToList(),
             Archivos = archivos.Count,
             YaEnSinube = enSinube,
             Nomina = archivos.Count - facturas.Count,
@@ -808,7 +901,7 @@
                 .Select(a => datos[a].Uuid)
                 .ToList(),
             PagosEnSinube = pagosEnSinube,
-            PorSubir = pendientes.Except(bloqueados).ToList()
+            PorSubir = porSubir
         };
     }
 

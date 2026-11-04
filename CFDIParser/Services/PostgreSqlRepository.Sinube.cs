@@ -235,13 +235,65 @@ public partial class PostgreSqlRepository
         using var cmd = new NpgsqlCommand(@"
             UPDATE sinube_envios
             SET estatus = 'EXISTE',
-                mensaje = 'Confirmado por el usuario: ya está en SINUBE. ' || mensaje,
+                mensaje = @prefijo || mensaje,
                 fecha_envio = NOW()
             WHERE empresa_id = @empresa_id AND tipo = @tipo AND UPPER(uuid) = ANY(@uuids)
               AND estatus IN ('ERROR', 'FOLIO');", cn);
 
         cmd.Parameters.AddWithValue("empresa_id", empresaId);
         cmd.Parameters.AddWithValue("tipo", tipo);
+        cmd.Parameters.AddWithValue("prefijo", PrefijoConfirmado);
+        cmd.Parameters.AddWithValue("uuids", uuids.Select(u => u.ToUpperInvariant()).ToArray());
+
+        return cmd.ExecuteNonQuery();
+    }
+
+    private const string PrefijoConfirmado = "Confirmado por el usuario: ya está en SINUBE. ";
+
+    /// <summary>UUID que el usuario marcó como "ya en SINUBE" (con Marcar … como ya en SINUBE).</summary>
+    public HashSet<string> ObtenerUuidsConfirmadosSinube(long empresaId, string tipo)
+    {
+        using var cn = new NpgsqlConnection(_connectionString);
+        cn.Open();
+
+        using var cmd = new NpgsqlCommand(@"
+            SELECT uuid FROM sinube_envios
+            WHERE empresa_id = @empresa_id AND tipo = @tipo AND estatus = 'EXISTE' AND mensaje LIKE @prefijo || '%';", cn);
+
+        cmd.Parameters.AddWithValue("empresa_id", empresaId);
+        cmd.Parameters.AddWithValue("tipo", tipo);
+        cmd.Parameters.AddWithValue("prefijo", PrefijoConfirmado);
+
+        var uuids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        using var dr = cmd.ExecuteReader();
+
+        while (dr.Read())
+            uuids.Add(dr.GetString(0));
+
+        return uuids;
+    }
+
+    /// <summary>
+    /// Deshace "Marcar como ya en SINUBE": regresan al rechazo original de SINUBE ("ya existe" ese serie-folio)
+    /// y vuelven a quedar por subir.
+    /// </summary>
+    public int QuitarYaEnSinube(long empresaId, string tipo, IEnumerable<string> uuids)
+    {
+        using var cn = new NpgsqlConnection(_connectionString);
+        cn.Open();
+
+        using var cmd = new NpgsqlCommand(@"
+            UPDATE sinube_envios
+            SET estatus = 'ERROR',
+                mensaje = SUBSTRING(mensaje FROM LENGTH(@prefijo) + 1),
+                fecha_envio = NOW()
+            WHERE empresa_id = @empresa_id AND tipo = @tipo AND UPPER(uuid) = ANY(@uuids)
+              AND estatus = 'EXISTE' AND mensaje LIKE @prefijo || '%';", cn);
+
+        cmd.Parameters.AddWithValue("empresa_id", empresaId);
+        cmd.Parameters.AddWithValue("tipo", tipo);
+        cmd.Parameters.AddWithValue("prefijo", PrefijoConfirmado);
         cmd.Parameters.AddWithValue("uuids", uuids.Select(u => u.ToUpperInvariant()).ToArray());
 
         return cmd.ExecuteNonQuery();

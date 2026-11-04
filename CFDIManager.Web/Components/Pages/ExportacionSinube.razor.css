@@ -666,3 +666,16 @@ html[data-theme="dark"] .results-table th {
     white-space: nowrap;
     text-overflow: ellipsis;
 }
+
+/* Desglose por tipo de la revisión en SINUBE. */
+.desglose-revision {
+    max-width: 34rem;
+    font-size: .82rem;
+}
+
+.desglose-revision th {
+    color: var(--bs-secondary-color);
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
