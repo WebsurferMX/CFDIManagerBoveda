@@ -244,14 +244,22 @@ public class AdministracionXmlService
             }
         }
 
-        // Agrupado por uso de CFDI: la hoja Por Uso CFDI como tabla, su resumen por uso y un dashboard que lee solo de ellas.
-        if (reporte == "agrupado:uso")
+        // Agrupado por uso de CFDI, método de pago o tipo: la hoja agrupada como tabla, su resumen y un dashboard que
+        // lee solo de ellas.
+        if (reporte is "agrupado:uso" or "agrupado:metodo" or "agrupado:tipo")
         {
             List<AdminXmlFilaDto> seleccion = _repo.ObtenerSeleccionAdministracionXml(SinPestana(f));
             bool recibidos = seleccion.Count > 0 && seleccion.All(x => x.Clasificacion == "RECIBIDO");
-            (byte[] porUso, _) = ReporteGeneral.CrearPorUso(
-                seleccion, new ReporteGeneral.Filtro(empresa.Rfc, recibidos ? "R" : "E", f.Ids.Count > 0 ? null : f.Anio, mesFiltro), recibidos);
-            return (porUso, NombreReporte(empresa, f, reporte));
+            var agrupacion = reporte switch
+            {
+                "agrupado:uso" => ReporteGeneral.Agrupacion.Uso,
+                "agrupado:metodo" => ReporteGeneral.Agrupacion.Metodo,
+                _ => ReporteGeneral.Agrupacion.Tipo
+            };
+            (byte[] agrupado, _) = ReporteGeneral.CrearPorAgrupacion(
+                seleccion, new ReporteGeneral.Filtro(empresa.Rfc, recibidos ? "R" : "E", f.Ids.Count > 0 ? null : f.Anio, mesFiltro),
+                recibidos, agrupacion);
+            return (agrupado, NombreReporte(empresa, f, reporte));
         }
 
         bool general = reporte == "general";

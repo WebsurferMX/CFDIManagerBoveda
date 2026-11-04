@@ -118,7 +118,7 @@ public static partial class ReporteGeneral
         for (var c = 0; c < columnas.Length; c++) ws.Cell(1, c + 1).Value = columnas[c];
 
         static decimal Signo(AdminXmlFilaDto x) => x.TipoCfdi is "E" or "P" ? -1 : 1;
-        static string Tipo(AdminXmlFilaDto x) => x.TipoCfdi switch { "I" => "Factura", "E" => "NotaCredito", "P" => "Pago", var t => t };
+        static string Tipo(AdminXmlFilaDto x) => x.TipoCfdi switch { "I" => "Factura", "E" => "NotaCredito", "P" => "Pago", "T" => "Traslado", "N" => "Nomina", var t => t };
         string Rfc(AdminXmlFilaDto x) => (emisor ? x.RfcEmisor : x.RfcReceptor).Trim().ToUpperInvariant();
         string Nombre(AdminXmlFilaDto x) => emisor ? x.NombreEmisor : x.NombreReceptor;
 
