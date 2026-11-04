@@ -13,7 +13,13 @@ public sealed record Tarea(
     bool Fija = false, bool CoincidenciaExacta = false)
 {
     public string Politica => "Tarea:" + Clave;
+
+    /// <summary>Submenú: opciones con el mismo permiso que la tarea (vacío = la tarea es una opción directa).</summary>
+    public IReadOnlyList<OpcionMenu> Opciones { get; init; } = [];
 }
+
+/// <summary>Opción de un submenú del menú lateral.</summary>
+public sealed record OpcionMenu(string Nombre, string Icono, string Ruta, bool CoincidenciaExacta = false);
 
 /// <summary>
 /// Catálogo de tareas (menú). Una tarea se permite si el rol del usuario la incluye y no se la quitaron en
@@ -29,7 +35,14 @@ public static class Tareas
         new("resumen", "Resumen", "Consulta", "bi-grid-1x2-fill", "", Todos, Fija: true, CoincidenciaExacta: true),
         new("cfdi-ingresos", "CFDI de ingresos", "Consulta", "bi-file-earmark-arrow-up-fill", "cfdi/emitidos", Todos),
         new("cfdi-egresos", "CFDI de egresos", "Consulta", "bi-file-earmark-arrow-down-fill", "cfdi/recibidos", Todos),
-        new("administracion-xml", "Administración de XML", "Operación", "bi-folder2-open", "administracion-xml", Operativos),
+        new("administracion-xml", "Administración de XML", "Operación", "bi-folder2-open", "administracion-xml", Operativos)
+        {
+            Opciones =
+            [
+                new("Todos", "bi-files", "administracion-xml", CoincidenciaExacta: true),
+                new("Visor de nóminas", "bi-person-vcard", "administracion-xml/nominas")
+            ]
+        },
         new("importaciones", "Importaciones", "Operación", "bi-cloud-arrow-up-fill", "importaciones", Operativos),
         new("exportaciones", "Exportaciones", "Consulta", "bi-file-earmark-excel-fill", "exportaciones", Todos),
         new("exportacion-sinube", "Importación a SINUBE", "SINUBE", "bi-send-fill", "exportacion-sinube", Operativos),

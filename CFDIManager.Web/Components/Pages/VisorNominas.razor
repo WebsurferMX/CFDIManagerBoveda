@@ -1,0 +1,675 @@
+@page "/administracion-xml/nominas"
+@attribute [Authorize(Policy = "Tarea:administracion-xml")]
+@implements IDisposable
+
+@using System.Globalization
+@using CFDIManager.Web.Services
+@using CFDIManager.Web.Services.AdministracionXml
+
+@inject EmpresaContext EmpresaContext
+@inject VisorNominaService Visor
+@inject PeriodoTrabajoService Periodo
+@inject IJSRuntime JS
+
+<PageTitle>Visor de nóminas</PageTitle>
+
+<div class="visor-nomina d-flex flex-column gap-3 pb-4">
+    <header>
+        <span class="eyebrow">Administración de XML</span>
+        <h1 class="h2 mb-0">Visor de nóminas</h1>
+    </header>
+
+    @if (!EmpresaContext.TieneEmpresaActiva)
+    {
+        <div class="alert alert-warning mb-0">Selecciona una empresa activa.</div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="card-body py-2 d-flex flex-wrap align-items-center gap-2">
+                <label class="d-flex align-items-center gap-2 fw-semibold mb-0">
+                    <i class="bi bi-bar-chart"></i>Ejercicio
+                    <select class="form-select form-select-sm w-auto" @bind="Anio" @bind:after="() => Cargar(false)" disabled="@Cargando">
+                        @foreach (int a in Anios)
+                        {
+                            <option value="@a">@a</option>
+                        }
+                    </select>
+                </label>
+                @if (Ejercicio is not null)
+                {
+                    <span class="badge rounded-pill text-bg-light border"><i class="bi bi-file-earmark-check me-1"></i>@Ejercicio.Recibos.Count.ToString("N0") recibos</span>
+                    @if (Ejercicio.Cancelados > 0)
+                    {
+                        <span class="badge rounded-pill text-bg-danger-subtle border border-danger-subtle text-danger-emphasis">
+                            <i class="bi bi-x-circle me-1"></i>@Ejercicio.Cancelados cancelados no considerados
+                        </span>
+                    }
+                    @if (Ejercicio.Ilegibles > 0)
+                    {
+                        <span class="badge rounded-pill text-bg-warning-subtle border border-warning-subtle text-warning-emphasis">
+                            <i class="bi bi-exclamation-triangle me-1"></i>@Ejercicio.Ilegibles XML no leídos
+                        </span>
+                    }
+                }
+                <div class="ms-auto d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => Cargar(true)" disabled="@Cargando">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Recargar
+                    </button>
+                    <button type="button" class="btn btn-sm btn-success" @onclick="Excel" disabled="@(Cargando || Ejercicio is not { Recibos.Count: > 0 })">
+                        <i class="bi bi-file-earmark-excel me-1"></i>Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        @if (Error is not null)
+        {
+            <div class="alert alert-danger mb-0"><i class="bi bi-exclamation-octagon me-1"></i>@Error</div>
+        }
+
+        @if (Cargando)
+        {
+            <div class="text-center text-body-secondary py-5"><span class="spinner-border spinner-border-sm me-2"></span>Leyendo recibos de nómina…</div>
+        }
+        else if (Ejercicio is { Recibos.Count: 0 })
+        {
+            <div class="alert alert-info mb-0">No hay recibos de nómina con fecha de pago en @Anio.</div>
+        }
+        else if (Ejercicio is not null)
+        {
+            <ul class="nav nav-tabs">
+                @foreach (var (clave, titulo, icono) in Pestanas)
+                {
+                    <li class="nav-item">
+                        <button type="button" class="nav-link @(Pestana == clave ? "active" : "")" @onclick="() => Pestana = clave">
+                            <i class="bi @icono me-1"></i>@titulo
+                        </button>
+                    </li>
+                }
+            </ul>
+
+            @if (Pestana == "anual")
+            {
+                @Anual()
+            }
+            else if (Pestana == "mensual")
+            {
+                @Mensual()
+            }
+            else
+            {
+                @Trabajadores()
+            }
+        }
+    }
+</div>
+
+@if (Seleccionado is not null)
+{
+    @DetalleTrabajador(Seleccionado)
+}
+
+@code {
+    private static readonly CultureInfo Mx = CultureInfo.GetCultureInfo("es-MX");
+
+    private static readonly (string Clave, string Titulo, string Icono)[] Pestanas =
+    [
+        ("anual", "Acumulado anual", "bi-bar-chart-line"),
+        ("mensual", "Detalle mensual", "bi-calendar3"),
+        ("trabajadores", "Trabajadores", "bi-people")
+    ];
+
+    private List<int> Anios = [];
+    private int Anio;
+    private EjercicioNomina? Ejercicio;
+    private TotalesNomina Total = new([]);
+    private TotalesNomina[] Meses = [];
+    private decimal?[] Enterado = new decimal?[12];
+    private bool Cargando;
+    private string? Error;
+    private string Pestana = "anual";
+    private bool EnteradoGuardado;
+
+    // Trabajadores
+    private string Busqueda = "";
+    private int MesFiltro;
+    private string? Seleccionado;
+
+    protected override async Task OnInitializedAsync()
+    {
+        EmpresaContext.OnChange += EmpresaCambio;
+        await Iniciar();
+    }
+
+    private async Task Iniciar()
+    {
+        Ejercicio = null;
+        Seleccionado = null;
+
+        if (!EmpresaContext.TieneEmpresaActiva)
+            return;
+
+        Anios = Visor.Anios(EmpresaContext.EmpresaId);
+        if (!Anios.Contains(Periodo.Anio))
+            Anios = Anios.Append(Periodo.Anio).OrderDescending().ToList();
+        Anio = Periodo.Anio;
+        await Cargar(false);
+    }
+
+    private async Task Cargar(bool recargar)
+    {
+        Cargando = true;
+        Error = null;
+        Seleccionado = null;
+        EnteradoGuardado = false;
+        StateHasChanged();
+
+        try
+        {
+            long empresa = EmpresaContext.EmpresaId;
+            int anio = Anio;
+            Ejercicio = await Task.Run(() => Visor.Leer(empresa, anio, recargar));
+            Total = new TotalesNomina(Ejercicio.Recibos);
+            Meses = Enumerable.Range(1, 12).Select(m => new TotalesNomina(Ejercicio.Recibos.Where(r => r.FechaPago.Month == m).ToList())).ToArray();
+            Enterado = Visor.IsrEnterado(empresa, anio);
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Cargando = false;
+        }
+    }
+
+    private void EmpresaCambio() => _ = InvokeAsync(async () =>
+    {
+        await Iniciar();
+        StateHasChanged();
+    });
+
+    public void Dispose() => EmpresaContext.OnChange -= EmpresaCambio;
+
+    private async Task Excel()
+    {
+        if (Ejercicio is null)
+            return;
+
+        byte[] archivo = Visor.GenerarExcel(Ejercicio, Enterado);
+        await JS.InvokeVoidAsync("descargarArchivoBase64", $"{EmpresaContext.Rfc} Visor nomina {Anio}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Convert.ToBase64String(archivo));
+    }
+
+    private void GuardarEnterado()
+    {
+        Visor.GuardarIsrEnterado(EmpresaContext.EmpresaId, Anio, Enterado);
+        EnteradoGuardado = true;
+    }
+
+    private static string M(decimal v) => v.ToString("C2", Mx);
+
+    private static string Mes(int m) => Mx.DateTimeFormat.GetAbbreviatedMonthName(m).TrimEnd('.').ToUpperInvariant();
+
+    private decimal EnteradoTotal => Enterado.Sum(v => v ?? 0);
+
+    private string PeriodoConsiderado
+    {
+        get
+        {
+            var meses = Ejercicio!.Recibos.Select(r => r.FechaPago.Month).Distinct().Order().ToList();
+            string Nombre(int m) => Mx.TextInfo.ToTitleCase(Mx.DateTimeFormat.GetMonthName(m));
+            return meses.Count == 0 ? "" : meses.Count == 1 ? $"{Nombre(meses[0])} {Anio}" : $"{Nombre(meses[0])}–{Nombre(meses[^1])} {Anio}";
+        }
+    }
+
+    // ---------- Acumulado anual ----------
+
+    private RenderFragment Anual() => __builder =>
+    {
+        decimal diferencia = Total.IsrRetenido - EnteradoTotal;
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-12 col-lg-5">
+                        <div class="vn-dato">
+                            <i class="bi bi-building text-primary"></i>
+                            <div>
+                                <div class="vn-etiqueta">Retenedor</div>
+                                <div class="fw-bold font-monospace">@Ejercicio!.RfcRetenedor</div>
+                                <div class="small text-body-secondary">@Ejercicio.NombreRetenedor</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <div class="vn-dato">
+                            <i class="bi bi-people text-success"></i>
+                            <div><div class="vn-etiqueta">Trabajadores</div><div class="fs-5 fw-bold">@Ejercicio.Trabajadores</div></div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-lg-2">
+                        <div class="vn-dato">
+                            <i class="bi bi-file-earmark-text text-warning"></i>
+                            <div><div class="vn-etiqueta">Recibos vigentes</div><div class="fs-5 fw-bold">@Ejercicio.Recibos.Count.ToString("N0")</div></div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-lg-3">
+                        <div class="vn-dato">
+                            <i class="bi bi-calendar-range text-info"></i>
+                            <div><div class="vn-etiqueta">Fecha de pago</div><div class="fw-bold">@PeriodoConsiderado</div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-2">
+                    <TarjetaTotal Ancho="col-6 col-lg" Titulo="Pagos de sueldos" Valor="@M(Total.SueldosGravados + Total.SueldosExentos)" Icono="bi-cash-stack" Color="success" />
+                    @if (Total.Asimilados != 0)
+                    {
+                        <TarjetaTotal Ancho="col-6 col-lg" Titulo="Asimilados" Valor="@M(Total.Asimilados)" Icono="bi-person-badge" Color="secondary" />
+                    }
+                    <TarjetaTotal Ancho="col-6 col-lg" Titulo="ISR retenido" Valor="@M(Total.IsrRetenido)" Icono="bi-bank" Color="primary" />
+                    <TarjetaTotal Ancho="col-6 col-lg" Titulo="Subsidio neto" Valor="@M(Total.SubsidioNeto)" Icono="bi-gift" Color="warning" />
+                    <TarjetaTotal Ancho="col-6 col-lg" Titulo="PTU timbrada" Valor="@M(Total.Ptu)" Icono="bi-pie-chart" Color="info" />
+                    <TarjetaTotal Ancho="col-6 col-lg" Titulo="Neto pagado" Valor="@M(Total.Neto)" Icono="bi-wallet2" Color="success" />
+                </div>
+            </div>
+        </div>
+
+        <details class="card shadow-sm vn-seccion" open>
+            <summary class="card-header fw-semibold"><i class="bi bi-cash-coin me-2 text-success"></i>Detalle de la nómina</summary>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-12 col-xl-6">
+                        @Tabla("Pagos por sueldos y salarios",
+                        [
+                            ("Trabajadores por sueldos y salarios", Total.TrabajadoresSueldos.ToString("N0"), false),
+                            ("Pagos gravados", M(Total.SueldosGravados), false),
+                            ("Pagos exentos", M(Total.SueldosExentos), false),
+                            ("Total", M(Total.SueldosGravados + Total.SueldosExentos), true)
+                        ])
+                    </div>
+                    <div class="col-12 col-xl-6">
+                        @Tabla("Pagos exentos de sueldos",
+                        [
+                            ("Aguinaldo exento", M(Total.AguinaldoExento), false),
+                            ("Prima vacacional exenta", M(Total.PrimaVacacionalExenta), false),
+                            ("Prima dominical exenta", M(Total.PrimaDominicalExenta), false),
+                            ("Otros exentos", M(Total.OtrosExentos), false),
+                            ("Total exentos", M(Total.SueldosExentos), true)
+                        ])
+                    </div>
+                    <div class="col-12 col-xl-6">
+                        @Tabla("Pagos timbrados de PTU",
+                        [
+                            ("PTU gravada", M(Total.PtuGravada), false),
+                            ("PTU exenta", M(Total.PtuExenta), false),
+                            ("Total PTU timbrada", M(Total.Ptu), true)
+                        ])
+                    </div>
+                    <div class="col-12 col-xl-6">
+                        @Tabla("Subsidio para el empleo",
+                        [
+                            ("Subsidio causado (correspondió)", M(Total.SubsidioCausado), false),
+                            ("(-) Ajustes al subsidio", M(Total.AjusteSubsidio), false),
+                            ("Subsidio neto que correspondió", M(Total.SubsidioNeto), true),
+                            ("Subsidio pagado en efectivo", M(Total.SubsidioPagado), false)
+                        ])
+                    </div>
+                </div>
+            </div>
+        </details>
+
+        <details class="card shadow-sm vn-seccion">
+            <summary class="card-header fw-semibold"><i class="bi bi-currency-dollar me-2 text-primary"></i>Resumen de pagos</summary>
+            <div class="card-body">
+                @Tabla(null,
+                [
+                    ("Pagos de sueldos (gravados)", M(Total.SueldosGravados), false),
+                    ("Pagos exentos de sueldos", M(Total.SueldosExentos), false),
+                    ("Pagos de asimilados a salarios", M(Total.Asimilados), false),
+                    ("Indemnizaciones", M(Total.Indemnizaciones), false),
+                    ("Jubilaciones y pensiones", M(Total.Jubilaciones), false),
+                    ("Total general", M(Total.TotalPagos), true)
+                ])
+            </div>
+        </details>
+
+        <details class="card shadow-sm vn-seccion" open>
+            <summary class="card-header fw-semibold">
+                <i class="bi bi-calculator me-2 text-warning"></i>ISR retenido y enterado
+                @if (diferencia > 1)
+                {
+                    <span class="badge text-bg-warning ms-2">ISR por enterar</span>
+                }
+            </summary>
+            <div class="card-body">
+                @Tabla(null,
+                [
+                    ("ISR retenido (sueldos, indemnizaciones y jubilaciones)", M(Total.IsrRetenido), false),
+                    ("ISR enterado (captura mensual en Detalle mensual)", M(EnteradoTotal), false),
+                    ("Diferencia (retenido − enterado)", M(diferencia), true)
+                ])
+            </div>
+        </details>
+    };
+
+    private RenderFragment Tabla(string? titulo, (string Concepto, string Valor, bool Total)[] filas) => __builder =>
+    {
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0 vn-tabla">
+                @if (titulo is not null)
+                {
+                    <thead><tr><th colspan="2" class="bg-body-tertiary">@titulo</th></tr></thead>
+                }
+                <tbody>
+                    @foreach (var (concepto, valor, total) in filas)
+                    {
+                        <tr class="@(total ? "fw-bold table-light" : "")">
+                            <td>@concepto</td>
+                            <td class="text-end font-monospace">@valor</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    };
+
+    // ---------- Detalle mensual ----------
+
+    private RenderFragment Mensual() => __builder =>
+    {
+        @SeccionMensual("Pagos por sueldos y salarios", "bi-cash-stack", "text-success", true,
+        [
+            ("Recibos", t => t.Comprobantes, false, false),
+            ("Trabajadores por sueldos y salarios", t => t.TrabajadoresSueldos, false, false),
+            ("Pagos gravados", t => t.SueldosGravados, true, false),
+            ("Pagos exentos", t => t.SueldosExentos, true, false),
+            ("   Aguinaldo exento", t => t.AguinaldoExento, true, false),
+            ("   Prima vacacional exenta", t => t.PrimaVacacionalExenta, true, false),
+            ("   Prima dominical exenta", t => t.PrimaDominicalExenta, true, false),
+            ("Asimilados a salarios", t => t.Asimilados, true, false),
+            ("Indemnizaciones", t => t.Indemnizaciones, true, false),
+            ("Jubilaciones y pensiones", t => t.Jubilaciones, true, false),
+            ("Total de pagos", t => t.TotalPagos, true, true)
+        ])
+        @SeccionMensual("Pagos timbrados de PTU", "bi-pie-chart", "text-info", false,
+        [
+            ("PTU gravada", t => t.PtuGravada, true, false),
+            ("PTU exenta", t => t.PtuExenta, true, false),
+            ("Total PTU", t => t.Ptu, true, true)
+        ])
+        @SeccionMensual("Subsidio para el empleo", "bi-gift", "text-warning", false,
+        [
+            ("Subsidio causado (correspondió)", t => t.SubsidioCausado, true, false),
+            ("(-) Ajustes al subsidio", t => t.AjusteSubsidio, true, false),
+            ("Subsidio pagado en efectivo", t => t.SubsidioPagado, true, true)
+        ])
+
+        <details class="card shadow-sm vn-seccion" open>
+            <summary class="card-header fw-semibold"><i class="bi bi-bank me-2 text-primary"></i>ISR retenido y enterado</summary>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-2 vn-mensual">
+                        @EncabezadoMeses()
+                        <tbody>
+                            @FilaMensual("ISR retenido", t => t.IsrRetenido, true, true)
+                            @FilaMensual("(+) ISR retenido de ejercicio anterior", t => t.IsrEjercicioAnterior, true, false)
+                            @FilaMensual("(-) Saldo a favor por compensación anual", t => t.SaldoFavorCompensado, true, false)
+                            @FilaMensual("(-) Reintegro de ISR retenido en exceso", t => t.ReintegroIsr, true, false)
+                            <tr>
+                                <td class="vn-concepto">ISR enterado</td>
+                                <td class="text-end font-monospace fw-bold">@M(EnteradoTotal)</td>
+                                @for (int m = 0; m < 12; m++)
+                                {
+                                    int i = m;
+                                    <td><input type="number" step="0.01" class="form-control form-control-sm text-end vn-enterado"
+                                               value="@Enterado[i]?.ToString(CultureInfo.InvariantCulture)"
+                                               @onchange="e => { Enterado[i] = decimal.TryParse(e.Value?.ToString(), NumberStyles.Number, CultureInfo.InvariantCulture, out decimal v) ? v : null; EnteradoGuardado = false; }" /></td>
+                                }
+                            </tr>
+                            <tr class="fw-bold table-light">
+                                <td class="vn-concepto">Diferencia (retenido − enterado)</td>
+                                <td class="text-end font-monospace">@M(Total.IsrRetenido - EnteradoTotal)</td>
+                                @for (int m = 0; m < 12; m++)
+                                {
+                                    decimal? dif = Enterado[m] is decimal e ? Meses[m].IsrRetenido - e : null;
+                                    <td class="text-end font-monospace @(dif is > 1 ? "text-warning-emphasis" : dif is < -1 ? "text-danger" : "")">@(dif is decimal d ? M(d) : "")</td>
+                                }
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-primary" @onclick="GuardarEnterado"><i class="bi bi-save me-1"></i>Guardar ISR enterado</button>
+                    @if (EnteradoGuardado)
+                    {
+                        <span class="small text-success"><i class="bi bi-check-circle me-1"></i>Guardado</span>
+                    }
+                </div>
+            </div>
+        </details>
+    };
+
+    private RenderFragment EncabezadoMeses() => __builder =>
+    {
+        <thead>
+            <tr>
+                <th class="vn-concepto">Concepto</th>
+                <th class="text-end">Total</th>
+                @for (int m = 1; m <= 12; m++)
+                {
+                    <th class="text-end @(Meses[m - 1].Comprobantes == 0 ? "text-body-tertiary" : "")">@Mes(m)</th>
+                }
+            </tr>
+        </thead>
+    };
+
+    private RenderFragment FilaMensual(string concepto, Func<TotalesNomina, decimal> valor, bool dinero, bool resaltar) => __builder =>
+    {
+        string F(decimal v) => dinero ? M(v) : v.ToString("N0");
+        <tr class="@(resaltar ? "fw-bold table-light" : "")">
+            <td class="vn-concepto">@concepto</td>
+            <td class="text-end font-monospace">@F(valor(Total))</td>
+            @for (int m = 0; m < 12; m++)
+            {
+                decimal v = valor(Meses[m]);
+                <td class="text-end font-monospace @(v == 0 ? "text-body-tertiary" : "")">@F(v)</td>
+            }
+        </tr>
+    };
+
+    private RenderFragment SeccionMensual(string titulo, string icono, string color, bool abierta,
+        (string Concepto, Func<TotalesNomina, decimal> Valor, bool Dinero, bool Resaltar)[] filas) => __builder =>
+    {
+        <details class="card shadow-sm vn-seccion" open="@abierta">
+            <summary class="card-header fw-semibold d-flex justify-content-between">
+                <span><i class="bi @icono me-2 @color"></i>@titulo</span>
+                <span class="font-monospace">@M(filas[^1].Valor(Total))</span>
+            </summary>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0 vn-mensual">
+                        @EncabezadoMeses()
+                        <tbody>
+                            @foreach (var f in filas)
+                            {
+                                @FilaMensual(f.Concepto, f.Valor, f.Dinero, f.Resaltar)
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </details>
+    };
+
+    // ---------- Trabajadores ----------
+
+    private IEnumerable<IGrouping<string, ReciboNomina>> TrabajadoresFiltrados
+    {
+        get
+        {
+            IEnumerable<ReciboNomina> recibos = Ejercicio!.Recibos;
+            if (MesFiltro is >= 1 and <= 12)
+                recibos = recibos.Where(r => r.FechaPago.Month == MesFiltro);
+
+            string b = Busqueda.Trim();
+            return recibos.GroupBy(r => r.Rfc)
+                .Where(g => b == "" || g.Any(r => r.Rfc.Contains(b, StringComparison.OrdinalIgnoreCase) ||
+                                                  r.Nombre.Contains(b, StringComparison.OrdinalIgnoreCase) ||
+                                                  r.NumEmpleado.Contains(b, StringComparison.OrdinalIgnoreCase)))
+                .OrderBy(g => Ultimo(g).Nombre, StringComparer.CurrentCulture);
+        }
+    }
+
+    private static ReciboNomina Ultimo(IEnumerable<ReciboNomina> recibos) => recibos.OrderByDescending(r => r.FechaPago).First();
+
+    private RenderFragment Trabajadores() => __builder =>
+    {
+        var grupos = TrabajadoresFiltrados.ToList();
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2 mb-2">
+                    <div class="input-group input-group-sm vn-busqueda">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="search" class="form-control" placeholder="RFC, nombre o número de empleado"
+                               @bind="Busqueda" @bind:event="oninput" />
+                    </div>
+                    <select class="form-select form-select-sm w-auto" @bind="MesFiltro">
+                        <option value="0">Todos los meses</option>
+                        @for (int m = 1; m <= 12; m++)
+                        {
+                            <option value="@m">@Mx.TextInfo.ToTitleCase(Mx.DateTimeFormat.GetMonthName(m))</option>
+                        }
+                    </select>
+                    <span class="badge rounded-pill text-bg-light border align-self-center">@grupos.Count trabajadores</span>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle mb-0 vn-tabla">
+                        <thead class="table-light">
+                            <tr>
+                                <th>RFC</th>
+                                <th>Nombre</th>
+                                <th>No. empleado</th>
+                                <th>Departamento</th>
+                                <th class="text-center">Recibos</th>
+                                <th class="text-end">Percepciones</th>
+                                <th class="text-end">ISR retenido</th>
+                                <th class="text-end">Subsidio</th>
+                                <th class="text-end">Neto pagado</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var g in grupos)
+                            {
+                                ReciboNomina u = Ultimo(g);
+                                <tr role="button" @onclick="() => Seleccionado = g.Key">
+                                    <td class="font-monospace small">@g.Key</td>
+                                    <td>@u.Nombre</td>
+                                    <td class="small">@u.NumEmpleado</td>
+                                    <td class="small text-body-secondary">@u.Departamento</td>
+                                    <td class="text-center"><span class="badge rounded-pill text-bg-light border">@g.Count()</span></td>
+                                    <td class="text-end font-monospace">@M(g.Sum(r => r.TotalPercepciones))</td>
+                                    <td class="text-end font-monospace text-primary">@M(g.Sum(r => r.IsrRetenido))</td>
+                                    <td class="text-end font-monospace text-warning-emphasis">@M(g.Sum(r => r.SubsidioPagado))</td>
+                                    <td class="text-end font-monospace text-success fw-semibold">@M(g.Sum(r => r.Neto))</td>
+                                    <td class="text-end"><i class="bi bi-chevron-right text-body-secondary"></i></td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot class="table-light fw-bold">
+                            <tr>
+                                <td colspan="4">Totales</td>
+                                <td class="text-center">@grupos.Sum(g => g.Count())</td>
+                                <td class="text-end font-monospace">@M(grupos.Sum(g => g.Sum(r => r.TotalPercepciones)))</td>
+                                <td class="text-end font-monospace">@M(grupos.Sum(g => g.Sum(r => r.IsrRetenido)))</td>
+                                <td class="text-end font-monospace">@M(grupos.Sum(g => g.Sum(r => r.SubsidioPagado)))</td>
+                                <td class="text-end font-monospace">@M(grupos.Sum(g => g.Sum(r => r.Neto)))</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+    };
+
+    private RenderFragment DetalleTrabajador(string rfc) => __builder =>
+    {
+        var recibos = Ejercicio!.Recibos.Where(r => r.Rfc == rfc).OrderByDescending(r => r.FechaPago).ToList();
+        if (recibos.Count == 0)
+            return;
+        ReciboNomina u = recibos[0];
+        long empresa = EmpresaContext.EmpresaId;
+
+        <div class="modal d-block vn-modal" tabindex="-1" role="dialog" @onclick="() => Seleccionado = null">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable" @onclick:stopPropagation>
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title mb-0">@u.Nombre</h5>
+                            <div class="small text-body-secondary">Ejercicio @Anio · @recibos.Count recibos</div>
+                        </div>
+                        <button type="button" class="btn-close" aria-label="Cerrar" @onclick="() => Seleccionado = null"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-2 mb-3 small">
+                            @foreach (var (etiqueta, valor) in new[] { ("RFC", rfc), ("CURP", u.Curp), ("No. empleado", u.NumEmpleado), ("Departamento", u.Departamento), ("Puesto", u.Puesto), ("Régimen", u.TipoRegimen) })
+                            {
+                                <div class="col-6 col-md-4 col-xl-2">
+                                    <div class="vn-etiqueta">@etiqueta</div>
+                                    <div class="fw-semibold text-break">@(string.IsNullOrEmpty(valor) ? "—" : valor)</div>
+                                </div>
+                            }
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <TarjetaTotal Ancho="col-6 col-lg-3" Titulo="Percepciones" Valor="@M(recibos.Sum(r => r.TotalPercepciones))" Icono="bi-cash-stack" Color="success" />
+                            <TarjetaTotal Ancho="col-6 col-lg-3" Titulo="ISR retenido" Valor="@M(recibos.Sum(r => r.IsrRetenido))" Icono="bi-bank" Color="primary" />
+                            <TarjetaTotal Ancho="col-6 col-lg-3" Titulo="Subsidio" Valor="@M(recibos.Sum(r => r.SubsidioPagado))" Icono="bi-gift" Color="warning" />
+                            <TarjetaTotal Ancho="col-6 col-lg-3" Titulo="Neto pagado" Valor="@M(recibos.Sum(r => r.Neto))" Icono="bi-wallet2" Color="success" />
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle mb-0 vn-tabla">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Fecha de pago</th>
+                                        <th>Tipo</th>
+                                        <th>UUID</th>
+                                        <th class="text-end">Percepciones</th>
+                                        <th class="text-end">Deducciones</th>
+                                        <th class="text-end">ISR</th>
+                                        <th class="text-end">Neto</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (ReciboNomina r in recibos)
+                                    {
+                                        <tr>
+                                            <td>@r.FechaPago.ToString("dd/MM/yyyy")</td>
+                                            <td><span class="badge @(r.TipoNomina == "E" ? "text-bg-warning" : "text-bg-light border")">@(r.TipoNomina == "E" ? "Extraordinaria" : "Ordinaria")</span></td>
+                                            <td class="font-monospace small">@r.Uuid</td>
+                                            <td class="text-end font-monospace">@M(r.TotalPercepciones)</td>
+                                            <td class="text-end font-monospace">@M(r.TotalDeducciones)</td>
+                                            <td class="text-end font-monospace text-primary">@M(r.IsrRetenido)</td>
+                                            <td class="text-end font-monospace text-success fw-semibold">@M(r.Neto)</td>
+                                            <td class="text-end text-nowrap">
+                                                <a href="@($"api/empresa/{empresa}/cfdi/{r.CfdiId}/pdf")" target="_blank" title="PDF" class="text-danger me-2"><i class="bi bi-file-earmark-pdf"></i></a>
+                                                <a href="@($"api/empresa/{empresa}/cfdi/{r.CfdiId}/xml")" target="_blank" title="XML"><i class="bi bi-filetype-xml"></i></a>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop show"></div>
+    };
+}

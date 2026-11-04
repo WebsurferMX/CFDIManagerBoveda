@@ -1,0 +1,52 @@
+.vn-dato {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    height: 100%;
+    padding: 0.6rem 0.8rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.6rem;
+    background: var(--bs-body-bg);
+}
+
+.vn-dato > .bi { font-size: 1.4rem; }
+
+.vn-etiqueta {
+    color: var(--bs-secondary-color);
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.vn-seccion > summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.vn-seccion > summary::-webkit-details-marker { display: none; }
+.vn-seccion > summary::after { content: "\F282"; font-family: bootstrap-icons; margin-left: auto; padding-left: 0.75rem; transition: transform 0.2s; }
+.vn-seccion[open] > summary::after { transform: rotate(180deg); }
+.vn-seccion:not([open]) > summary { border-bottom: 0; }
+
+.vn-tabla { font-size: 0.85rem; }
+
+.vn-mensual { font-size: 0.78rem; white-space: nowrap; }
+.vn-mensual th { font-size: 0.7rem; text-transform: uppercase; }
+
+/* El concepto queda fijo al desplazar los meses. */
+.vn-mensual .vn-concepto {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    min-width: 15rem;
+    background: var(--bs-body-bg);
+    white-space: pre;
+}
+
+.vn-mensual tr.table-light .vn-concepto { background: var(--bs-tertiary-bg); }
+
+.vn-enterado { min-width: 6.5rem; font-size: 0.75rem; }
+
+.vn-busqueda { max-width: 360px; }
+
+.vn-modal { background: transparent; overflow-y: auto; }

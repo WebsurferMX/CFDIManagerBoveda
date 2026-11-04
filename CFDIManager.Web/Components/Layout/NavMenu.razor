@@ -1,3 +1,5 @@
+@implements IDisposable
+@inject NavigationManager Navegacion
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -17,15 +19,55 @@
         @foreach (Tarea tarea in Tareas.Catalogo)
         {
             <AuthorizeView Policy="@tarea.Politica" Context="permiso">
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link"
-                             href="@tarea.Ruta"
-                             Match="@(tarea.CoincidenciaExacta ? NavLinkMatch.All : NavLinkMatch.Prefix)">
-                        <span class="bi @tarea.Icono" aria-hidden="true"></span>
-                        @tarea.Nombre
-                    </NavLink>
-                </div>
+                @if (tarea.Opciones.Count > 0)
+                {
+                    @* Submenú desplegable; abierto cuando la ruta actual es de alguna de sus opciones. El clic en el
+                       título no debe cerrar el menú en pantallas chicas (onclick del contenedor). *@
+                    <details class="nav-item nav-grupo px-3" open="@EnRuta(tarea.Ruta)">
+                        <summary class="nav-link" onclick="event.stopPropagation()">
+                            <span class="bi @tarea.Icono" aria-hidden="true"></span>
+                            @tarea.Nombre
+                        </summary>
+                        @foreach (OpcionMenu opcion in tarea.Opciones)
+                        {
+                            <div class="nav-subitem">
+                                <NavLink class="nav-link"
+                                         href="@opcion.Ruta"
+                                         Match="@(opcion.CoincidenciaExacta ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                                    <span class="bi @opcion.Icono" aria-hidden="true"></span>
+                                    @opcion.Nombre
+                                </NavLink>
+                            </div>
+                        }
+                    </details>
+                }
+                else
+                {
+                    <div class="nav-item px-3">
+                        <NavLink class="nav-link"
+                                 href="@tarea.Ruta"
+                                 Match="@(tarea.CoincidenciaExacta ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                            <span class="bi @tarea.Icono" aria-hidden="true"></span>
+                            @tarea.Nombre
+                        </NavLink>
+                    </div>
+                }
             </AuthorizeView>
         }
     </nav>
 </div>
+
+@code {
+    protected override void OnInitialized() => Navegacion.LocationChanged += Navego;
+
+    /// <summary>La ruta actual es la de la tarea o una de sus subrutas.</summary>
+    private bool EnRuta(string ruta)
+    {
+        string actual = Navegacion.ToBaseRelativePath(Navegacion.Uri).Split('?', '#')[0];
+        return actual.Equals(ruta, StringComparison.OrdinalIgnoreCase) || actual.StartsWith(ruta + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void Navego(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Navegacion.LocationChanged -= Navego;
+}
