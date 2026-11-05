@@ -61,6 +61,12 @@ public sealed class XmlAzulejerasService
                         ["7A"] =
                             new(
                                 "7AA",
+                                "CLIENTE MOSTRADOR"),
+
+                        // Conserva la serie (así está en SINUBE); solo público general cambia de nombre.
+                        ["50E"] =
+                            new(
+                                null,
                                 "CLIENTE MOSTRADOR")
                     },
 
@@ -165,7 +171,7 @@ public sealed class XmlAzulejerasService
             {
                 EquivalenciaSerie? regla = Regla(reglas, g.Key);
                 List<CfdiConsultaDto> publico = g.Where(EsPublicoGeneral).ToList();
-                List<CfdiConsultaDto> conRfc = regla is not null && CambiaSerie(regla, g.Key)
+                List<CfdiConsultaDto> conRfc = regla is not null && IncluyeConRfc(reglas, regla, g.Key)
                     ? g.Where(c => !EsPublicoGeneral(c) && !EsNomina(c)).ToList()
                     : [];
 
@@ -188,8 +194,10 @@ public sealed class XmlAzulejerasService
 
     private static bool EsNomina(CfdiConsultaDto c) => c.TipoCfdi.Equals("N", StringComparison.OrdinalIgnoreCase);
 
-    // La regla cambia la serie (72A → 72AA); las que solo cambian el nombre (serie "*") no tocan a clientes con RFC.
-    private static bool CambiaSerie(EquivalenciaSerie regla, string serie) =>
+    // Clientes con RFC de la serie también se suben desde aquí (con la serie convertida si cambia, p. ej. 72A → 72AA,
+    // o tal cual, p. ej. 50E) cuando la serie tiene regla propia; la regla general "*" solo toca a público general.
+    private static bool IncluyeConRfc(Dictionary<string, EquivalenciaSerie> reglas, EquivalenciaSerie regla, string serie) =>
+        reglas.ContainsKey(serie) ||
         !string.Equals(regla.SerieNueva, serie, StringComparison.OrdinalIgnoreCase);
 
     // A público general y que no sea nómina: la nómina no se modifica ni se sube a SINUBE.
@@ -198,8 +206,8 @@ public sealed class XmlAzulejerasService
         !c.TipoCfdi.Equals("N", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Modifica los emitidos a público general de las <paramref name="series"/> elegidas (con equivalencia).
-    /// Arma el ZIP para descargar y deja los XML en Storage\Azulejeras\RFC\fecha para subirlos a SINUBE.
+    /// Modifica los emitidos de las <paramref name="series"/> elegidas (con equivalencia) y deja los XML en
+    /// Storage\Azulejeras\RFC\fecha para subirlos a SINUBE desde la pantalla (ya no se descarga ZIP).
     /// </summary>
     public XmlAzulejerasResultado GenerarZip(
         EmpresaDto empresa,
@@ -229,7 +237,7 @@ public sealed class XmlAzulejerasService
             if (EsNomina(cfdi) ||
                 !series.Contains(cfdi.Serie.Trim()) ||
                 Regla(reglas, cfdi.Serie.Trim()) is not { } equivalencia ||
-                (!publico && !CambiaSerie(equivalencia, cfdi.Serie.Trim())))
+                (!publico && !IncluyeConRfc(reglas, equivalencia, cfdi.Serie.Trim())))
             {
                 resultado.SinCambios++;
                 resultado.ImporteSinCambios += cfdi.Total;
@@ -289,20 +297,6 @@ public sealed class XmlAzulejerasService
 
             resultado.Detalles.Add(detalle);
         }
-
-        using (var memoria = new MemoryStream())
-        {
-            using (var zip = new ZipArchive(memoria, ZipArchiveMode.Create, true))
-            {
-                foreach (string archivo in resultado.Archivos)
-                    zip.CreateEntryFromFile(archivo, Path.GetFileName(archivo), CompressionLevel.Optimal);
-            }
-
-            resultado.Contenido = memoria.ToArray();
-        }
-
-        resultado.TipoContenido = "application/zip";
-        resultado.NombreArchivo = $"XML_Azulejeras_{empresa.Rfc}_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
 
         return resultado;
     }

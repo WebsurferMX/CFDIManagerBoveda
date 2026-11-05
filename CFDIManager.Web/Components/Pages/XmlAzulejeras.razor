@@ -628,15 +628,7 @@
 
             ConfigSinube = Sinube.ObtenerConfiguracion(empresa);
             FaltaSinube = SinubeService.FaltanDatos(ConfigSinube, requierePassword: true);
-
-            if (Resultado.Archivos.Count > 0)
-            {
-                await JS.InvokeVoidAsync(
-                    "descargarArchivoBase64",
-                    Resultado.NombreArchivo,
-                    Resultado.TipoContenido,
-                    Convert.ToBase64String(Resultado.Contenido));
-            }
+            // Ya no se descarga ZIP: los XML quedan en Storage\Azulejeras y se suben a SINUBE desde esta pantalla.
         }
         catch (Exception ex)
         {
