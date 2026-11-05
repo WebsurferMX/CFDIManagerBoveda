@@ -201,7 +201,18 @@ public sealed class PortalSatCiec : IDisposable
         string xml = await r.Content.ReadAsStringAsync(ct);
 
         if (!xml.Contains("Comprobante", StringComparison.Ordinal))
-            throw new InvalidOperationException($"El SAT no regresó el XML de {cfdi.Uuid}.");
+        {
+            // Lo que haya contestado el portal (aviso, límite, error), como texto corto para mostrarlo.
+            string texto = System.Text.RegularExpressions.Regex.Replace(
+                System.Text.RegularExpressions.Regex.Replace(xml, "<(script|style)[^>]*>.*?</\\1>", " ",
+                    System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase),
+                "<[^>]+>|\\s+", " ").Trim();
+            texto = System.Net.WebUtility.HtmlDecode(texto);
+            if (texto.Length > 160) texto = texto[..160] + "…";
+
+            throw new InvalidOperationException(
+                $"El portal no regresó el XML (HTTP {(int)r.StatusCode}{(texto == "" ? ", respuesta vacía" : $": {texto}")})");
+        }
 
         return xml;
     }

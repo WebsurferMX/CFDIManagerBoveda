@@ -11,10 +11,22 @@ public sealed class ResultadoDescargaCiec
     public int Errores { get; set; }
     public int SinXml { get; set; }
 
+    /// <summary>Motivo de cada error con cuántos lo tuvieron (lo que contestó el portal o la importación).</summary>
+    public Dictionary<string, int> Motivos { get; } = new(StringComparer.Ordinal);
+
+    public void AgregarError(string motivo)
+    {
+        Errores++;
+        Motivos[motivo] = Motivos.GetValueOrDefault(motivo) + 1;
+    }
+
     public string Resumen =>
         $"{Importados + Actualizados + Omitidos + Errores} descargados: {Importados} nuevos, " +
         $"{Actualizados} ya existían (actualizados), {Omitidos} omitidos, {Errores} con error" +
-        (SinXml > 0 ? $"; {SinXml} sin XML disponible en el portal" : "");
+        (SinXml > 0 ? $"; {SinXml} sin XML disponible en el portal" : "") +
+        (Motivos.Count > 0
+            ? ". Errores: " + string.Join(" · ", Motivos.OrderByDescending(m => m.Value).Take(3).Select(m => $"{m.Value} × {m.Key}"))
+            : "");
 }
 
 /// <summary>
@@ -142,20 +154,32 @@ public sealed class DescargaCiecService : IDisposable
                     continue;
                 }
 
-                string xml;
+                string? xml = null;
+                string motivo = "";
 
-                try
+                // Un reintento: el portal a veces falla una vez y a la siguiente sí entrega el XML.
+                for (int intento = 1; intento <= 2 && xml is null; intento++)
                 {
-                    xml = await _portal.DescargarXmlAsync(cfdi, ct);
+                    try
+                    {
+                        xml = await _portal.DescargarXmlAsync(cfdi, ct);
+                    }
+                    catch (SesionSatExpiradaException)
+                    {
+                        EmpresaSesion = null;
+                        throw;
+                    }
+                    catch (Exception ex) when (!ct.IsCancellationRequested)
+                    {
+                        motivo = ex.Message;
+                        if (intento == 1)
+                            await Task.Delay(TimeSpan.FromSeconds(2), ct);
+                    }
                 }
-                catch (SesionSatExpiradaException)
+
+                if (xml is null)
                 {
-                    EmpresaSesion = null;
-                    throw;
-                }
-                catch (Exception) when (!ct.IsCancellationRequested)
-                {
-                    resultado.Errores++;
+                    resultado.AgregarError(motivo);
                     continue;
                 }
 
@@ -169,7 +193,7 @@ public sealed class DescargaCiecService : IDisposable
                     case "CORRECTO": resultado.Importados++; break;
                     case "ACTUALIZADO": resultado.Actualizados++; break;
                     case "OMITIDO": resultado.Omitidos++; break;
-                    default: resultado.Errores++; break;
+                    default: resultado.AgregarError(string.IsNullOrWhiteSpace(r.Detalle) ? $"Importación: {r.Estatus}" : $"Importación: {r.Detalle}"); break;
                 }
 
                 cfdi.YaImportado = r.Estatus is "CORRECTO" or "ACTUALIZADO";
