@@ -365,6 +365,16 @@
                     </div>
                 </div>
 
+                <h2 class="second-title"><i class="bi bi-receipt-cutoff"></i> Facturas, notas y pagos de proveedores</h2>
+
+                <div class="form-grid">
+                    <div class="field">
+                        <label>Series alternas cuando el folio ya existe</label>
+                        <input class="form-control" @bind="Config.SerieAlternaProveedores" placeholder="Vacío: no se cambia (p. ej. +FR,+FRR)" maxlength="100" />
+                        <small class="hint">Mismo formato que en clientes; sin serie, "+FR" da FR. Se aplica después de Revisar en SINUBE, a lo que SINUBE no tiene con su UUID.</small>
+                    </div>
+                </div>
+
                 <h2 class="second-title"><i class="bi bi-cloud-download-fill"></i> Descarga de XML del SAT</h2>
                 <p class="section-help">Parámetros de la pestaña "Descarga XMLs del SAT": cómo nombrar los XML al exportarlos.</p>
 

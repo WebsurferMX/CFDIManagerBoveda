@@ -60,12 +60,23 @@ public class SinubeConfiguracionDto
     /// Las series alternas ya resueltas para un comprobante de esa serie: "+R" se agrega a la serie y en el sufijo
     /// "*" es la última letra de la serie ("+*": 72AA → 72AAA, 76EE → 76EEE; "+**": 72AAAA).
     /// </summary>
-    public List<string> SeriesAlternasPara(string? serie)
+    public List<string> SeriesAlternasPara(string? serie) => Resolver(SeriesAlternasPagos, serie);
+
+    /// <summary>
+    /// Series alternas de las facturas, notas y pagos de proveedores cuyo serie-folio ya ocupa otro comprobante del
+    /// mismo proveedor en SINUBE (p. ej. el proveedor repite folios). Mismo formato que <see cref="SerieAlternaPagos"/>;
+    /// sin serie, "+FR" da "FR". Vacía: no se cambia.
+    /// </summary>
+    public string SerieAlternaProveedores { get; set; } = "";
+
+    public List<string> SeriesAlternasProveedoresPara(string? serie) => Resolver(Lista(SerieAlternaProveedores), serie);
+
+    private static List<string> Resolver(List<string> alternas, string? serie)
     {
         string original = (serie ?? "").Trim().ToUpperInvariant();
         string ultima = original.Length > 0 ? original[^1].ToString() : "";
 
-        return SeriesAlternasPagos
+        return alternas
             .Select(s => s.StartsWith('+') ? original + s[1..].Replace("*", ultima) : s)
             .Where(s => s != "" && s != original)
             .Distinct()

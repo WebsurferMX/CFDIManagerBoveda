@@ -497,6 +497,15 @@ public class SinubeService
                 else
                 {
                     await EnviarProveedorAsync(documento, envio, configuracion, cancelacion);
+
+                    // "El comprobante ya existe" en proveedores trae proveedor-serie-folio, no el UUID. Solo con la
+                    // revisión previa (yaEnSinube: lo que SINUBE tiene con ese UUID ya se omitió arriba) se sabe que es
+                    // otro comprobante del proveedor con el mismo folio, y se reintenta con las series alternas.
+                    if (envio.Estatus == "EXISTE" && yaEnSinube is not null &&
+                        configuracion.SeriesAlternasProveedoresPara(envio.Serie) is { Count: > 0 } alternas)
+                    {
+                        await EnviarProveedorConSeriesAsync(documento, envio, alternas, configuracion, cancelacion);
+                    }
                 }
             }
             catch (OperationCanceledException) when (cancelacion.IsCancellationRequested)
@@ -748,6 +757,49 @@ public class SinubeService
         {
             envio.Estatus = "FOLIO";
             envio.Mensaje = FolioOcupado(envio, configuracion);
+            envio.Serie = serieOriginal;
+        }
+    }
+
+    /// <summary>
+    /// Proveedores: el folio ya lo ocupa otro comprobante del proveedor en SINUBE. Se manda con cada serie alterna en
+    /// orden hasta que SINUBE la acepte; el XML de la bóveda no cambia (solo la copia que se envía).
+    /// </summary>
+    private async Task EnviarProveedorConSeriesAsync(
+        XmlDocument documento,
+        SinubeEnvioDto envio,
+        List<string> series,
+        SinubeConfiguracionDto configuracion,
+        CancellationToken cancelacion)
+    {
+        string serieOriginal = envio.Serie;
+        string original = $"{serieOriginal}-{envio.Folio}".TrimStart('-');
+
+        foreach (string serie in series)
+        {
+            ((XmlElement)Comprobante(documento)).SetAttribute("Serie", serie);
+            envio.Serie = serie;
+
+            await EnviarProveedorAsync(documento, envio, configuracion, cancelacion);
+
+            if (envio.Estatus != "EXISTE")
+                break;
+        }
+
+        if (envio.Estatus == "OK")
+        {
+            envio.Mensaje = $"Serie cambiada: {original} ya existe en SINUBE, se subió como {envio.Serie}-{envio.Folio}. " + envio.Mensaje;
+        }
+        else if (envio.Estatus == "EXISTE")
+        {
+            // Ocupado también con las alternas: no es el mismo UUID (ya se revisó), así que no cuenta como subido.
+            envio.Estatus = "FOLIO";
+            envio.Mensaje = $"El folio {original} ya lo tiene otro comprobante del proveedor en SINUBE, también con " +
+                            $"{string.Join(", ", series)}. Agrega otra serie alterna de proveedores en Herramientas.";
+            envio.Serie = serieOriginal;
+        }
+        else
+        {
             envio.Serie = serieOriginal;
         }
     }
