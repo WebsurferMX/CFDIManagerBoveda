@@ -151,6 +151,7 @@ builder.Services.AddScoped<CFDIManager.Web.Services.Sat.DescargaArchivosSatServi
 builder.Services.AddSingleton<CatalogoLogosService>();
 
 builder.Services.AddScoped<RepresentacionImpresaService>();
+builder.Services.AddSingleton<HtmlPdfService>();
 
 builder.Services.AddScoped<AdministracionXmlService>();
 

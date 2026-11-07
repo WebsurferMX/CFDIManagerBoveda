@@ -6,6 +6,7 @@
 @using CFDIParser.Services
 @using CFDIManager.Web.Services
 @using CFDIManager.Web.Services.AdministracionXml
+@using CFDIManager.Web.Services.Sinube
 @using Microsoft.AspNetCore.Components.Forms
 
 @inject EmpresaContext EmpresaContext
@@ -732,6 +733,35 @@
                     </div>
 
                     <div class="row g-2 mb-3">
+                        @if (GruposEnvio.Any(g => g.Cfdis.Any(x => x.TipoCfdi is not ("P" or "N"))))
+                        {
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold mb-1">Formato del PDF</label>
+                                <select class="form-select form-select-sm" @bind="FormatoCfdiEnvio" disabled="@EnviandoCfdi">
+                                    @foreach (FormatoImpresionSinube f in FormatosEnvio.Where(f => f.Tipo == SinubeDatosService.FormatoFactura))
+                                    {
+                                        <option value="@f.Nombre">@f.Nombre</option>
+                                    }
+                                    <option value="">Formato propio de CFDI Manager</option>
+                                </select>
+                            </div>
+                        }
+                        @if (GruposEnvio.Any(g => g.Cfdis.Any(x => x.TipoCfdi == "P")))
+                        {
+                            <div class="col-md-6">
+                                <label class="form-label small fw-semibold mb-1">Formato de los pagos</label>
+                                <select class="form-select form-select-sm" @bind="FormatoPagoEnvio" disabled="@EnviandoCfdi">
+                                    @foreach (FormatoImpresionSinube f in FormatosEnvio.Where(f => f.Tipo == SinubeDatosService.FormatoPago))
+                                    {
+                                        <option value="@f.Nombre">@f.Nombre</option>
+                                    }
+                                    <option value="">Formato propio de CFDI Manager</option>
+                                </select>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="row g-2 mb-3">
                         <div class="col-md-6">
                             <label class="form-label small fw-semibold mb-1">Con copia (CC)</label>
                             <input class="form-control form-control-sm" @bind="CcEnvio" disabled="@EnviandoCfdi" />
@@ -750,7 +780,7 @@
                     </div>
 
                     <div class="d-flex align-items-center gap-2">
-                        <span class="small text-body-secondary">PDF (formato SINUBE) y XML de cada CFDI · un correo por destinatario</span>
+                        <span class="small text-body-secondary">PDF y XML de cada CFDI · un correo por destinatario</span>
                         <button type="button" class="btn btn-primary ms-auto" @onclick="EnviarCfdis"
                                 disabled="@(EnviandoCfdi || !GruposEnvio.Any(g => g.Enviar && g.Resultado != "Enviado"))">
                             @if (EnviandoCfdi)
@@ -873,6 +903,27 @@
 
     private static string ClaveCcEnvio(long empresaId) => $"correo_cfdi_cc:{empresaId}";
 
+    // Formatos de impresión de SINUBE (su plantilla vigente); "" es el formato propio. Se recuerdan por empresa.
+    private List<FormatoImpresionSinube> FormatosEnvio = [];
+    private string FormatoCfdiEnvio = "";
+    private string FormatoPagoEnvio = "";
+
+    private static string ClaveFormatoEnvio(long empresaId, int tipo) => $"formato_pdf_cfdi:{empresaId}:{tipo}";
+
+    private string FormatoInicial(long empresaId, int tipo)
+    {
+        string? recordado = Repo.ObtenerConfiguracionApp(ClaveFormatoEnvio(empresaId, tipo));
+        List<FormatoImpresionSinube> deTipo = FormatosEnvio.Where(f => f.Tipo == tipo).ToList();
+
+        if (recordado is not null && (recordado == "" || deTipo.Any(f => f.Nombre == recordado)))
+            return recordado;
+
+        return deTipo.FirstOrDefault()?.Nombre ?? "";
+    }
+
+    private FormatoImpresionSinube? FormatoElegido(string nombre, int tipo) =>
+        nombre == "" ? null : FormatosEnvio.FirstOrDefault(f => f.Tipo == tipo && f.Nombre == nombre);
+
     /// <summary>Los marcados o, si no hay, el comprobante activo.</summary>
     private async Task PrepararEnvioCfdi()
     {
@@ -910,7 +961,11 @@
 
         try
         {
+            Task<List<FormatoImpresionSinube>> formatos = EnvioCfdi.FormatosAsync(empresa);
             GruposEnvio = await EnvioCfdi.PrepararAsync(empresa, ids);
+            FormatosEnvio = await formatos;
+            FormatoCfdiEnvio = FormatoInicial(empresa.EmpresaId, SinubeDatosService.FormatoFactura);
+            FormatoPagoEnvio = FormatoInicial(empresa.EmpresaId, SinubeDatosService.FormatoPago);
         }
         catch (Exception ex)
         {
@@ -937,6 +992,16 @@
         if (CopiaParaMiEnvio && MiCorreoEnvio != "" && !cc.Contains(MiCorreoEnvio, StringComparer.OrdinalIgnoreCase))
             cc.Add(MiCorreoEnvio);
 
+        FormatoImpresionSinube? formatoCfdi = FormatoElegido(FormatoCfdiEnvio, SinubeDatosService.FormatoFactura);
+        FormatoImpresionSinube? formatoPago = FormatoElegido(FormatoPagoEnvio, SinubeDatosService.FormatoPago);
+        if (FormatosEnvio.Count > 0)
+        {
+            if (GruposEnvio.Any(g => g.Cfdis.Any(x => x.TipoCfdi is not ("P" or "N"))))
+                Repo.GuardarConfiguracionApp(ClaveFormatoEnvio(empresa.EmpresaId, SinubeDatosService.FormatoFactura), FormatoCfdiEnvio);
+            if (GruposEnvio.Any(g => g.Cfdis.Any(x => x.TipoCfdi == "P")))
+                Repo.GuardarConfiguracionApp(ClaveFormatoEnvio(empresa.EmpresaId, SinubeDatosService.FormatoPago), FormatoPagoEnvio);
+        }
+
         foreach (GrupoEnvioCfdi g in GruposEnvio.Where(g => g.Enviar && g.Resultado != "Enviado"))
         {
             g.Resultado = "Enviando…";
@@ -944,7 +1009,7 @@
 
             try
             {
-                await EnvioCfdi.EnviarAsync(empresa, g, cc, MensajeEnvio, enviadoPor);
+                await EnvioCfdi.EnviarAsync(empresa, g, cc, MensajeEnvio, enviadoPor, formatoCfdi, formatoPago);
                 g.Resultado = "Enviado";
             }
             catch (Exception ex)

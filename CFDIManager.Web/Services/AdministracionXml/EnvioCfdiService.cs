@@ -24,6 +24,12 @@ public sealed class GrupoEnvioCfdi
     /// <summary>Nombre comercial del catálogo de clientes de SINUBE (va en el PDF debajo del receptor).</summary>
     public string NombreComercial { get; set; } = "";
 
+    /// <summary>Cliente en SINUBE (código auxiliar, referencia bancaria, correo y direcciones para el formato de impresión).</summary>
+    public ClienteSinube? Sinube { get; set; }
+
+    /// <summary>Dirección de la empresa en SINUBE (#emisor_calle_fiscal#…).</summary>
+    public DireccionSinube? DireccionEmisor { get; set; }
+
     public bool Enviar { get; set; } = true;
 
     /// <summary>Resultado del envío: "" sin enviar, "Enviado" o el error.</summary>
@@ -33,18 +39,60 @@ public sealed class GrupoEnvioCfdi
 }
 
 /// <summary>
-/// "Enviar CFDI" de Administración de XML: manda a cada contraparte el PDF (formato SINUBE) y el XML de sus comprobantes.
-/// El correo propuesto es el del catálogo de clientes de SINUBE o, si no tiene, el último que se capturó para ese RFC.
+/// "Enviar CFDI" de Administración de XML: manda a cada contraparte el PDF y el XML de sus comprobantes.
+/// El PDF sale con el formato de impresión de SINUBE elegido (su plantilla vigente) o, sin SINUBE, con el formato propio.
+/// El correo propuesto es el del catálogo de clientes de SINUBE más los adicionales recordados para ese RFC.
 /// </summary>
 public class EnvioCfdiService(
     PostgreSqlRepository repo,
     XmlCfdiParser parser,
     RepresentacionImpresaService pdf,
+    HtmlPdfService htmlPdf,
     CorreoService correo,
     SinubeService sinube,
-    SinubeDatosService datosSinube)
+    SinubeDatosService datosSinube,
+    ILogger<EnvioCfdiService> log)
 {
     private static string ClaveCorreo(long empresaId, string rfc) => $"correo_cfdi:{empresaId}:{rfc.Trim().ToUpperInvariant()}";
+
+    /// <summary>Formatos de impresión de facturas y pagos de SINUBE de la empresa (vacío si no tiene SINUBE o no responde).</summary>
+    public async Task<List<FormatoImpresionSinube>> FormatosAsync(EmpresaDto empresa, CancellationToken ct = default)
+    {
+        SinubeConfiguracionDto config = sinube.ObtenerConfiguracion(empresa);
+        if (SinubeService.FaltanDatos(config, requierePassword: true) is not null || HtmlPdfService.Navegador is null)
+            return [];
+
+        try
+        {
+            return await datosSinube.FormatosImpresionAsync(config, ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            log.LogWarning(ex, "No se pudieron leer los formatos de impresión de SINUBE de {Empresa}", empresa.Rfc);
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// PDF del CFDI: con el formato de SINUBE que corresponde a su tipo (pago o factura) o, si no hay, con el formato propio.
+    /// </summary>
+    public async Task<byte[]> GenerarPdfAsync(
+        string ruta, DatosClientePdf cliente, FormatoImpresionSinube? formatoCfdi, FormatoImpresionSinube? formatoPago, CancellationToken ct = default)
+    {
+        CfdiDto c = parser.Parse(ruta);
+        FormatoImpresionSinube? formato = c.TipoComprobante switch
+        {
+            "P" => formatoPago,
+            "N" => null,
+            _ => formatoCfdi
+        };
+
+        if (formato is null)
+            return await Task.Run(() => pdf.Generar(c, cliente), ct);
+
+        string html = PlantillaSinube.Llenar(formato.Html, c, System.Xml.Linq.XDocument.Load(ruta), cliente, RepresentacionImpresaService.Qr(c));
+        return await htmlPdf.ConvertirAsync(html, ct);
+    }
 
     public async Task<List<GrupoEnvioCfdi>> PrepararAsync(EmpresaDto empresa, IReadOnlyCollection<long> ids, CancellationToken ct = default)
     {
@@ -71,8 +119,23 @@ public class EnvioCfdiService(
         SinubeConfiguracionDto config = sinube.ObtenerConfiguracion(empresa);
         bool conSinube = SinubeService.FaltanDatos(config, requierePassword: true) is null;
 
+        DireccionSinube? direccionEmpresa = null;
+        if (conSinube)
+        {
+            try
+            {
+                direccionEmpresa = await datosSinube.DireccionEmpresaAsync(config, ct);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                log.LogWarning(ex, "No se pudo leer la dirección de {Empresa} en SINUBE", empresa.Rfc);
+            }
+        }
+
         foreach (GrupoEnvioCfdi g in grupos)
         {
+            g.DireccionEmisor = direccionEmpresa;
+
             // Primero el correo del catálogo de clientes de SINUBE (público en general no está ahí).
             if (conSinube && g.Rfc is not ("XAXX010101000" or "XEXX010101000"))
             {
@@ -81,6 +144,7 @@ public class EnvioCfdiService(
                     if (await datosSinube.ClienteAsync(config, g.Rfc, ct) is { } cliente)
                     {
                         g.NombreComercial = cliente.NombreComercial;
+                        g.Sinube = cliente;
                         if (cliente.Email != "")
                         {
                             g.Para = cliente.Email;
@@ -101,9 +165,10 @@ public class EnvioCfdiService(
         return grupos;
     }
 
-    /// <summary>Envía el PDF y el XML de cada CFDI del grupo y recuerda el correo (se usa si SINUBE no tiene uno).</summary>
+    /// <summary>Envía el PDF y el XML de cada CFDI del grupo y recuerda los correos adicionales.</summary>
     public async Task EnviarAsync(
-        EmpresaDto empresa, GrupoEnvioCfdi grupo, IReadOnlyList<string> cc, string mensaje, string enviadoPor, CancellationToken ct = default)
+        EmpresaDto empresa, GrupoEnvioCfdi grupo, IReadOnlyList<string> cc, string mensaje, string enviadoPor,
+        FormatoImpresionSinube? formatoCfdi = null, FormatoImpresionSinube? formatoPago = null, CancellationToken ct = default)
     {
         List<string> adicionales = CorreoService.SepararCorreos(grupo.Adicionales);
         List<string> para = CorreoService.SepararCorreos(grupo.Para)
@@ -114,7 +179,10 @@ public class EnvioCfdiService(
             throw new InvalidOperationException("Escribe al menos un correo.");
 
         var adjuntos = new List<AdjuntoCorreo>();
-        var cliente = new DatosClientePdf(grupo.NombreComercial);
+        ClienteSinube? s = grupo.Sinube;
+        var cliente = new DatosClientePdf(
+            grupo.NombreComercial, s?.CodigoAux ?? "", RefBancaria: s?.RefBancaria ?? "", Correo: s?.Email ?? "",
+            Fiscal: s?.Fiscal, Envio: s?.Envio, Emisor: grupo.DireccionEmisor);
 
         foreach (AdminXmlFilaDto x in grupo.Cfdis)
         {
@@ -124,7 +192,7 @@ public class EnvioCfdiService(
 
             string nombre = Nombre(x);
             byte[] xml = await File.ReadAllBytesAsync(ruta, ct);
-            byte[] archivoPdf = await Task.Run(() => pdf.Generar(parser.Parse(ruta), cliente), ct);
+            byte[] archivoPdf = await GenerarPdfAsync(ruta, cliente, formatoCfdi, formatoPago, ct);
             adjuntos.Add(new AdjuntoCorreo($"{nombre}.pdf", "application/pdf", archivoPdf));
             adjuntos.Add(new AdjuntoCorreo($"{nombre}.xml", "application/xml", xml));
         }

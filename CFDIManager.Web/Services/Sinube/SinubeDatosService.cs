@@ -126,22 +126,82 @@ public class SinubeDatosService(SinubeService sinube, IHttpClientFactory http)
         return pagos;
     }
 
-    /// <summary>Correo(s) y nombre comercial del cliente en el catálogo de SINUBE (DbCliente), o null si no está.</summary>
-    public async Task<(string Email, string NombreComercial)?> ClienteAsync(
+    /// <summary>
+    /// Cliente en el catálogo de SINUBE (DbCliente) con sus direcciones (DbClienteDireccion: 1 fiscal, 2 genérica, 3 envío),
+    /// o null si no está.
+    /// </summary>
+    public async Task<ClienteSinube?> ClienteAsync(
         SinubeConfiguracionDto configuracion, string rfc, CancellationToken cancelacion = default)
     {
         string empresa = configuracion.Empresa.Replace("'", "");
         List<FilaSinube> filas = await ConsultarAsync(configuracion,
-            $"SELECT email, nombreComercial FROM DbCliente WHERE empresa = '{empresa}' AND rfcCliente = '{rfc.Trim().ToUpperInvariant().Replace("'", "")}'",
+            $"SELECT cliente, email, nombreComercial, codigoAuxiliar, referenciaBancaria FROM DbCliente WHERE empresa = '{empresa}' AND rfcCliente = '{rfc.Trim().ToUpperInvariant().Replace("'", "")}'",
             cancelacion);
 
         if (filas.Count == 0)
             return null;
 
+        FilaSinube f = filas[0];
         // SINUBE separa varios correos con ";".
-        string email = string.Join(", ", (filas[0].Texto("email") ?? "")
+        string email = string.Join(", ", (f.Texto("email") ?? "")
             .Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-        return (email, (filas[0].Texto("nombreComercial") ?? "").Trim());
+
+        var direcciones = new Dictionary<int, DireccionSinube>();
+        if (long.TryParse(f.Texto("cliente"), out long numero))
+        {
+            foreach (FilaSinube d in await ConsultarAsync(configuracion,
+                         $"SELECT * FROM DbClienteDireccion WHERE empresa = '{empresa}' AND cliente = {numero}", cancelacion))
+            {
+                if (int.TryParse(d.Texto("tipo"), out int tipo) && Direccion(d) is { Vacia: false } direccion)
+                    direcciones[tipo] = direccion;
+            }
+        }
+
+        return new ClienteSinube(email, T(f, "nombreComercial"), T(f, "codigoAuxiliar"), T(f, "referenciaBancaria"),
+            direcciones.GetValueOrDefault(1) ?? direcciones.GetValueOrDefault(2), direcciones.GetValueOrDefault(3));
+    }
+
+    /// <summary>Dirección de la matriz o sucursal de la empresa en SINUBE (DbMatrizSucursal), o null.</summary>
+    public async Task<DireccionSinube?> DireccionEmpresaAsync(SinubeConfiguracionDto configuracion, CancellationToken cancelacion = default)
+    {
+        string empresa = configuracion.Empresa.Replace("'", "");
+        List<FilaSinube> filas = await ConsultarAsync(configuracion, $"SELECT * FROM DbMatrizSucursal WHERE empresa = '{empresa}'", cancelacion);
+        FilaSinube? fila = filas.FirstOrDefault(f => string.Equals(T(f, "sucursal"), configuracion.Sucursal, StringComparison.OrdinalIgnoreCase))
+                           ?? filas.FirstOrDefault();
+        return fila is null ? null : Direccion(fila);
+    }
+
+    private static string T(FilaSinube f, string campo) => (f.Texto(campo) ?? "").Trim();
+
+    private static DireccionSinube Direccion(FilaSinube d) => new(
+        T(d, "calle"), T(d, "noExterior"), T(d, "noInterior"), T(d, "colonia"), T(d, "localidad"), T(d, "referencia"),
+        T(d, "municipio"), T(d, "estado"), T(d, "pais"), T(d, "codigoPostal"));
+
+    /// <summary>Tipo de reporte de SINUBE (DbReporte.tipoReporte) de los formatos de impresión de CFDI.</summary>
+    public const int FormatoFactura = 31;
+
+    /// <summary>Tipo de reporte de SINUBE de los formatos del complemento de pago.</summary>
+    public const int FormatoPago = 32;
+
+    /// <summary>
+    /// Formatos de impresión de facturas y pagos de la empresa (DbReporte, los del diálogo "CFDI 3.3 Y 4.0" de SINUBE)
+    /// con su plantilla HTML tal como está hoy.
+    /// </summary>
+    public async Task<List<FormatoImpresionSinube>> FormatosImpresionAsync(
+        SinubeConfiguracionDto configuracion, CancellationToken cancelacion = default)
+    {
+        string empresa = configuracion.Empresa.Replace("'", "");
+        List<FilaSinube> filas = await ConsultarAsync(configuracion,
+            $"SELECT reporte, tipoReporte, plantillaHTML FROM DbReporte WHERE empresa = '{empresa}'", cancelacion);
+
+        return filas
+            .Select(f => new FormatoImpresionSinube(
+                (f.Texto("reporte") ?? "").Trim(),
+                int.TryParse(f.Texto("tipoReporte"), out int tipo) ? tipo : 0,
+                f.Texto("plantillaHTML") ?? ""))
+            .Where(f => f.Tipo is FormatoFactura or FormatoPago && f.Nombre != "" && f.Html != "")
+            .OrderBy(f => f.Nombre, StringComparer.Ordinal)
+            .ToList();
     }
 
     /// <summary>
@@ -235,6 +295,21 @@ public class SinubeDatosService(SinubeService sinube, IHttpClientFactory http)
     // Igual que ClsSiNubeGetPost.sustituirEscapes: solo '&' rompe el form-urlencoded de SINUBE.
     private static string Escapar(string? valor) => (valor ?? "").Replace("&", "%26");
 }
+
+/// <summary>Dirección de SINUBE (cliente o matriz/sucursal de la empresa).</summary>
+public sealed record DireccionSinube(
+    string Calle, string NoExterior, string NoInterior, string Colonia, string Localidad, string Referencia,
+    string Municipio, string Estado, string Pais, string CodigoPostal)
+{
+    public bool Vacia => Calle == "" && Colonia == "" && CodigoPostal == "" && Municipio == "";
+}
+
+/// <summary>Datos del cliente en SINUBE que usan los correos y los formatos de impresión.</summary>
+public sealed record ClienteSinube(
+    string Email, string NombreComercial, string CodigoAux, string RefBancaria, DireccionSinube? Fiscal, DireccionSinube? Envio);
+
+/// <summary>Formato de impresión de SINUBE (DbReporte): nombre, tipo (31 factura, 32 pago) y plantilla HTML con variables #…#.</summary>
+public sealed record FormatoImpresionSinube(string Nombre, int Tipo, string Html);
 
 /// <summary>Complemento de pago registrado en SINUBE (DbRecepcionPagosXML).</summary>
 public sealed record PagoSinube(string Uuid, string Serie, long Folio)

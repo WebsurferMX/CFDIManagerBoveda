@@ -9,7 +9,11 @@ using Cat = CFDIManager.Web.Services.AdministracionXml.ReporteGeneral.Catalogos;
 namespace CFDIManager.Web.Services.AdministracionXml;
 
 /// <summary>Datos del cliente que no vienen en el XML (catálogo de clientes de SINUBE): van debajo del receptor.</summary>
-public sealed record DatosClientePdf(string NombreComercial = "", string CodigoAux = "", string Referencia = "");
+public sealed record DatosClientePdf(
+    string NombreComercial = "", string CodigoAux = "", string Referencia = "", string RefBancaria = "", string Correo = "",
+    CFDIManager.Web.Services.Sinube.DireccionSinube? Fiscal = null,
+    CFDIManager.Web.Services.Sinube.DireccionSinube? Envio = null,
+    CFDIManager.Web.Services.Sinube.DireccionSinube? Emisor = null);
 
 /// <summary>
 /// Representación impresa (PDF) de un CFDI con el formato de SINUBE (las mismas variables de su plantilla:
@@ -118,6 +122,9 @@ public class RepresentacionImpresaService
         return "https://verificacfdi.facturaelectronica.sat.gob.mx/default.aspx" +
                $"?id={c.UUID}&re={c.RFCEmisor}&rr={c.RFCReceptor}&tt={tt}&fe={Uri.EscapeDataString(fe)}";
     }
+
+    /// <summary>QR de verificación del SAT del CFDI (PNG).</summary>
+    public static byte[] Qr(CfdiDto c) => GenerarQr(UrlVerificacion(c));
 
     private static byte[] GenerarQr(string texto)
     {
