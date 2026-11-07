@@ -97,6 +97,7 @@ public static class PlantillaCorreo
             </td></tr>
             <tr><td style="padding:18px 32px 26px;border-top:1px solid #eef1f5;font-size:12px;line-height:1.5;color:#94a3b8;">
                 Este correo lo envió automáticamente CFDI Manager. Si no esperabas este mensaje, avisa al administrador de tu empresa.
+                Ernesto Hernandez enha@cga.bar
             </td></tr>
             </table>
             </td></tr></table>
