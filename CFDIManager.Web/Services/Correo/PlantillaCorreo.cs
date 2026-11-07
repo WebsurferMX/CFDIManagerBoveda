@@ -32,6 +32,12 @@ public static class PlantillaCorreo
 
         /// <summary>Content-ID de una imagen en línea (p. ej. el resumen de XML) que va después de los párrafos.</summary>
         public string? ImagenCid { get; init; }
+
+        /// <summary>Ancho natural de la imagen en px: no se agranda más allá (se vería borrosa).</summary>
+        public int ImagenAnchoMaximo { get; init; } = 696;
+
+        /// <summary>Ancho máximo de la tarjeta del correo en px; en pantallas angostas se ajusta.</summary>
+        public int AnchoMaximo { get; init; } = 760;
     }
 
     /// <summary>Pie de todos los correos si no se ha configurado otro (Configuración → Correo).</summary>
@@ -63,6 +69,8 @@ public static class PlantillaCorreo
         static string E(string? s) => WebUtility.HtmlEncode(s ?? "");
 
         var html = new StringBuilder();
+        // Fluida: ocupa el ancho de la ventana hasta el máximo (más ancha si lleva imagen).
+        int ancho = c.AnchoMaximo;
 
         html.Append($"""
             <!DOCTYPE html>
@@ -70,7 +78,7 @@ public static class PlantillaCorreo
             <body style="margin:0;padding:0;background:#eef1f5;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1e293b;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef1f5;padding:32px 12px;">
             <tr><td align="center">
-            <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #dde3ea;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:{ancho}px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #dde3ea;">
             <tr><td style="background:{ColorMarca};padding:22px 32px;">
                 <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:{ColorAcento};margin-right:8px;"></span>
                 <span style="color:#ffffff;font-size:17px;font-weight:700;letter-spacing:.3px;">CFDI Manager</span>
@@ -87,7 +95,7 @@ public static class PlantillaCorreo
             html.Append($"""<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#334155;">{E(parrafo)}</p>""");
 
         if (!string.IsNullOrWhiteSpace(c.ImagenCid))
-            html.Append($"""<img src="cid:{E(c.ImagenCid)}" alt="Resumen" width="536" style="display:block;width:100%;max-width:536px;height:auto;margin:6px 0 18px;border:1px solid #e2e8f0;border-radius:8px;">""");
+            html.Append($"""<img src="cid:{E(c.ImagenCid)}" alt="Resumen" style="display:block;width:100%;max-width:{c.ImagenAnchoMaximo}px;height:auto;margin:6px 0 18px;border:1px solid #e2e8f0;border-radius:8px;">""");
 
         if (c.Datos.Count > 0)
         {

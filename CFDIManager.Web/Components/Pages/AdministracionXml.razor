@@ -771,8 +771,9 @@
             EmpresaDto empresa = EmpresaContext.EmpresaActiva!;
             (byte[] contenido, string nombre) = await Task.Run(() => Admin.GenerarExcel(empresa, f, TipoReporte));
 
-            // Resumen dentro del correo: claro (fondo del correo) y una sección debajo de la otra (ancho de correo).
-            ImagenCorreo = await GenerarImagenResumen(empresa, "debajo", claro: true);
+            // Resumen dentro del correo, con el tema que el usuario tiene en la app.
+            bool claroCorreo = await JS.InvokeAsync<string>("cfdiTheme.current") == "light";
+            ImagenCorreo = await GenerarImagenResumen(empresa, "debajo", claroCorreo);
 
             AdjuntosCorreo =
             [
@@ -1556,8 +1557,7 @@
     [
         ("emitidos", "Solo emitidos (ingresos)", "bi-box-arrow-up-right"),
         ("recibidos", "Solo recibidos (egresos)", "bi-box-arrow-in-down-left"),
-        ("juntas", "Emitidos y recibidos, uno junto al otro", "bi-layout-split"),
-        ("debajo", "Emitidos y recibidos, uno debajo del otro", "bi-layout-three-columns")
+        ("debajo", "Emitidos y recibidos", "bi-layout-three-columns")
     ];
 
     private string FormaImagen = "debajo";
@@ -1616,7 +1616,7 @@
             secciones.Add(new("Recibidos", "egresos", Repo.ObtenerTotalesAdministracionXml(Para("RECIBIDO"))));
 
         return Task.Run(() => CFDIManager.Web.Services.AdministracionXml.ResumenImagen.Generar(
-            empresa.NombreParaMostrar, empresa.Rfc, periodo, secciones, juntas: forma == "juntas", claro: claro));
+            empresa.NombreParaMostrar, empresa.Rfc, periodo, secciones, claro: claro));
     }
 
     /// <summary>"Octubre 2026", "Septiembre – Octubre 2026", "Octubre 2026 · días 1, 2" o "Enero – Octubre 2026 (acumulado)".</summary>

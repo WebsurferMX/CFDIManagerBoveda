@@ -222,13 +222,17 @@
 
             parrafos.Add($"Archivos adjuntos: {string.Join(", ", Adjuntos.Select(a => a.Nombre))}.");
 
-            bool conImagen = IncluirImagen && Imagen is { Length: > 0 };
+            bool conImagen = IncluirImagen && Imagen is { Length: > 24 };
+            // Ancho real del PNG (encabezado IHDR): la tarjeta se ensancha para mostrarlo a tamaño natural.
+            int anchoImagen = conImagen ? System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(Imagen.AsSpan(16, 4)) : 0;
 
             (string html, string texto) = PlantillaCorreo.Construir(new PlantillaCorreo.Contenido
             {
                 Titulo = Asunto.Trim(),
                 Parrafos = parrafos,
                 ImagenCid = conImagen ? "resumen" : null,
+                ImagenAnchoMaximo = conImagen ? anchoImagen : 696,
+                AnchoMaximo = conImagen ? Math.Max(760, anchoImagen + 64) : 760,
                 Datos = [.. Datos, ("Enviado por", MiNombre), ("Fecha", DateTime.Now.ToString("dd/MM/yyyy HH:mm"))]
             });
 
