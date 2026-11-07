@@ -268,6 +268,13 @@ builder.Services
 
 var app = builder.Build();
 
+// Pie de todos los correos: configurable en Configuración → Correo.
+{
+    var repoPie = new PostgreSqlRepository(CadenaPostgres(builder.Configuration));
+    CFDIManager.Web.Services.Correo.PlantillaCorreo.LeerPie =
+        () => repoPie.ObtenerConfiguracionApp(CFDIManager.Web.Services.Correo.CorreoService.ClavePie);
+}
+
 if (ClaveMaestra.Leer(app.Configuration) is null)
     app.Logger.LogWarning(
         "Sin {Variable}: las contraseñas guardadas (CIEC, correo, SINUBE) solo se podrán leer en este equipo.",

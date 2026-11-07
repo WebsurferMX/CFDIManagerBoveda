@@ -705,6 +705,7 @@
                    AsuntoSugerido="@($"Reporte de XML {EmpresaContext.NombreEmpresa}")"
                    Datos="@([("Empresa", EmpresaContext.NombreEmpresa), ("RFC", EmpresaContext.Rfc)])"
                    EmpresaId="EmpresaContext.EmpresaId"
+                   Imagen="ImagenCorreo"
                    OnCerrar="() => AdjuntosCorreo = []"
                    OnEnviado="texto => Avisar(texto)" />
 
@@ -760,6 +761,7 @@
 
     // Reporte en Excel listo para enviar por correo (mientras tenga archivos, el diálogo está abierto).
     private List<CFDIManager.Web.Services.Correo.AdjuntoCorreo> AdjuntosCorreo = [];
+    private byte[]? ImagenCorreo;
 
     private async Task PrepararCorreo()
     {
@@ -768,6 +770,9 @@
             AdminXmlFiltroDto f = FiltroAccion();
             EmpresaDto empresa = EmpresaContext.EmpresaActiva!;
             (byte[] contenido, string nombre) = await Task.Run(() => Admin.GenerarExcel(empresa, f, TipoReporte));
+
+            // Resumen dentro del correo: claro (fondo del correo) y una sección debajo de la otra (ancho de correo).
+            ImagenCorreo = await GenerarImagenResumen(empresa, "debajo", claro: true);
 
             AdjuntosCorreo =
             [
@@ -1568,28 +1573,12 @@
 
         try
         {
-            AdminXmlFiltroDto Para(string clasificacion)
-            {
-                AdminXmlFiltroDto f = FiltroSinPestana();
-                f.Clasificacion = clasificacion;
-                f.Busqueda = "";
-                f.Filtrar = "";
-                return f;
-            }
-
             string periodo = TextoPeriodo();
             string forma = FormaImagen;
-            var secciones = new List<CFDIManager.Web.Services.AdministracionXml.ResumenImagen.Seccion>();
-
-            if (forma != "recibidos")
-                secciones.Add(new("Emitidos", "ingresos", Repo.ObtenerTotalesAdministracionXml(Para("EMITIDO"))));
-            if (forma != "emitidos")
-                secciones.Add(new("Recibidos", "egresos", Repo.ObtenerTotalesAdministracionXml(Para("RECIBIDO"))));
 
             // La imagen sigue el tema que el usuario tiene en la app (claro u oscuro).
             bool claro = await JS.InvokeAsync<string>("cfdiTheme.current") == "light";
-            byte[] png = await Task.Run(() => CFDIManager.Web.Services.AdministracionXml.ResumenImagen.Generar(
-                empresa.NombreParaMostrar, empresa.Rfc, periodo, secciones, juntas: forma == "juntas", claro: claro));
+            byte[] png = await GenerarImagenResumen(empresa, forma, claro);
 
             string lado = forma switch { "emitidos" => " Emitidos", "recibidos" => " Recibidos", _ => "" };
             string nombre = $"{empresa.Rfc} Resumen{lado} {periodo.Replace("–", "a").Replace(",", "")}.png";
@@ -1604,6 +1593,30 @@
         {
             GenerandoImagen = false;
         }
+    }
+
+    /// <summary>PNG con los totales del periodo (sin pestaña ni búsqueda) en la forma elegida.</summary>
+    private Task<byte[]> GenerarImagenResumen(EmpresaDto empresa, string forma, bool claro)
+    {
+        AdminXmlFiltroDto Para(string clasificacion)
+        {
+            AdminXmlFiltroDto f = FiltroSinPestana();
+            f.Clasificacion = clasificacion;
+            f.Busqueda = "";
+            f.Filtrar = "";
+            return f;
+        }
+
+        string periodo = TextoPeriodo();
+        var secciones = new List<CFDIManager.Web.Services.AdministracionXml.ResumenImagen.Seccion>();
+
+        if (forma != "recibidos")
+            secciones.Add(new("Emitidos", "ingresos", Repo.ObtenerTotalesAdministracionXml(Para("EMITIDO"))));
+        if (forma != "emitidos")
+            secciones.Add(new("Recibidos", "egresos", Repo.ObtenerTotalesAdministracionXml(Para("RECIBIDO"))));
+
+        return Task.Run(() => CFDIManager.Web.Services.AdministracionXml.ResumenImagen.Generar(
+            empresa.NombreParaMostrar, empresa.Rfc, periodo, secciones, juntas: forma == "juntas", claro: claro));
     }
 
     /// <summary>"Octubre 2026", "Septiembre – Octubre 2026", "Octubre 2026 · días 1, 2" o "Enero – Octubre 2026 (acumulado)".</summary>

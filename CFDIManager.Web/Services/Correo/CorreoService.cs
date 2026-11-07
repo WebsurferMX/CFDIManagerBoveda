@@ -9,6 +9,9 @@ namespace CFDIManager.Web.Services.Correo;
 
 public sealed record AdjuntoCorreo(string Nombre, string TipoContenido, byte[] Contenido);
 
+/// <summary>Imagen dentro del cuerpo del correo; el HTML la referencia con src="cid:{Cid}".</summary>
+public sealed record ImagenEnLinea(string Cid, string Nombre, byte[] Contenido);
+
 public sealed class MensajeCorreo
 {
     public string Tipo { get; init; } = "General";
@@ -24,6 +27,8 @@ public sealed class MensajeCorreo
     public string CuerpoTexto { get; init; } = "";
 
     public IReadOnlyList<AdjuntoCorreo> Adjuntos { get; init; } = [];
+
+    public IReadOnlyList<ImagenEnLinea> Imagenes { get; init; } = [];
 
     /// <summary>Usuario que envía (bitácora).</summary>
     public string EnviadoPor { get; init; } = "";
@@ -43,6 +48,13 @@ public sealed class CorreoService(PostgreSqlRepository repo, IDataProtectionProv
     private readonly IDataProtector _protector = proteccion.CreateProtector("CFDIManager.Smtp");
 
     public ConfiguracionCorreoDto ObtenerConfiguracion() => repo.ObtenerConfiguracionCorreo();
+
+    public const string ClavePie = "correo_pie";
+
+    /// <summary>Pie de todos los correos (vacío: el de omisión de la plantilla).</summary>
+    public string ObtenerPie() => repo.ObtenerConfiguracionApp(ClavePie) ?? "";
+
+    public void GuardarPie(string pie) => repo.GuardarConfiguracionApp(ClavePie, (pie ?? "").Trim());
 
     public bool EstaConfigurado()
     {
@@ -159,6 +171,12 @@ public sealed class CorreoService(PostgreSqlRepository repo, IDataProtectionProv
             HtmlBody = mensaje.CuerpoHtml,
             TextBody = mensaje.CuerpoTexto
         };
+
+        foreach (ImagenEnLinea imagen in mensaje.Imagenes)
+        {
+            MimeEntity recurso = cuerpo.LinkedResources.Add(imagen.Nombre, imagen.Contenido, ContentType.Parse("image/png"));
+            recurso.ContentId = imagen.Cid;
+        }
 
         foreach (AdjuntoCorreo adjunto in mensaje.Adjuntos)
             cuerpo.Attachments.Add(adjunto.Nombre, adjunto.Contenido, ContentType.Parse(adjunto.TipoContenido));

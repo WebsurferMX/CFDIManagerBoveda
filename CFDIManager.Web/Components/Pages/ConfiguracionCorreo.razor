@@ -162,6 +162,19 @@
                 </div>
             </div>
 
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <span class="eyebrow">TODOS LOS CORREOS</span>
+                    <h2 class="h5">Pie de los correos</h2>
+                    <textarea class="form-control small" rows="4" @bind="Pie" maxlength="600"></textarea>
+                    <div class="d-flex justify-content-end mt-2">
+                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="GuardarPie" disabled="@Ocupado">
+                            <i class="bi bi-save me-1"></i>Guardar pie
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div class="card shadow-sm flex-grow-1">
                 <div class="card-header bg-body d-flex justify-content-between align-items-center py-3">
                     <div>
@@ -222,12 +235,31 @@
     private string? Exito;
     private string? Error;
 
+    // Pie de todos los correos.
+    private string Pie = "";
+
+    private void GuardarPie()
+    {
+        Exito = Error = null;
+
+        try
+        {
+            Correo.GuardarPie(Pie);
+            Exito = "El pie de los correos se guardó.";
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+    }
+
     protected override async Task OnInitializedAsync()
     {
         try
         {
             Modelo = Correo.ObtenerConfiguracion();
             TienePassword = !string.IsNullOrEmpty(Modelo.Password);
+            Pie = Correo.ObtenerPie() is { Length: > 0 } pie ? pie : PlantillaCorreo.PieOmision;
             CargarBitacora();
 
             var usuario = await Acceso.ObtenerUsuarioActualAsync();

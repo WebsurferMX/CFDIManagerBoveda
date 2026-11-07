@@ -29,6 +29,33 @@ public static class PlantillaCorreo
         public string? UrlBoton { get; init; }
 
         public string? Nota { get; init; }
+
+        /// <summary>Content-ID de una imagen en línea (p. ej. el resumen de XML) que va después de los párrafos.</summary>
+        public string? ImagenCid { get; init; }
+    }
+
+    /// <summary>Pie de todos los correos si no se ha configurado otro (Configuración → Correo).</summary>
+    public const string PieOmision =
+        "Este correo lo envió automáticamente CFDI Manager. Si no esperabas este mensaje, avisa al administrador de tu empresa.\n" +
+        "Ernesto Hernandez enha@cga.bar";
+
+    /// <summary>Lee el pie configurado; lo asigna Program al arrancar.</summary>
+    public static Func<string?>? LeerPie { get; set; }
+
+    /// <summary>El pie configurado o, si está vacío o no se puede leer, el de omisión.</summary>
+    public static string Pie
+    {
+        get
+        {
+            try
+            {
+                return LeerPie?.Invoke() is { Length: > 0 } pie && !string.IsNullOrWhiteSpace(pie) ? pie.Trim() : PieOmision;
+            }
+            catch
+            {
+                return PieOmision;
+            }
+        }
     }
 
     public static (string Html, string Texto) Construir(Contenido c)
@@ -58,6 +85,9 @@ public static class PlantillaCorreo
 
         foreach (string parrafo in c.Parrafos)
             html.Append($"""<p style="margin:0 0 14px;font-size:15px;line-height:1.6;color:#334155;">{E(parrafo)}</p>""");
+
+        if (!string.IsNullOrWhiteSpace(c.ImagenCid))
+            html.Append($"""<img src="cid:{E(c.ImagenCid)}" alt="Resumen" width="536" style="display:block;width:100%;max-width:536px;height:auto;margin:6px 0 18px;border:1px solid #e2e8f0;border-radius:8px;">""");
 
         if (c.Datos.Count > 0)
         {
@@ -93,11 +123,12 @@ public static class PlantillaCorreo
         if (!string.IsNullOrWhiteSpace(c.Nota))
             html.Append($"""<p style="margin:0 0 14px;padding:12px 14px;border-left:3px solid {ColorAcento};background:#f0f9fb;font-size:13px;line-height:1.5;color:#334155;">{E(c.Nota)}</p>""");
 
+        string pie = string.Join("<br>", Pie.Split('\n').Select(l => E(l.TrimEnd('\r'))));
+
         html.Append($"""
             </td></tr>
             <tr><td style="padding:18px 32px 26px;border-top:1px solid #eef1f5;font-size:12px;line-height:1.5;color:#94a3b8;">
-                Este correo lo envió automáticamente CFDI Manager. Si no esperabas este mensaje, avisa al administrador de tu empresa.
-                Ernesto Hernandez enha@cga.bar
+                {pie}
             </td></tr>
             </table>
             </td></tr></table>
@@ -122,6 +153,8 @@ public static class PlantillaCorreo
 
         if (!string.IsNullOrWhiteSpace(c.Nota))
             texto.AppendLine().AppendLine(c.Nota);
+
+        texto.AppendLine().AppendLine("--").AppendLine(Pie);
 
         return (html.ToString(), texto.ToString());
     }
