@@ -12,10 +12,13 @@ public sealed class GrupoEnvioCfdi
     public string Nombre { get; init; } = "";
     public List<AdminXmlFilaDto> Cfdis { get; init; } = [];
 
-    /// <summary>Correo(s) a enviar, separados por coma; se propone el guardado o el de SINUBE.</summary>
+    /// <summary>Correo(s) del catálogo de clientes de SINUBE, separados por coma (editables, no se guardan).</summary>
     public string Para { get; set; } = "";
 
-    /// <summary>De dónde salió el correo propuesto: "guardado", "SINUBE" o "".</summary>
+    /// <summary>Correos adicionales; se recuerdan por RFC con lo que tenga al enviar (vacío los borra).</summary>
+    public string Adicionales { get; set; } = "";
+
+    /// <summary>"SINUBE" si el correo salió del catálogo de clientes; "" si no.</summary>
     public string Origen { get; set; } = "";
 
     /// <summary>Nombre comercial del catálogo de clientes de SINUBE (va en el PDF debajo del receptor).</summary>
@@ -31,7 +34,7 @@ public sealed class GrupoEnvioCfdi
 
 /// <summary>
 /// "Enviar CFDI" de Administración de XML: manda a cada contraparte el PDF (formato SINUBE) y el XML de sus comprobantes.
-/// El correo propuesto es el último usado con ese RFC o, si no hay, el del catálogo de clientes de SINUBE.
+/// El correo propuesto es el del catálogo de clientes de SINUBE o, si no tiene, el último que se capturó para ese RFC.
 /// </summary>
 public class EnvioCfdiService(
     PostgreSqlRepository repo,
@@ -70,42 +73,43 @@ public class EnvioCfdiService(
 
         foreach (GrupoEnvioCfdi g in grupos)
         {
-            if (repo.ObtenerConfiguracionApp(ClaveCorreo(empresa.EmpresaId, g.Rfc)) is { Length: > 0 } guardado)
+            // Primero el correo del catálogo de clientes de SINUBE (público en general no está ahí).
+            if (conSinube && g.Rfc is not ("XAXX010101000" or "XEXX010101000"))
             {
-                g.Para = guardado;
-                g.Origen = "guardado";
-            }
-
-            // Público en general no está en el catálogo de clientes.
-            if (!conSinube || g.Rfc is "XAXX010101000" or "XEXX010101000")
-                continue;
-
-            try
-            {
-                if (await datosSinube.ClienteAsync(config, g.Rfc, ct) is { } cliente)
+                try
                 {
-                    g.NombreComercial = cliente.NombreComercial;
-                    if (g.Para == "" && cliente.Email != "")
+                    if (await datosSinube.ClienteAsync(config, g.Rfc, ct) is { } cliente)
                     {
-                        g.Para = cliente.Email;
-                        g.Origen = "SINUBE";
+                        g.NombreComercial = cliente.NombreComercial;
+                        if (cliente.Email != "")
+                        {
+                            g.Para = cliente.Email;
+                            g.Origen = "SINUBE";
+                        }
                     }
                 }
+                catch (Exception) when (!ct.IsCancellationRequested)
+                {
+                    // Sin SINUBE se usa el último correo capturado.
+                }
             }
-            catch (Exception) when (!ct.IsCancellationRequested)
-            {
-                // Sin SINUBE se captura el correo a mano.
-            }
+
+            // Además, los adicionales que se dejaron la última vez para ese RFC.
+            g.Adicionales = repo.ObtenerConfiguracionApp(ClaveCorreo(empresa.EmpresaId, g.Rfc)) ?? "";
         }
 
         return grupos;
     }
 
-    /// <summary>Envía el PDF y el XML de cada CFDI del grupo y recuerda el correo para ese RFC.</summary>
+    /// <summary>Envía el PDF y el XML de cada CFDI del grupo y recuerda el correo (se usa si SINUBE no tiene uno).</summary>
     public async Task EnviarAsync(
         EmpresaDto empresa, GrupoEnvioCfdi grupo, IReadOnlyList<string> cc, string mensaje, string enviadoPor, CancellationToken ct = default)
     {
-        List<string> para = CorreoService.SepararCorreos(grupo.Para);
+        List<string> adicionales = CorreoService.SepararCorreos(grupo.Adicionales);
+        List<string> para = CorreoService.SepararCorreos(grupo.Para)
+            .Concat(adicionales)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         if (para.Count == 0)
             throw new InvalidOperationException("Escribe al menos un correo.");
 
@@ -157,7 +161,8 @@ public class EnvioCfdiService(
             EmpresaId = empresa.EmpresaId
         }, cancelacion: ct);
 
-        repo.GuardarConfiguracionApp(ClaveCorreo(empresa.EmpresaId, grupo.Rfc), string.Join(", ", para));
+        // Los adicionales se recuerdan tal como quedaron (vacío los borra).
+        repo.GuardarConfiguracionApp(ClaveCorreo(empresa.EmpresaId, grupo.Rfc), string.Join(", ", adicionales));
     }
 
     private static string Folio(AdminXmlFilaDto x) =>

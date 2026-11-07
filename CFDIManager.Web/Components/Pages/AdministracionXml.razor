@@ -708,11 +708,12 @@
                                         <td class="text-end small" title="@string.Join(", ", g.Cfdis.Select(x => $"{x.Serie}{x.Folio}"))">@g.Cfdis.Count</td>
                                         <td class="text-end small">@g.Total.ToString("C2")</td>
                                         <td>
-                                            <input class="form-control form-control-sm" @bind="g.Para" placeholder="correo@cliente.com" disabled="@EnviandoCfdi" />
-                                            @if (g.Origen != "")
-                                            {
-                                                <div class="form-text mt-0">@(g.Origen == "SINUBE" ? "Del catálogo de clientes de SINUBE" : "Último correo usado")</div>
-                                            }
+                                            <input class="form-control form-control-sm" @bind="g.Para" placeholder="Sin correo en SINUBE" disabled="@EnviandoCfdi"
+                                                   title="Del catálogo de clientes de SINUBE" />
+                                            <div class="form-text mt-0 mb-1">@(g.Origen == "SINUBE" ? "Del catálogo de clientes de SINUBE" : "SINUBE no tiene correo para este cliente")</div>
+                                            <input class="form-control form-control-sm" @bind="g.Adicionales" placeholder="Correos adicionales" disabled="@EnviandoCfdi"
+                                                   title="Se recuerdan para este RFC; si los dejas vacíos, se borran" />
+                                            <div class="form-text mt-0">Adicionales: se recuerdan para este RFC</div>
                                         </td>
                                         <td class="small">
                                             @if (g.Resultado == "Enviado")

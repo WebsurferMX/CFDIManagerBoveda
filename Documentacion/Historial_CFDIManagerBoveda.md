@@ -254,7 +254,7 @@ Se crean solas al arrancar.
 | Importación a SINUBE | Series alternas también para **proveedores** cuando el folio ya existe (solo después de Revisar en SINUBE) | `8f35a73` |
 | Correo | Pie editable en Configuración → Correo; tarjeta fluida hasta 760 px; Enviar por correo lleva dentro la **imagen del resumen** con las tarjetas KPI de la pantalla | `e316f56`, `4daf8bb`, `125725f` |
 | PDF | Representación impresa con el **formato de SINUBE** (Serie-Folio, impuestos por concepto, importe con letra, sellos y QR); logo del Catálogo de logos, importable desde la dirección o el HTML del formato de SINUBE | `2d81a08` |
-| **Enviar CFDI** | Herramienta de Administración de XML: PDF y XML de los marcados (o el activo), un correo por contraparte. Propone el último correo usado con ese RFC o el del catálogo de clientes de SINUBE (`DbCliente`, con su nombre comercial para el PDF); CC recordado por empresa y copia para quien envía | `2d81a08`, `725dc0e` |
+| **Enviar CFDI** | Herramienta de Administración de XML: PDF y XML de los marcados (o el activo), un correo por contraparte. Propone el correo del catálogo de clientes de SINUBE (`DbCliente`, con su nombre comercial para el PDF) más los correos adicionales recordados por RFC (lo que quede al enviar se guarda; vacío los borra); CC recordado por empresa y copia para quien envía | `2d81a08`, `725dc0e` |
 
 Versiones etiquetadas en GitHub: **v0.1.0** (imagen del resumen con KPI) y **v0.2.0** (Enviar CFDI), ambas del 7/11.
 
@@ -270,7 +270,7 @@ Versiones etiquetadas en GitHub: **v0.1.0** (imagen del resumen con KPI) y **v0.
 | Datos (Storage) | `C:\CFDIManagerDatos\Storage`, fuera de la carpeta del programa; se define por equipo en Herramientas (`carpeta_storage:<EQUIPO>`) |
 | XML | `Storage\XML\<RFC>\Emitidos\|Recibidos\AAAA\MM` |
 | Logos del PDF | `Storage\Logos\<RFC>.png\|.jpg` (Catálogo de logos de Administración de XML) |
-| Ajustes en `configuracion_app` | `correo_pie` (pie de los correos), `correo_cfdi:<empresa>:<RFC>` (último correo de Enviar CFDI por RFC), `correo_cfdi_cc:<empresa>` (CC de Enviar CFDI), `isr_enterado:<empresa>:<año>` (visor de nóminas) |
+| Ajustes en `configuracion_app` | `correo_pie` (pie de los correos), `correo_cfdi:<empresa>:<RFC>` (correos adicionales de Enviar CFDI por RFC), `correo_cfdi_cc:<empresa>` (CC de Enviar CFDI), `isr_enterado:<empresa>:<año>` (visor de nóminas) |
 | Llaves de cifrado (CIEC, SMTP, SINUBE) | Tabla `proteccion_llaves`, cifradas con `CFDI_CLAVE_MAESTRA` (debe ser la misma en todos los equipos). Sin ella se usa `Storage\Llaves` con DPAPI y en otro equipo hay que volver a capturar las contraseñas |
 | e.firma | `Storage\Certificados\{RFC}\{RFC}.cer/.key` |
 | Sesiones de Claude Code | `websu`: `C:\Users\websu\.claude\projects\`; ERNESTO-CGA: `C:\Users\Ernesto Hernández\.claude\projects\` (copia en `Desktop\projects.rar`); servidor: `C:\Users\CFDI Manager\.claude\projects\` |
