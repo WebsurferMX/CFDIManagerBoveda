@@ -734,6 +734,13 @@
                         <div class="col-md-6">
                             <label class="form-label small fw-semibold mb-1">Con copia (CC)</label>
                             <input class="form-control form-control-sm" @bind="CcEnvio" disabled="@EnviandoCfdi" />
+                            @if (MiCorreoEnvio != "")
+                            {
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" id="cfdi-copia" @bind="CopiaParaMiEnvio" disabled="@EnviandoCfdi" />
+                                    <label class="form-check-label small" for="cfdi-copia">Enviarme una copia (@MiCorreoEnvio)</label>
+                                </div>
+                            }
                         </div>
                         <div class="col-md-6">
                             <label class="form-label small fw-semibold mb-1">Mensaje</label>
@@ -859,6 +866,8 @@
     private bool PreparandoEnvio;
     private bool EnviandoCfdi;
     private string CcEnvio = "";
+    private string MiCorreoEnvio = "";
+    private bool CopiaParaMiEnvio;
     private string MensajeEnvio = "Buen día:\nTe envío los comprobantes fiscales (PDF y XML) adjuntos.\nSaludos.";
 
     private static string ClaveCcEnvio(long empresaId) => $"correo_cfdi_cc:{empresaId}";
@@ -886,6 +895,13 @@
         GruposEnvio = [];
         // CC que la empresa usa siempre (p. ej. sus propios correos de ventas): el último capturado.
         CcEnvio = Repo.ObtenerConfiguracionApp(ClaveCcEnvio(empresa.EmpresaId)) ?? "";
+
+        // Copia para el usuario que envía (su correo de Usuarios), marcada de entrada como en "Enviar por correo".
+        var yo = await Acceso.ObtenerUsuarioActualAsync();
+        MiCorreoEnvio = CFDIManager.Web.Services.Seguridad.AccesoEmpresasService.ObtenerUsuarioId(yo) is long idUsuario
+            ? Repo.ObtenerUsuarioPorId(idUsuario)?.Email ?? ""
+            : "";
+        CopiaParaMiEnvio = MiCorreoEnvio != "";
         PreparandoEnvio = true;
         TituloModal = "Enviar CFDI";
         Modal = "enviarcfdi";
@@ -916,6 +932,9 @@
         string enviadoPor = usuario.FindFirst(CFDIManager.Web.Services.Seguridad.UsuarioClaimsFactory.NombreCompleto)?.Value ?? usuario.Identity?.Name ?? "";
         List<string> cc = CFDIManager.Web.Services.Correo.CorreoService.SepararCorreos(CcEnvio);
         Repo.GuardarConfiguracionApp(ClaveCcEnvio(empresa.EmpresaId), string.Join(", ", cc));
+
+        if (CopiaParaMiEnvio && MiCorreoEnvio != "" && !cc.Contains(MiCorreoEnvio, StringComparer.OrdinalIgnoreCase))
+            cc.Add(MiCorreoEnvio);
 
         foreach (GrupoEnvioCfdi g in GruposEnvio.Where(g => g.Enviar && g.Resultado != "Enviado"))
         {
