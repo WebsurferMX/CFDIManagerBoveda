@@ -133,6 +133,30 @@ Cuerpo: el XML del CFDI (UTF-8, líneas unidas con CRLF)
 
 ---
 
+## 3.1 Reglas de CFDI Manager (Importación a SINUBE y XML Azulejeras)
+
+**SINUBE identifica por serie y folio, no por UUID.** Si otro comprobante ya ocupa ese serie-folio, responde
+"ya existe" aunque el CFDI sea distinto (folios reutilizados, proveedores que repiten folio, pagos con el folio de la
+factura). Por eso:
+
+| Caso | Qué hace la app | Qué configurar |
+|---|---|---|
+| Clientes (facturas, notas, pagos) con folio ocupado | Reintenta con las **series alternas** en orden (NC-3569 → NC-FR 3569). El XML de la bóveda no cambia | Herramientas → "Facturas, notas y pagos de clientes", p. ej. `+FR,+FRR` |
+| Proveedores con folio ocupado | Igual, solo **después de Revisar en SINUBE** (SINUBE no dice el UUID en su respuesta) | Herramientas → "Facturas, notas y pagos de proveedores", p. ej. `+*,+FR`. Otra opción: en SINUBE, proveedor → **Omitir serie y folio al importar XML** |
+| XML Azulejeras | Series alternas propias sobre la serie ya convertida (72AA → 72AAA) | Parámetros de XML Azulejeras, p. ej. `+*,+**` |
+| Marcados como "ya en SINUBE" que SINUBE no tiene con su UUID | No cuentan como subidos; aviso con botón **Quitar marca** para volver a subirlos | — (nunca usar "Marcar como ya en SINUBE" cuando es otro comprobante) |
+| Traslados propios (emisor = receptor) | Se suben como cliente **y** como proveedor, estén guardados en Emitidos o en Recibidos | Casilla **Traslado** en proveedores |
+| Rechazo "no tiene un rango de folios" | Es configuración del certificado/serie en SINUBE (rango agotado); no es un problema de la app | Ampliar el rango de folios en SINUBE |
+
+Formato de las series alternas: separadas por coma; `+X` agrega X a la serie original; `*` dentro del sufijo es la
+última letra de la serie (`+*`: 72AA → 72AAA, 76EE → 76EEE; sin serie no aplica); una serie sin `+` es fija (`COMFR`).
+
+En XML Azulejeras, las series con regla propia convierten **todas** sus facturas (público general cambia además el
+nombre a CLIENTE MOSTRADOR; clientes con RFC conservan su nombre). En MAJAR, 72A–75A → xxAA y 76E → 76EE; en Azulejera
+BM, 7A → 7AA y 50E se queda en 50E.
+
+---
+
 ## 4. Lista rápida
 
 **Clientes**
