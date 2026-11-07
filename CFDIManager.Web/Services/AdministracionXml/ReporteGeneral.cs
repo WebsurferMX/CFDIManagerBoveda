@@ -964,7 +964,7 @@ public static partial class ReporteGeneral
     private static string Catalogo(IReadOnlyDictionary<string, string> catalogo, string clave) =>
         clave.Length == 0 ? "" : catalogo.TryGetValue(clave, out var descripcion) ? $"{clave} - {descripcion}" : clave;
 
-    private static class Catalogos
+    internal static class Catalogos
     {
         public static readonly Dictionary<string, string> Forma = new()
         {

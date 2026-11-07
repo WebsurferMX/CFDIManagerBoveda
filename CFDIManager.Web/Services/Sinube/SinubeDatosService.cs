@@ -126,6 +126,24 @@ public class SinubeDatosService(SinubeService sinube, IHttpClientFactory http)
         return pagos;
     }
 
+    /// <summary>Correo(s) y nombre comercial del cliente en el catálogo de SINUBE (DbCliente), o null si no está.</summary>
+    public async Task<(string Email, string NombreComercial)?> ClienteAsync(
+        SinubeConfiguracionDto configuracion, string rfc, CancellationToken cancelacion = default)
+    {
+        string empresa = configuracion.Empresa.Replace("'", "");
+        List<FilaSinube> filas = await ConsultarAsync(configuracion,
+            $"SELECT email, nombreComercial FROM DbCliente WHERE empresa = '{empresa}' AND rfcCliente = '{rfc.Trim().ToUpperInvariant().Replace("'", "")}'",
+            cancelacion);
+
+        if (filas.Count == 0)
+            return null;
+
+        // SINUBE separa varios correos con ";".
+        string email = string.Join(", ", (filas[0].Texto("email") ?? "")
+            .Split([';', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        return (email, (filas[0].Texto("nombreComercial") ?? "").Trim());
+    }
+
     /// <summary>
     /// Ejecuta un SELECT y regresa todas las filas (sigue el CURSOR hasta la última página).
     /// La consulta no debe incluir TAMPAG/CURSOR/NOADMINSINUBE: se agregan aquí.

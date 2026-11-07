@@ -7,9 +7,59 @@ public partial class CatalogoLogosService
 {
     private readonly string _carpeta;
 
-    public CatalogoLogosService(IWebHostEnvironment ambiente)
+    private readonly IHttpClientFactory? _http;
+
+    public CatalogoLogosService(IWebHostEnvironment ambiente, IHttpClientFactory? http = null)
     {
         _carpeta = CarpetaStorage.Ruta("Logos");
+        _http = http;
+    }
+
+    [GeneratedRegex("""<img[^>]+src\s*=\s*["']([^"']+)["']""", RegexOptions.IgnoreCase)]
+    private static partial Regex ImagenHtml();
+
+    /// <summary>
+    /// Logo desde la dirección de la imagen o desde el HTML del formato de impresión de SINUBE (toma el primer
+    /// &lt;img src&gt;). Solo direcciones públicas http/https.
+    /// </summary>
+    public async Task ImportarAsync(string rfc, string direccionOHtml, CancellationToken ct = default)
+    {
+        string texto = (direccionOHtml ?? "").Trim();
+        string url = ImagenHtml().Match(texto) is { Success: true } m ? m.Groups[1].Value : texto;
+
+        if (!Uri.TryCreate(System.Net.WebUtility.HtmlDecode(url), UriKind.Absolute, out Uri? uri) || uri.Scheme is not ("http" or "https"))
+            throw new InvalidOperationException("Pega la dirección (http/https) de la imagen o el HTML del formato con su <img src=…>.");
+
+        // No se descargan direcciones de la red interna.
+        System.Net.IPAddress[] ips = await System.Net.Dns.GetHostAddressesAsync(uri.Host, ct);
+        if (ips.Length == 0 || ips.Any(EsInterna))
+            throw new InvalidOperationException("La dirección del logo debe ser de internet.");
+
+        using HttpClient cliente = _http?.CreateClient() ?? new HttpClient();
+        cliente.Timeout = TimeSpan.FromSeconds(20);
+        using var solicitud = new HttpRequestMessage(HttpMethod.Get, uri);
+        // PNG o JPG (no WebP, que no se usa en el PDF).
+        solicitud.Headers.Accept.ParseAdd("image/png,image/jpeg;q=0.9");
+        using HttpResponseMessage respuesta = await cliente.SendAsync(solicitud, HttpCompletionOption.ResponseHeadersRead, ct);
+        respuesta.EnsureSuccessStatusCode();
+
+        if (respuesta.Content.Headers.ContentLength is > 5 * 1024 * 1024)
+            throw new InvalidOperationException("El logo pesa más de 5 MB.");
+
+        byte[] imagen = await respuesta.Content.ReadAsByteArrayAsync(ct);
+        Guardar(rfc, imagen);
+    }
+
+    private static bool EsInterna(System.Net.IPAddress ip)
+    {
+        if (System.Net.IPAddress.IsLoopback(ip) || ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal)
+            return true;
+
+        byte[] b = ip.MapToIPv4().GetAddressBytes();
+        return ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork || ip.IsIPv4MappedToIPv6
+            ? b[0] == 10 || b[0] == 127 || (b[0] == 172 && b[1] is >= 16 and <= 31) || (b[0] == 192 && b[1] == 168) ||
+              (b[0] == 169 && b[1] == 254) || (b[0] == 100 && b[1] is >= 64 and <= 127) || b[0] == 0
+            : false;
     }
 
     [GeneratedRegex("^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$")]

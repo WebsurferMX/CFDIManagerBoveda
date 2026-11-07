@@ -20,6 +20,7 @@
 @inject PeriodoTrabajoService Periodo
 @inject CFDIManager.Web.Services.Sat.EstadoDescargaAutomaticaSat DescargaSat
 @inject CFDIManager.Web.Services.AdministracionXml.ValidacionSatSegundoPlano ValidacionesSat
+@inject EnvioCfdiService EnvioCfdi
 
 <PageTitle>Administración de XML</PageTitle>
 
@@ -613,6 +614,11 @@
                     <input class="form-control font-monospace text-uppercase" style="max-width: 180px" @bind="RfcLogo" />
                     <InputFile class="form-control" accept=".png,.jpg,.jpeg" OnChange="GuardarLogo" />
                 </div>
+                <div class="input-group mb-3">
+                    <span class="input-group-text"><i class="bi bi-cloud-download me-1"></i>De SINUBE</span>
+                    <input class="form-control" placeholder="Dirección del logo o HTML del formato de SINUBE" @bind="LogoSinube" />
+                    <button type="button" class="btn btn-outline-primary" @onclick="ImportarLogo" disabled="@(string.IsNullOrWhiteSpace(LogoSinube))">Importar</button>
+                </div>
                 <div class="logos">
                     @foreach (string rfc in LogosGuardados)
                     {
@@ -671,6 +677,88 @@
                 </p>
                 break;
 
+            case "enviarcfdi":
+                @if (PreparandoEnvio)
+                {
+                    <div class="text-body-secondary py-4 text-center"><span class="spinner-border spinner-border-sm me-2"></span>Consultando correos…</div>
+                }
+                else
+                {
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 2rem"></th>
+                                    <th>Para</th>
+                                    <th class="text-end">CFDI</th>
+                                    <th class="text-end">Total</th>
+                                    <th style="min-width: 18rem">Correo</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (GrupoEnvioCfdi g in GruposEnvio)
+                                {
+                                    <tr>
+                                        <td><input type="checkbox" class="form-check-input" @bind="g.Enviar" disabled="@EnviandoCfdi" /></td>
+                                        <td>
+                                            <div class="fw-semibold small">@g.Nombre</div>
+                                            <div class="small text-body-secondary font-monospace">@g.Rfc@(g.NombreComercial != "" ? $" · {g.NombreComercial}" : "")</div>
+                                        </td>
+                                        <td class="text-end small" title="@string.Join(", ", g.Cfdis.Select(x => $"{x.Serie}{x.Folio}"))">@g.Cfdis.Count</td>
+                                        <td class="text-end small">@g.Total.ToString("C2")</td>
+                                        <td>
+                                            <input class="form-control form-control-sm" @bind="g.Para" placeholder="correo@cliente.com" disabled="@EnviandoCfdi" />
+                                            @if (g.Origen != "")
+                                            {
+                                                <div class="form-text mt-0">@(g.Origen == "SINUBE" ? "Del catálogo de clientes de SINUBE" : "Último correo usado")</div>
+                                            }
+                                        </td>
+                                        <td class="small">
+                                            @if (g.Resultado == "Enviado")
+                                            {
+                                                <span class="badge text-bg-success">Enviado</span>
+                                            }
+                                            else if (g.Resultado != "")
+                                            {
+                                                <span class="text-danger">@g.Resultado</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold mb-1">Con copia (CC)</label>
+                            <input class="form-control form-control-sm" @bind="CcEnvio" disabled="@EnviandoCfdi" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-semibold mb-1">Mensaje</label>
+                            <textarea class="form-control form-control-sm" rows="3" @bind="MensajeEnvio" disabled="@EnviandoCfdi"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="small text-body-secondary">PDF (formato SINUBE) y XML de cada CFDI · un correo por destinatario</span>
+                        <button type="button" class="btn btn-primary ms-auto" @onclick="EnviarCfdis"
+                                disabled="@(EnviandoCfdi || !GruposEnvio.Any(g => g.Enviar && g.Resultado != "Enviado"))">
+                            @if (EnviandoCfdi)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1"></span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-send me-1"></i>
+                            }
+                            Enviar @GruposEnvio.Count(g => g.Enviar && g.Resultado != "Enviado") correo(s)
+                        </button>
+                    </div>
+                }
+                break;
+
             case "imagen":
                 <div class="d-flex flex-column gap-2 mb-3">
                     @foreach (var (clave, titulo, icono) in FormasImagen)
@@ -720,6 +808,7 @@
             ("Exportar a Excel", "bi-file-earmark-excel", "verde", () => Exportar(TipoReporte)),
             ("Imagen del resumen", "bi-image", "morado", Sincrona(() => AbrirModal("imagen"))),
             ("Enviar por correo", "bi-envelope-paper", "azul", PrepararCorreo),
+            ("Enviar CFDI", "bi-send", "verde", PrepararEnvioCfdi),
             ("Abrir XML", "bi-filetype-xml", "azul", Sincrona(AbrirXml)),
             ("Generar PDF", "bi-file-earmark-pdf", "rojo", GenerarPdf),
             ("Valida Estado SAT", "bi-shield-check", "azul", ValidarEstadoSat),
@@ -756,12 +845,100 @@
         "complemento" => "bi-braces",
         "red" => "bi-hdd-network",
         "imagen" => "bi-image",
+        "enviarcfdi" => "bi-send",
         _ => "bi-window"
     };
 
     // Reporte en Excel listo para enviar por correo (mientras tenga archivos, el diálogo está abierto).
     private List<CFDIManager.Web.Services.Correo.AdjuntoCorreo> AdjuntosCorreo = [];
     private byte[]? ImagenCorreo;
+
+    // ---------- Enviar CFDI: PDF (formato SINUBE) y XML, un correo por contraparte ----------
+    private const int MaximoEnvioCfdi = 200;
+    private List<GrupoEnvioCfdi> GruposEnvio = [];
+    private bool PreparandoEnvio;
+    private bool EnviandoCfdi;
+    private string CcEnvio = "";
+    private string MensajeEnvio = "Buen día:\nTe envío los comprobantes fiscales (PDF y XML) adjuntos.\nSaludos.";
+
+    private static string ClaveCcEnvio(long empresaId) => $"correo_cfdi_cc:{empresaId}";
+
+    /// <summary>Los marcados o, si no hay, el comprobante activo.</summary>
+    private async Task PrepararEnvioCfdi()
+    {
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa)
+            return;
+
+        List<long> ids = !TodoElFiltro && Marcadas.Count > 0 ? Marcadas.ToList() : Activa is not null ? [ActivaId] : [];
+
+        if (ids.Count == 0)
+        {
+            Avisar("Selecciona o marca los comprobantes a enviar.", error: true);
+            return;
+        }
+
+        if (ids.Count > MaximoEnvioCfdi)
+        {
+            Avisar($"Marca hasta {MaximoEnvioCfdi} comprobantes por envío.", error: true);
+            return;
+        }
+
+        GruposEnvio = [];
+        // CC que la empresa usa siempre (p. ej. sus propios correos de ventas): el último capturado.
+        CcEnvio = Repo.ObtenerConfiguracionApp(ClaveCcEnvio(empresa.EmpresaId)) ?? "";
+        PreparandoEnvio = true;
+        TituloModal = "Enviar CFDI";
+        Modal = "enviarcfdi";
+        StateHasChanged();
+
+        try
+        {
+            GruposEnvio = await EnvioCfdi.PrepararAsync(empresa, ids);
+        }
+        catch (Exception ex)
+        {
+            CerrarModal();
+            Avisar(ex.Message, error: true);
+        }
+        finally
+        {
+            PreparandoEnvio = false;
+        }
+    }
+
+    private async Task EnviarCfdis()
+    {
+        if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa)
+            return;
+
+        EnviandoCfdi = true;
+        var usuario = await Acceso.ObtenerUsuarioActualAsync();
+        string enviadoPor = usuario.FindFirst(CFDIManager.Web.Services.Seguridad.UsuarioClaimsFactory.NombreCompleto)?.Value ?? usuario.Identity?.Name ?? "";
+        List<string> cc = CFDIManager.Web.Services.Correo.CorreoService.SepararCorreos(CcEnvio);
+        Repo.GuardarConfiguracionApp(ClaveCcEnvio(empresa.EmpresaId), string.Join(", ", cc));
+
+        foreach (GrupoEnvioCfdi g in GruposEnvio.Where(g => g.Enviar && g.Resultado != "Enviado"))
+        {
+            g.Resultado = "Enviando…";
+            StateHasChanged();
+
+            try
+            {
+                await EnvioCfdi.EnviarAsync(empresa, g, cc, MensajeEnvio, enviadoPor);
+                g.Resultado = "Enviado";
+            }
+            catch (Exception ex)
+            {
+                g.Resultado = ex.Message;
+            }
+
+            StateHasChanged();
+        }
+
+        EnviandoCfdi = false;
+        int enviados = GruposEnvio.Count(g => g.Resultado == "Enviado");
+        Avisar($"{enviados} de {GruposEnvio.Count(g => g.Enviar)} correo(s) enviados.", error: enviados < GruposEnvio.Count(g => g.Enviar));
+    }
 
     private async Task PrepararCorreo()
     {
@@ -2013,6 +2190,23 @@
             using var memoria = new MemoryStream();
             await e.File.OpenReadStream(5 * 1024 * 1024).CopyToAsync(memoria);
             Logos.Guardar(RfcLogo, memoria.ToArray());
+            LogosGuardados = Logos.Listar();
+            VersionLogos++;
+        }
+        catch (Exception ex)
+        {
+            Avisar(ex.Message, error: true);
+        }
+    }
+
+    private string LogoSinube = "";
+
+    private async Task ImportarLogo()
+    {
+        try
+        {
+            await Logos.ImportarAsync(RfcLogo, LogoSinube);
+            LogoSinube = "";
             LogosGuardados = Logos.Listar();
             VersionLogos++;
         }
