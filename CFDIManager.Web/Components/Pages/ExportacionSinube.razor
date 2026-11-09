@@ -1190,7 +1190,14 @@
             texto.Append($"{r.Estatus}\t{r.TipoComprobante}\t{r.Serie}\t{r.Folio}\t{r.FechaCfdi:dd/MM/yyyy}\t{r.Rfc}\t{r.Nombre}\t{r.Uuid}\t{r.Mensaje.Replace('\n', ' ')}\n");
         }
 
-        await JS.InvokeVoidAsync("navigator.clipboard.writeText", texto.ToString());
+        try
+        {
+            await JS.InvokeAsync<bool>("copiarTexto", texto.ToString());
+        }
+        catch (JSException)
+        {
+            // Sin portapapeles: la pantalla sigue funcionando.
+        }
     }
 
     // ───────────── Herramientas ─────────────

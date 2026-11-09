@@ -1070,8 +1070,14 @@
 
     private async Task Copiar()
     {
-        await JS.InvokeVoidAsync("navigator.clipboard.writeText", Credencial!.Password);
-        Copiado = true;
+        try
+        {
+            Copiado = await JS.InvokeAsync<bool>("copiarTexto", Credencial!.Password);
+        }
+        catch (JSException)
+        {
+            Copiado = false;
+        }
     }
 
     /// <summary>Recarga la lista y, si se indica, vuelve a abrir ese usuario en el formulario.</summary>
