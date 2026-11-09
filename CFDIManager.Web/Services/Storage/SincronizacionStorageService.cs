@@ -46,7 +46,7 @@ public class SincronizacionStorageService
         // 1. Archivos actuales y los ya revisados en pasadas anteriores.
         Dictionary<string, FileInfo> actuales = Directory
             .EnumerateFiles(carpeta, "*.xml", SearchOption.AllDirectories)
-            .Where(a => !a.Contains($"{Path.DirectorySeparatorChar}NoIdentificados{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Where(a => !RutaXmlService.FueraDeBoveda(a))
             .Select(a => new FileInfo(a))
             .ToDictionary(f => f.FullName, StringComparer.OrdinalIgnoreCase);
 

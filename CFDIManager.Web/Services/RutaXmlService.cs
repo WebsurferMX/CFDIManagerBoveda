@@ -42,4 +42,21 @@ public class RutaXmlService
     public string CarpetaEmpresa(
         EmpresaDto empresa) =>
         CarpetaEmpresa(empresa.Rfc);
+
+    /// <summary>Copias con adenda de SINUBE: Emitidos\Adendas\AAAA\MM\UUID.xml (aparte de la copia del SAT).</summary>
+    public const string CarpetaAdendas = "Adendas";
+
+    public string CarpetaAdendasPeriodo(EmpresaDto empresa, int anio, int mes) =>
+        Path.Combine(CarpetaEmpresa(empresa), "Emitidos", CarpetaAdendas, anio.ToString(), mes.ToString("00"));
+
+    /// <summary>
+    /// Carpetas dentro de la de la empresa que no son parte de la bóveda (no se importan ni se registran al sincronizar):
+    /// NoIdentificados y las copias con adenda, que repiten el UUID de la copia del SAT.
+    /// </summary>
+    public static bool FueraDeBoveda(string ruta)
+    {
+        char s = Path.DirectorySeparatorChar;
+        return ruta.Contains($"{s}NoIdentificados{s}", StringComparison.OrdinalIgnoreCase) ||
+               ruta.Contains($"{s}Emitidos{s}{CarpetaAdendas}{s}", StringComparison.OrdinalIgnoreCase);
+    }
 }

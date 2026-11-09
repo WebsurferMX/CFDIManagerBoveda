@@ -190,7 +190,7 @@ public sealed class ResincronizacionBoveda(
     private static List<string> Archivos(string carpeta) =>
         Directory.Exists(carpeta)
             ? Directory.EnumerateFiles(carpeta, "*.xml", SearchOption.AllDirectories)
-                .Where(a => !a.Contains($"{Path.DirectorySeparatorChar}NoIdentificados{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+                .Where(a => !RutaXmlService.FueraDeBoveda(a))
                 .ToList()
             : [];
 

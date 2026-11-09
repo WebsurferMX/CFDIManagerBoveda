@@ -204,6 +204,10 @@ builder.Services.AddScoped<CFDIManager.Web.Services.Sinube.PendientesSinubeServi
 
 builder.Services.AddScoped<CFDIManager.Web.Services.Sinube.ConciliacionSinubeService>();
 
+// Copias con adenda de las facturas emitidas en SINUBE (Emitidos\Adendas), aparte de la copia del SAT.
+builder.Services.AddScoped<CFDIManager.Web.Services.Sinube.AdendasSinubeService>();
+builder.Services.AddHostedService<CFDIManager.Web.Services.Sinube.AdendasSinubeHostedService>();
+
 builder.Services.AddScoped<PostgreSqlRepository>(
     serviceProvider => new PostgreSqlRepository(
         CadenaPostgres(serviceProvider.GetRequiredService<IConfiguration>())));

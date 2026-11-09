@@ -51,6 +51,8 @@ public class EnvioCfdiService(
     CorreoService correo,
     SinubeService sinube,
     SinubeDatosService datosSinube,
+    AdendasSinubeService adendas,
+    RutaXmlService rutas,
     ILogger<EnvioCfdiService> log)
 {
     private static string ClaveCorreo(long empresaId, string rfc) => $"correo_cfdi:{empresaId}:{rfc.Trim().ToUpperInvariant()}";
@@ -184,6 +186,8 @@ public class EnvioCfdiService(
             grupo.NombreComercial, s?.CodigoAux ?? "", RefBancaria: s?.RefBancaria ?? "", Correo: s?.Email ?? "",
             Fiscal: s?.Fiscal, Envio: s?.Envio, Emisor: grupo.DireccionEmisor);
 
+        var mesesRevisados = new HashSet<DateTime>();
+
         foreach (AdminXmlFilaDto x in grupo.Cfdis)
         {
             string ruta = RutaXmlLocal.Resolver(x.RutaXml);
@@ -191,7 +195,8 @@ public class EnvioCfdiService(
                 throw new FileNotFoundException($"No se encontró el XML de {Nombre(x)}.");
 
             string nombre = Nombre(x);
-            byte[] xml = await File.ReadAllBytesAsync(ruta, ct);
+            // Con adenda de SINUBE, el cliente recibe ese XML (mismo timbre); el PDF sale de la copia del SAT.
+            byte[] xml = await File.ReadAllBytesAsync(await XmlConAdendaAsync(empresa, x, mesesRevisados, ct) ?? ruta, ct);
             byte[] archivoPdf = await GenerarPdfAsync(ruta, cliente, formatoCfdi, formatoPago, ct);
             adjuntos.Add(new AdjuntoCorreo($"{nombre}.pdf", "application/pdf", archivoPdf));
             adjuntos.Add(new AdjuntoCorreo($"{nombre}.xml", "application/xml", xml));
@@ -231,6 +236,34 @@ public class EnvioCfdiService(
 
         // Los adicionales se recuerdan tal como quedaron (vacío los borra).
         repo.GuardarConfiguracionApp(ClaveCorreo(empresa.EmpresaId, grupo.Rfc), string.Join(", ", adicionales));
+    }
+
+    /// <summary>
+    /// XML con adenda de SINUBE (Emitidos\Adendas) de una factura emitida por la empresa, o null si no tiene.
+    /// Si aún no se ha bajado (la tarea corre cada pocas horas), se pide su mes a SINUBE una vez por envío.
+    /// </summary>
+    private async Task<string?> XmlConAdendaAsync(EmpresaDto empresa, AdminXmlFilaDto x, HashSet<DateTime> revisados, CancellationToken ct)
+    {
+        if (x.TipoCfdi is "P" or "N" || !string.Equals(x.RfcEmisor.Trim(), empresa.Rfc.Trim(), StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        DateTime mes = new(x.FechaEmision.Year, x.FechaEmision.Month, 1);
+        string archivo = Path.Combine(rutas.CarpetaAdendasPeriodo(empresa, mes.Year, mes.Month), x.Uuid.Trim().ToUpperInvariant() + ".xml");
+
+        if (!File.Exists(archivo) && revisados.Add(mes) && adendas.TieneSinube(empresa))
+        {
+            try
+            {
+                await adendas.DescargarMesAsync(empresa, mes.Year, mes.Month, ct);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                // Sin SINUBE se manda la copia del SAT.
+                log.LogWarning(ex, "No se pudieron revisar las adendas de SINUBE de {Rfc} {Mes:yyyy-MM}", empresa.Rfc, mes);
+            }
+        }
+
+        return File.Exists(archivo) ? archivo : null;
     }
 
     private static string Folio(AdminXmlFilaDto x) =>
