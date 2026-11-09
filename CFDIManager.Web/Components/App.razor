@@ -38,6 +38,18 @@
         </form>
         <script src="js/sesion.js" data-minutos="@MinutosInactividad"></script>
     }
+    else if (!SesionIniciada)
+    {
+        @* En el login también late (js/sesion.js): al entrar, la app no confunde el login con un navegador recién abierto. *@
+        <script>
+            (function () {
+                const latir = () => { try { localStorage.setItem("cfdi-latido", String(Date.now())); } catch { } };
+                latir();
+                setInterval(latir, 5000);
+                window.addEventListener("pagehide", latir);
+            })();
+        </script>
+    }
     <script src="_framework/blazor.web.js"></script>
 </body>
 

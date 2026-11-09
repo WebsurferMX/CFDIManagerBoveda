@@ -14,6 +14,10 @@
     const RENOVAR_CADA = 5 * 60000;
     const CLAVE_ACTIVIDAD = "cfdi-ultima-actividad";
     const CLAVE_CERRADA = "cfdi-sesion-cerrada";
+    // Latido de las pestañas abiertas (y del login, App.razor). Si al abrir la app ninguna pestaña latió en
+    // SIN_PESTANAS, el navegador estuvo cerrado: se cierra la sesión aunque el navegador haya restaurado la cookie.
+    const CLAVE_LATIDO = "cfdi-latido";
+    const SIN_PESTANAS = 3 * 60000;
     const inicio = Date.now();
 
     let actividadLocal = inicio;
@@ -65,7 +69,7 @@
         location.href = "cuenta/login?inactividad=1";
     }
 
-    function salir() {
+    function salir(motivo) {
         if (saliendo) {
             return;
         }
@@ -82,6 +86,10 @@
         const formulario = document.getElementById("cfdi-salir-inactividad");
 
         if (formulario) {
+            if (motivo && formulario.elements.motivo) {
+                formulario.elements.motivo.value = motivo;
+            }
+
             formulario.submit();
         } else {
             location.href = "cuenta/login?inactividad=1";
@@ -150,7 +158,25 @@
     ["mousemove", "mousedown", "keydown", "wheel", "touchstart", "scroll"].forEach(evento =>
         window.addEventListener(evento, alActuar, { passive: true, capture: true }));
 
+    // Navegador cerrado y vuelto a abrir (sesión restaurada): ninguna pestaña latió en los últimos minutos.
+    const latido = leer(CLAVE_LATIDO);
+
+    if (latido && inicio - latido > SIN_PESTANAS) {
+        salir("navegador");
+        return;
+    }
+
+    function latir() {
+        escribir(CLAVE_LATIDO, Date.now());
+    }
+
+    latir();
+    window.addEventListener("pagehide", latir);
+
     // Abrir o recargar la página también es actividad (y evita que una marca vieja cierre la sesión recién iniciada).
     marcar();
-    setInterval(revisar, 5000);
+    setInterval(() => {
+        latir();
+        revisar();
+    }, 5000);
 })();
