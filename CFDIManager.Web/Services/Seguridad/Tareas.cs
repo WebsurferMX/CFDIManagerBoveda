@@ -56,7 +56,39 @@ public static class Tareas
         new("herramientas", "Herramientas", "Configuración", "bi-tools", "configuracion/herramientas", [Roles.Administrador])
     ];
 
-    private static readonly Dictionary<string, Tarea> PorClave = Catalogo.ToDictionary(t => t.Clave);
+    /// <summary>Grupo de las herramientas de Administración de XML en Configuración → Usuarios.</summary>
+    public const string GrupoHerramientasXml = "Herramientas de XML";
+
+    /// <summary>
+    /// Botones del panel de herramientas de Administración de XML, en su orden. No son opciones del menú lateral:
+    /// se asignan o quitan por usuario igual que las tareas, y la página solo muestra los permitidos.
+    /// </summary>
+    public static readonly IReadOnlyList<Tarea> HerramientasXml =
+    [
+        new("xml-exportar-excel", "Exportar a Excel", GrupoHerramientasXml, "bi-file-earmark-excel", "", Operativos),
+        new("xml-imagen-resumen", "Imagen del resumen", GrupoHerramientasXml, "bi-image", "", Operativos),
+        new("xml-enviar-correo", "Enviar por correo", GrupoHerramientasXml, "bi-envelope-paper", "", Operativos),
+        new("xml-enviar-cfdi", "Enviar CFDI", GrupoHerramientasXml, "bi-send", "", Operativos),
+        new("xml-abrir-xml", "Abrir XML", GrupoHerramientasXml, "bi-filetype-xml", "", Operativos),
+        new("xml-generar-pdf", "Generar PDF", GrupoHerramientasXml, "bi-file-earmark-pdf", "", Operativos),
+        new("xml-validar-sat", "Valida Estado SAT", GrupoHerramientasXml, "bi-shield-check", "", Operativos),
+        new("xml-localizar", "Localizar XML", GrupoHerramientasXml, "bi-search", "", Operativos),
+        new("xml-importar", "Importar XML", GrupoHerramientasXml, "bi-upload", "", Operativos),
+        new("xml-zip-xml", "Descargar XML (ZIP)", GrupoHerramientasXml, "bi-file-earmark-zip", "", Operativos),
+        new("xml-zip-pdf", "Descargar PDF (ZIP)", GrupoHerramientasXml, "bi-file-earmark-zip", "", Operativos),
+        new("xml-agrupaciones", "Agrupaciones", GrupoHerramientasXml, "bi-diagram-3", "", Operativos),
+        new("xml-renombrar", "Renombrar XML's", GrupoHerramientasXml, "bi-input-cursor-text", "", Operativos),
+        new("xml-logos", "Catálogo de logos", GrupoHerramientasXml, "bi-images", "", Operativos),
+        new("xml-series", "Verifica series", GrupoHerramientasXml, "bi-123", "", Operativos),
+        new("xml-complemento", "Leer complemento", GrupoHerramientasXml, "bi-braces", "", Operativos),
+        new("xml-externos", "XML externos", GrupoHerramientasXml, "bi-box-arrow-in-down", "", Operativos),
+        new("xml-direccion-datos", "Dirección de datos", GrupoHerramientasXml, "bi-hdd-network", "", Operativos)
+    ];
+
+    /// <summary>Menú y herramientas: todo lo que se puede asignar o quitar a un usuario.</summary>
+    private static readonly IReadOnlyList<Tarea> Todas = [.. Catalogo, .. HerramientasXml];
+
+    private static readonly Dictionary<string, Tarea> PorClave = Todas.ToDictionary(t => t.Clave);
 
     public static Tarea Obtener(string clave) => PorClave[clave];
 
@@ -64,11 +96,11 @@ public static class Tareas
 
     /// <summary>Tareas que se pueden quitar a un usuario con ese rol (las que el rol permite y no son fijas).</summary>
     public static IEnumerable<Tarea> AsignablesPara(string rol) =>
-        rol == Roles.Administrador ? [] : Catalogo.Where(t => !t.Fija && t.Roles.Contains(rol));
+        rol == Roles.Administrador ? [] : Todas.Where(t => !t.Fija && t.Roles.Contains(rol));
 
     public static void Registrar(AuthorizationOptions opciones)
     {
-        foreach (Tarea t in Catalogo)
+        foreach (Tarea t in Todas)
             opciones.AddPolicy(t.Politica, p => p.RequireAuthenticatedUser().AddRequirements(new TareaRequisito(t)));
     }
 }

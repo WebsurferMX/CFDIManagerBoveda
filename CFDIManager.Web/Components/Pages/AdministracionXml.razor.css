@@ -111,6 +111,7 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
     display: flex;
     flex: none;
     align-items: center;
+    justify-content: flex-start;
     width: 100%;
     padding: .25rem .6rem;
     border: 0;
@@ -122,6 +123,9 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
     user-select: none;
     transition: background-color .15s;
 }
+
+/* Días: número a la izquierda y cantidad a la derecha. */
+.lista .item.renglon { justify-content: space-between; }
 
 .lista .item + .item {
     border-top: 1px solid var(--bs-border-color-translucent);
@@ -680,9 +684,11 @@ td.ajusta { white-space: normal; }
     text-transform: uppercase;
 }
 
+/* justify-content explícito: el reset de MudBlazor centra el contenido de todo <button>. */
 .herramienta {
     display: flex;
     align-items: center;
+    justify-content: flex-start;
     gap: .6rem;
     width: 100%;
     padding: .3rem .75rem;

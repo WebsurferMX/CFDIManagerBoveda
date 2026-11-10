@@ -194,3 +194,12 @@ html[data-theme="dark"] .roles .active-rol {
     font-size: .875rem;
     cursor: pointer;
 }
+
+/* Herramientas de XML: lista corrida en columnas, sin grupos. */
+.herramientas-xml {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 0 1rem;
+}
+
+.herramientas-xml.deshabilitadas { opacity: .5; }
+.herramientas-xml.deshabilitadas .tarea { cursor: default; }

@@ -23,6 +23,7 @@
 @inject CFDIManager.Web.Services.AdministracionXml.ValidacionSatSegundoPlano ValidacionesSat
 @inject EnvioCfdiService EnvioCfdi
 @inject ISnackbar Snackbar
+@inject IAuthorizationService Autorizacion
 
 <PageTitle>Administración de XML</PageTitle>
 
@@ -464,18 +465,20 @@
             </div>
         </section>
 
-        <MudPaper Elevation="1" Class="herramientas">
-            @foreach (var (seccion, acciones) in Herramientas)
-            {
-                <div class="seccion">@seccion</div>
-                @foreach (var (texto, icono, tono, accion) in acciones)
+        @* Solo los botones que el usuario tiene asignados (Configuración → Usuarios → Herramientas de XML). *@
+        @if (HerramientasPermitidas.Count > 0)
+        {
+            <MudPaper Elevation="1" Class="herramientas">
+                <div class="seccion">Herramientas</div>
+                @foreach (Tarea t in HerramientasPermitidas)
                 {
+                    var (tono, accion) = AccionesHerramientas[t.Clave];
                     <button type="button" class="herramienta" @onclick="accion">
-                        <span class="ic tono-@tono"><i class="bi @icono"></i></span>@texto
+                        <span class="ic tono-@tono"><i class="bi @t.Icono"></i></span>@t.Nombre
                     </button>
                 }
-            }
-        </MudPaper>
+            </MudPaper>
+        }
     }
 
     <MudDialog Visible="@(Modal != "")" VisibleChanged="v => { if (!v) CerrarModal(); }" Options="OpcionesModal">
@@ -796,31 +799,47 @@
 @code {
     private const int TamanoPagina = 200;
 
-    // Panel derecho: secciones con sus acciones (texto, icono, color, acción).
-    private IEnumerable<(string, (string, string, string, Func<Task>)[])> Herramientas =>
-    [
-        ("Herramientas",
-        [
-            ("Exportar a Excel", "bi-file-earmark-excel", "verde", () => Exportar(TipoReporte)),
-            ("Imagen del resumen", "bi-image", "morado", Sincrona(() => AbrirModal("imagen"))),
-            ("Enviar por correo", "bi-envelope-paper", "azul", PrepararCorreo),
-            ("Enviar CFDI", "bi-send", "verde", PrepararEnvioCfdi),
-            ("Abrir XML", "bi-filetype-xml", "azul", Sincrona(AbrirXml)),
-            ("Generar PDF", "bi-file-earmark-pdf", "rojo", GenerarPdf),
-            ("Valida Estado SAT", "bi-shield-check", "azul", ValidarEstadoSat),
-            ("Localizar XML", "bi-search", "azul", Sincrona(Localizar)),
-            ("Importar XML", "bi-upload", "azul", Sincrona(() => AbrirModal("importar"))),
-            ("Descargar XML (ZIP)", "bi-file-earmark-zip", "ambar", DescargarZipXml),
-            ("Descargar PDF (ZIP)", "bi-file-earmark-zip", "rojo", DescargarZipPdf),
-            ("Agrupaciones", "bi-diagram-3", "ambar", Sincrona(() => AbrirModal("agrupaciones"))),
-            ("Renombrar XML's", "bi-input-cursor-text", "azul", Sincrona(() => AbrirModal("renombrar"))),
-            ("Catálogo de logos", "bi-images", "ambar", Sincrona(() => AbrirModal("logos"))),
-            ("Verifica series", "bi-123", "azul", Sincrona(() => AbrirModal("series"))),
-            ("Leer complemento", "bi-braces", "verde", Sincrona(LeerComplemento)),
-            ("XML externos", "bi-box-arrow-in-down", "ambar", Sincrona(() => AbrirModal("externos"))),
-            ("Dirección de datos", "bi-hdd-network", "azul", Sincrona(() => AbrirModal("red")))
-        ])
-    ];
+    // Panel derecho: el texto, el icono y el orden salen de Tareas.HerramientasXml; aquí el color y la acción de cada uno.
+    private Dictionary<string, (string Tono, Func<Task> Accion)> AccionesHerramientas => new()
+    {
+        ["xml-exportar-excel"] = ("verde", () => Exportar(TipoReporte)),
+        ["xml-imagen-resumen"] = ("morado", Sincrona(() => AbrirModal("imagen"))),
+        ["xml-enviar-correo"] = ("azul", PrepararCorreo),
+        ["xml-enviar-cfdi"] = ("verde", PrepararEnvioCfdi),
+        ["xml-abrir-xml"] = ("azul", Sincrona(AbrirXml)),
+        ["xml-generar-pdf"] = ("rojo", GenerarPdf),
+        ["xml-validar-sat"] = ("azul", ValidarEstadoSat),
+        ["xml-localizar"] = ("azul", Sincrona(Localizar)),
+        ["xml-importar"] = ("azul", Sincrona(() => AbrirModal("importar"))),
+        ["xml-zip-xml"] = ("ambar", DescargarZipXml),
+        ["xml-zip-pdf"] = ("rojo", DescargarZipPdf),
+        ["xml-agrupaciones"] = ("ambar", Sincrona(() => AbrirModal("agrupaciones"))),
+        ["xml-renombrar"] = ("azul", Sincrona(() => AbrirModal("renombrar"))),
+        ["xml-logos"] = ("ambar", Sincrona(() => AbrirModal("logos"))),
+        ["xml-series"] = ("azul", Sincrona(() => AbrirModal("series"))),
+        ["xml-complemento"] = ("verde", Sincrona(LeerComplemento)),
+        ["xml-externos"] = ("ambar", Sincrona(() => AbrirModal("externos"))),
+        ["xml-direccion-datos"] = ("azul", Sincrona(() => AbrirModal("red")))
+    };
+
+    // Botones que el usuario tiene asignados (Administrador: todos); se calcula al abrir la página.
+    private List<Tarea> HerramientasPermitidas = new();
+
+    private async Task CargarHerramientasPermitidas()
+    {
+        System.Security.Claims.ClaimsPrincipal usuario = await Acceso.ObtenerUsuarioActualAsync();
+        List<Tarea> permitidas = new();
+
+        foreach (Tarea t in Tareas.HerramientasXml)
+        {
+            if ((await Autorizacion.AuthorizeAsync(usuario, t.Politica)).Succeeded)
+            {
+                permitidas.Add(t);
+            }
+        }
+
+        HerramientasPermitidas = permitidas;
+    }
 
     private static Func<Task> Sincrona(Action accion) => () =>
     {
@@ -1188,6 +1207,7 @@
         DescargaSat.Cambio += DescargaSatCambio;
         ValidacionesSat.Cambio += ValidacionSatCambio;
         _ultimaPasadaVista = Sincronizacion.UltimaPasada;
+        await CargarHerramientasPermitidas();
         await CargarOpciones();
         ConectarValidacionSat();
 

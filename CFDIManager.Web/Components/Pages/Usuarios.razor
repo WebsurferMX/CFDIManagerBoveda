@@ -371,7 +371,7 @@
                                     <span><i class="bi bi-ui-checks-grid"></i> Tareas</span>
                                     @if (!EsAdministradorSeleccionado)
                                     {
-                                        <span class="badge rounded-pill text-bg-primary">@TareasAsignadas / @TareasDelRol.Count</span>
+                                        <span class="badge rounded-pill text-bg-primary">@Asignadas(MenuDelRol) / @MenuDelRol.Count</span>
                                     }
                                 </div>
 
@@ -387,13 +387,13 @@
                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span class="small text-body-secondary">Las que desmarques no le aparecerán en el menú. Resumen siempre está.</span>
                                         <span class="d-flex gap-1">
-                                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => Modelo.TareasDenegadas.Clear()">Todas</button>
-                                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="QuitarTodasLasTareas">Ninguna</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => Asignar(MenuDelRol, true)">Todas</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => Asignar(MenuDelRol, false)">Ninguna</button>
                                         </span>
                                     </div>
 
                                     <div class="tareas">
-                                        @foreach (var grupo in TareasDelRol.GroupBy(t => t.Grupo))
+                                        @foreach (var grupo in MenuDelRol.GroupBy(t => t.Grupo))
                                         {
                                             <div class="tareas-grupo">
                                                 <div class="tareas-grupo-titulo">@grupo.Key</div>
@@ -411,6 +411,37 @@
                                     </div>
                                 }
                             </div>
+
+                            @* Botones del panel de herramientas de Administración de XML (Supervisor y Contador). Sin la tarea
+                               Administración de XML no aplican: quedan deshabilitados. *@
+                            @if (!EsAdministradorSeleccionado && HerramientasDelRol.Count > 0)
+                            {
+                                bool sinAdminXml = Modelo.TareasDenegadas.Contains("administracion-xml");
+
+                                <div class="panel">
+                                    <div class="seccion-titulo d-flex justify-content-between align-items-center">
+                                        <span><i class="bi bi-tools"></i> @Tareas.GrupoHerramientasXml</span>
+                                        <span class="badge rounded-pill text-bg-primary">@Asignadas(HerramientasDelRol) / @HerramientasDelRol.Count</span>
+                                    </div>
+
+                                    <div class="d-flex justify-content-end gap-1 mb-2">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@sinAdminXml" @onclick="() => Asignar(HerramientasDelRol, true)">Todas</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@sinAdminXml" @onclick="() => Asignar(HerramientasDelRol, false)">Ninguna</button>
+                                    </div>
+
+                                    <div class="tareas herramientas-xml @(sinAdminXml ? "deshabilitadas" : "")">
+                                        @foreach (Tarea t in HerramientasDelRol)
+                                        {
+                                            <label class="form-check tarea">
+                                                <input class="form-check-input" type="checkbox" disabled="@sinAdminXml"
+                                                       checked="@(!Modelo.TareasDenegadas.Contains(t.Clave))"
+                                                       @onchange="args => AlternarTarea(t.Clave, args)" />
+                                                <span class="form-check-label"><i class="bi @t.Icono me-1 text-body-secondary"></i>@t.Nombre</span>
+                                            </label>
+                                        }
+                                    </div>
+                                </div>
+                            }
                         </div>
 
                         @* Columna 3: empresas *@
@@ -660,7 +691,20 @@
     // Tareas del rol elegido que se pueden quitar, y cuántas conserva el usuario.
     private List<Tarea> TareasDelRol => Tareas.AsignablesPara(Modelo.Rol).ToList();
 
-    private int TareasAsignadas => TareasDelRol.Count(t => !Modelo.TareasDenegadas.Contains(t.Clave));
+    // Opciones del menú lateral y botones de herramientas de Administración de XML, por separado en la pantalla.
+    private List<Tarea> MenuDelRol => TareasDelRol.Where(t => t.Grupo != Tareas.GrupoHerramientasXml).ToList();
+
+    private List<Tarea> HerramientasDelRol => TareasDelRol.Where(t => t.Grupo == Tareas.GrupoHerramientasXml).ToList();
+
+    private int Asignadas(List<Tarea> tareas) => tareas.Count(t => !Modelo.TareasDenegadas.Contains(t.Clave));
+
+    private void Asignar(List<Tarea> tareas, bool asignar)
+    {
+        foreach (Tarea t in tareas)
+        {
+            if (asignar) Modelo.TareasDenegadas.Remove(t.Clave); else Modelo.TareasDenegadas.Add(t.Clave);
+        }
+    }
 
     private void AlternarTarea(string clave, ChangeEventArgs args)
     {
@@ -669,8 +713,6 @@
         else
             Modelo.TareasDenegadas.Add(clave);
     }
-
-    private void QuitarTodasLasTareas() => Modelo.TareasDenegadas = TareasDelRol.Select(t => t.Clave).ToHashSet();
 
     /// <summary>Guarda solo las quitadas que aplican a su rol; el cambio aplica de inmediato (sin cerrar su sesión).</summary>
     private void GuardarTareas(long usuarioId)
