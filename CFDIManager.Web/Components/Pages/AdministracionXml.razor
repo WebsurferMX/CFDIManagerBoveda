@@ -136,27 +136,17 @@
                               Label="Buscar por" Placeholder="UUID, RFC, nombre, serie o folio" Variant="Variant.Outlined" Margin="Margin.Dense"
                               Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Class="busqueda" />
 
-                <MudSelect T="string" @bind-Value="TipoReporte" Label="Nvo. reporte de" Variant="Variant.Outlined" Margin="Margin.Dense"
-                           Dense="true" Class="reporte">
-                    <MudSelectItem Value="@("general")">Reporte general (por tipo)</MudSelectItem>
-                    <MudSelectItem Value="@("conceptos")">Conceptos</MudSelectItem>
-                    @if (Clasificacion == "RECIBIDO")
-                    {
-                        <MudSelectItem Value="@("agrupado:emisor")">Agrupado por emisor</MudSelectItem>
-                    }
-                    else
-                    {
-                        <MudSelectItem Value="@("agrupado:receptor")">Agrupado por receptor</MudSelectItem>
-                    }
-                    @if (VariosMeses)
-                    {
-                        <MudSelectItem Value="@("agrupado:mes")">Agrupado por mes</MudSelectItem>
-                    }
-                    <MudSelectItem Value="@("agrupado:uso")">Uso CFDI</MudSelectItem>
-                    <MudSelectItem Value="@("agrupado:metodo")">Método de pago</MudSelectItem>
-                    <MudSelectItem Value="@("agrupado:tipo")">Tipo</MudSelectItem>
-                    <MudSelectItem Value="@("pareto")">Análisis 80-20 (Pareto) con dashboard</MudSelectItem>
-                </MudSelect>
+                @* Solo los reportes asignados al usuario (Configuración → Usuarios → Reportes de XML). *@
+                @if (ReportesVisibles.Count > 0)
+                {
+                    <MudSelect T="string" @bind-Value="TipoReporte" Label="Nvo. reporte de" Variant="Variant.Outlined" Margin="Margin.Dense"
+                               Dense="true" Class="reporte">
+                        @foreach (var (tipo, nombre) in ReportesVisibles)
+                        {
+                            <MudSelectItem Value="@tipo">@nombre</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
 
                 <div class="progreso" role="progressbar" aria-label="Progreso del proceso">
                     <MudProgressLinear Value="@(Proceso is { Total: > 0 } p ? (p.Hechos * 100.0 / p.Total) : 0)" Striped="EnProceso"
@@ -802,7 +792,7 @@
     // Panel derecho: el texto, el icono y el orden salen de Tareas.HerramientasXml; aquí el color y la acción de cada uno.
     private Dictionary<string, (string Tono, Func<Task> Accion)> AccionesHerramientas => new()
     {
-        ["xml-exportar-excel"] = ("verde", () => Exportar(TipoReporte)),
+        ["xml-exportar-excel"] = ("verde", ExportarReporteElegido),
         ["xml-imagen-resumen"] = ("morado", Sincrona(() => AbrirModal("imagen"))),
         ["xml-enviar-correo"] = ("azul", PrepararCorreo),
         ["xml-enviar-cfdi"] = ("verde", PrepararEnvioCfdi),
@@ -822,23 +812,68 @@
         ["xml-direccion-datos"] = ("azul", Sincrona(() => AbrirModal("red")))
     };
 
-    // Botones que el usuario tiene asignados (Administrador: todos); se calcula al abrir la página.
+    // Botones y reportes que el usuario tiene asignados (Administrador: todos); se calculan al abrir la página.
+    // Sin ningún reporte, "Exportar a Excel" no tiene qué exportar y no se muestra.
     private List<Tarea> HerramientasPermitidas = new();
+    private List<Tarea> ReportesPermitidos = new();
 
     private async Task CargarHerramientasPermitidas()
     {
         System.Security.Claims.ClaimsPrincipal usuario = await Acceso.ObtenerUsuarioActualAsync();
-        List<Tarea> permitidas = new();
 
-        foreach (Tarea t in Tareas.HerramientasXml)
+        async Task<List<Tarea>> SoloPermitidas(IEnumerable<Tarea> tareas)
         {
-            if ((await Autorizacion.AuthorizeAsync(usuario, t.Politica)).Succeeded)
+            List<Tarea> permitidas = new();
+
+            foreach (Tarea t in tareas)
             {
-                permitidas.Add(t);
+                if ((await Autorizacion.AuthorizeAsync(usuario, t.Politica)).Succeeded)
+                {
+                    permitidas.Add(t);
+                }
             }
+
+            return permitidas;
         }
 
-        HerramientasPermitidas = permitidas;
+        ReportesPermitidos = await SoloPermitidas(Tareas.ReportesXml);
+        HerramientasPermitidas = (await SoloPermitidas(Tareas.HerramientasXml))
+            .Where(t => t.Clave != "xml-exportar-excel" || ReportesPermitidos.Count > 0)
+            .ToList();
+        AjustarTipoReporte();
+    }
+
+    // Reportes permitidos que aplican al filtro: emisor en recibidos o receptor en emitidos; por mes con varios meses.
+    private List<(string Tipo, string Nombre)> ReportesVisibles =>
+        ReportesPermitidos
+            .Where(r => r.Ruta != "agrupado:mes" || VariosMeses)
+            .Select(r => r.Ruta == "agrupado:contraparte"
+                ? Clasificacion == "RECIBIDO" ? ("agrupado:emisor", "Agrupado por emisor") : ("agrupado:receptor", "Agrupado por receptor")
+                : (r.Ruta, r.Nombre))
+            .ToList();
+
+    // Revisa otra vez el permiso: el reporte elegido debe estar entre los visibles del usuario.
+    private Task ExportarReporteElegido()
+    {
+        AjustarTipoReporte();
+
+        if (!ReportesVisibles.Any(r => r.Tipo == TipoReporte))
+        {
+            Avisar("No tienes asignado ese reporte.", error: true);
+            return Task.CompletedTask;
+        }
+
+        return Exportar(TipoReporte);
+    }
+
+    private void AjustarTipoReporte()
+    {
+        List<(string Tipo, string Nombre)> visibles = ReportesVisibles;
+
+        if (visibles.Count > 0 && !visibles.Any(r => r.Tipo == TipoReporte))
+        {
+            TipoReporte = visibles.Any(r => r.Tipo == "general") ? "general" : visibles[0].Tipo;
+        }
     }
 
     private static Func<Task> Sincrona(Action accion) => () =>
@@ -1004,6 +1039,15 @@
 
     private async Task PrepararCorreo()
     {
+        // El correo adjunta el reporte elegido: debe ser uno de los asignados al usuario.
+        AjustarTipoReporte();
+
+        if (!ReportesVisibles.Any(r => r.Tipo == TipoReporte))
+        {
+            Avisar("No tienes asignado ningún reporte para adjuntar.", error: true);
+            return;
+        }
+
         try
         {
             AdminXmlFiltroDto f = FiltroAccion();
@@ -1403,11 +1447,8 @@
 
     private Task Consultar()
     {
-        // Agrupado por mes solo aplica con varios meses (o acumulado).
-        if (TipoReporte == "agrupado:mes" && !VariosMeses)
-        {
-            TipoReporte = "general";
-        }
+        // Agrupado por mes solo aplica con varios meses (o acumulado); el elegido debe estar entre los visibles.
+        AjustarTipoReporte();
 
         try
         {

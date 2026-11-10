@@ -354,7 +354,7 @@
                                                        type="radio"
                                                        name="rol"
                                                        checked="@(Modelo.Rol == rol.Nombre)"
-                                                       @onchange="() => Modelo.Rol = rol.Nombre" />
+                                                       @onchange="() => CambiarRol(rol.Nombre)" />
                                                 <span>
                                                     <span class="fw-semibold d-block">@rol.Nombre</span>
                                                     <small class="text-body-secondary">@rol.Descripcion</small>
@@ -412,25 +412,32 @@
                                 }
                             </div>
 
-                            @* Botones del panel de herramientas de Administración de XML (Supervisor y Contador). Sin la tarea
+                            @* Botones de herramientas y reportes de Administración de XML, un bloque por grupo. Sin la tarea
                                Administración de XML no aplican: quedan deshabilitados. *@
-                            @if (!EsAdministradorSeleccionado && HerramientasDelRol.Count > 0)
+                            @foreach (var (grupo, icono) in Tareas.GruposAdministracionXml)
                             {
+                                List<Tarea> delGrupo = TareasDelRol.Where(t => t.Grupo == grupo).ToList();
+
+                                if (EsAdministradorSeleccionado || delGrupo.Count == 0)
+                                {
+                                    continue;
+                                }
+
                                 bool sinAdminXml = Modelo.TareasDenegadas.Contains("administracion-xml");
 
                                 <div class="panel">
                                     <div class="seccion-titulo d-flex justify-content-between align-items-center">
-                                        <span><i class="bi bi-tools"></i> @Tareas.GrupoHerramientasXml</span>
-                                        <span class="badge rounded-pill text-bg-primary">@Asignadas(HerramientasDelRol) / @HerramientasDelRol.Count</span>
+                                        <span><i class="bi @icono"></i> @grupo</span>
+                                        <span class="badge rounded-pill text-bg-primary">@Asignadas(delGrupo) / @delGrupo.Count</span>
                                     </div>
 
                                     <div class="d-flex justify-content-end gap-1 mb-2">
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@sinAdminXml" @onclick="() => Asignar(HerramientasDelRol, true)">Todas</button>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@sinAdminXml" @onclick="() => Asignar(HerramientasDelRol, false)">Ninguna</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@sinAdminXml" @onclick="() => Asignar(delGrupo, true)">Todas</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@sinAdminXml" @onclick="() => Asignar(delGrupo, false)">Ninguna</button>
                                     </div>
 
                                     <div class="tareas herramientas-xml @(sinAdminXml ? "deshabilitadas" : "")">
-                                        @foreach (Tarea t in HerramientasDelRol)
+                                        @foreach (Tarea t in delGrupo)
                                         {
                                             <label class="form-check tarea">
                                                 <input class="form-check-input" type="checkbox" disabled="@sinAdminXml"
@@ -691,10 +698,21 @@
     // Tareas del rol elegido que se pueden quitar, y cuántas conserva el usuario.
     private List<Tarea> TareasDelRol => Tareas.AsignablesPara(Modelo.Rol).ToList();
 
-    // Opciones del menú lateral y botones de herramientas de Administración de XML, por separado en la pantalla.
-    private List<Tarea> MenuDelRol => TareasDelRol.Where(t => t.Grupo != Tareas.GrupoHerramientasXml).ToList();
+    // Opciones del menú lateral; las herramientas y los reportes de Administración de XML van en bloques aparte.
+    private List<Tarea> MenuDelRol =>
+        TareasDelRol.Where(t => !Tareas.GruposAdministracionXml.Any(g => g.Grupo == t.Grupo)).ToList();
 
-    private List<Tarea> HerramientasDelRol => TareasDelRol.Where(t => t.Grupo == Tareas.GrupoHerramientasXml).ToList();
+    // Al elegir un rol, empieza sin lo que ese rol no recibe de inicio (Tareas.DenegadasPorOmision) y recupera lo
+    // que el rol anterior quitaba de inicio.
+    private void CambiarRol(string rol)
+    {
+        if (rol == Modelo.Rol)
+            return;
+
+        Modelo.TareasDenegadas.ExceptWith(Tareas.DenegadasPorOmision(Modelo.Rol));
+        Modelo.Rol = rol;
+        Modelo.TareasDenegadas.UnionWith(Tareas.DenegadasPorOmision(rol));
+    }
 
     private int Asignadas(List<Tarea> tareas) => tareas.Count(t => !Modelo.TareasDenegadas.Contains(t.Clave));
 
@@ -775,7 +793,8 @@
 
     private void CargarUsuarios() => ListaUsuarios = Repo.ObtenerUsuarios();
 
-    private ModeloUsuario CrearModeloVacio() => new() { Rol = Roles.Consulta };
+    private ModeloUsuario CrearModeloVacio() =>
+        new() { Rol = Roles.Consulta, TareasDenegadas = Tareas.DenegadasPorOmision(Roles.Consulta).ToHashSet() };
 
     private static bool EstaBloqueado(UsuarioDto u) => u.LockoutFin > DateTimeOffset.UtcNow;
 

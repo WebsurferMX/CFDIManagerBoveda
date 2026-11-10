@@ -35,7 +35,7 @@ public static class Tareas
         new("resumen", "Resumen", "Consulta", "bi-grid-1x2-fill", "", Todos, Fija: true, CoincidenciaExacta: true),
         new("cfdi-ingresos", "CFDI de ingresos", "Consulta", "bi-file-earmark-arrow-up-fill", "cfdi/emitidos", Todos),
         new("cfdi-egresos", "CFDI de egresos", "Consulta", "bi-file-earmark-arrow-down-fill", "cfdi/recibidos", Todos),
-        new("administracion-xml", "Administración de XML", "Operación", "bi-folder2-open", "administracion-xml", Operativos)
+        new("administracion-xml", "Administración de XML", "Operación", "bi-folder2-open", "administracion-xml", Todos)
         {
             Opciones =
             [
@@ -65,28 +65,61 @@ public static class Tareas
     /// </summary>
     public static readonly IReadOnlyList<Tarea> HerramientasXml =
     [
-        new("xml-exportar-excel", "Exportar a Excel", GrupoHerramientasXml, "bi-file-earmark-excel", "", Operativos),
-        new("xml-imagen-resumen", "Imagen del resumen", GrupoHerramientasXml, "bi-image", "", Operativos),
-        new("xml-enviar-correo", "Enviar por correo", GrupoHerramientasXml, "bi-envelope-paper", "", Operativos),
-        new("xml-enviar-cfdi", "Enviar CFDI", GrupoHerramientasXml, "bi-send", "", Operativos),
-        new("xml-abrir-xml", "Abrir XML", GrupoHerramientasXml, "bi-filetype-xml", "", Operativos),
-        new("xml-generar-pdf", "Generar PDF", GrupoHerramientasXml, "bi-file-earmark-pdf", "", Operativos),
-        new("xml-validar-sat", "Valida Estado SAT", GrupoHerramientasXml, "bi-shield-check", "", Operativos),
-        new("xml-localizar", "Localizar XML", GrupoHerramientasXml, "bi-search", "", Operativos),
-        new("xml-importar", "Importar XML", GrupoHerramientasXml, "bi-upload", "", Operativos),
-        new("xml-zip-xml", "Descargar XML (ZIP)", GrupoHerramientasXml, "bi-file-earmark-zip", "", Operativos),
-        new("xml-zip-pdf", "Descargar PDF (ZIP)", GrupoHerramientasXml, "bi-file-earmark-zip", "", Operativos),
-        new("xml-agrupaciones", "Agrupaciones", GrupoHerramientasXml, "bi-diagram-3", "", Operativos),
-        new("xml-renombrar", "Renombrar XML's", GrupoHerramientasXml, "bi-input-cursor-text", "", Operativos),
-        new("xml-logos", "Catálogo de logos", GrupoHerramientasXml, "bi-images", "", Operativos),
-        new("xml-series", "Verifica series", GrupoHerramientasXml, "bi-123", "", Operativos),
-        new("xml-complemento", "Leer complemento", GrupoHerramientasXml, "bi-braces", "", Operativos),
-        new("xml-externos", "XML externos", GrupoHerramientasXml, "bi-box-arrow-in-down", "", Operativos),
-        new("xml-direccion-datos", "Dirección de datos", GrupoHerramientasXml, "bi-hdd-network", "", Operativos)
+        new("xml-exportar-excel", "Exportar a Excel", GrupoHerramientasXml, "bi-file-earmark-excel", "", Todos),
+        new("xml-imagen-resumen", "Imagen del resumen", GrupoHerramientasXml, "bi-image", "", Todos),
+        new("xml-enviar-correo", "Enviar por correo", GrupoHerramientasXml, "bi-envelope-paper", "", Todos),
+        new("xml-enviar-cfdi", "Enviar CFDI", GrupoHerramientasXml, "bi-send", "", Todos),
+        new("xml-abrir-xml", "Abrir XML", GrupoHerramientasXml, "bi-filetype-xml", "", Todos),
+        new("xml-generar-pdf", "Generar PDF", GrupoHerramientasXml, "bi-file-earmark-pdf", "", Todos),
+        new("xml-validar-sat", "Valida Estado SAT", GrupoHerramientasXml, "bi-shield-check", "", Todos),
+        new("xml-localizar", "Localizar XML", GrupoHerramientasXml, "bi-search", "", Todos),
+        new("xml-importar", "Importar XML", GrupoHerramientasXml, "bi-upload", "", Todos),
+        new("xml-zip-xml", "Descargar XML (ZIP)", GrupoHerramientasXml, "bi-file-earmark-zip", "", Todos),
+        new("xml-zip-pdf", "Descargar PDF (ZIP)", GrupoHerramientasXml, "bi-file-earmark-zip", "", Todos),
+        new("xml-agrupaciones", "Agrupaciones", GrupoHerramientasXml, "bi-diagram-3", "", Todos),
+        new("xml-renombrar", "Renombrar XML's", GrupoHerramientasXml, "bi-input-cursor-text", "", Todos),
+        new("xml-logos", "Catálogo de logos", GrupoHerramientasXml, "bi-images", "", Todos),
+        new("xml-series", "Verifica series", GrupoHerramientasXml, "bi-123", "", Todos),
+        new("xml-complemento", "Leer complemento", GrupoHerramientasXml, "bi-braces", "", Todos),
+        new("xml-externos", "XML externos", GrupoHerramientasXml, "bi-box-arrow-in-down", "", Todos),
+        new("xml-direccion-datos", "Dirección de datos", GrupoHerramientasXml, "bi-hdd-network", "", Todos)
     ];
 
-    /// <summary>Menú y herramientas: todo lo que se puede asignar o quitar a un usuario.</summary>
-    private static readonly IReadOnlyList<Tarea> Todas = [.. Catalogo, .. HerramientasXml];
+    /// <summary>Grupo de los reportes de "Nvo. reporte de" de Administración de XML en Configuración → Usuarios.</summary>
+    public const string GrupoReportesXml = "Reportes de XML";
+
+    /// <summary>
+    /// Reportes de la lista "Nvo. reporte de" (Exportar a Excel) de Administración de XML. La ruta es el tipo de
+    /// reporte que recibe AdministracionXmlService.GenerarExcel; "agrupado:contraparte" es por emisor en recibidos y
+    /// por receptor en emitidos.
+    /// </summary>
+    public static readonly IReadOnlyList<Tarea> ReportesXml =
+    [
+        new("xml-rep-general", "Reporte general (por tipo)", GrupoReportesXml, "bi-table", "general", Todos),
+        new("xml-rep-conceptos", "Conceptos", GrupoReportesXml, "bi-list-ul", "conceptos", Todos),
+        new("xml-rep-contraparte", "Agrupado por emisor / receptor", GrupoReportesXml, "bi-people", "agrupado:contraparte", Todos),
+        new("xml-rep-mes", "Agrupado por mes", GrupoReportesXml, "bi-calendar3", "agrupado:mes", Todos),
+        new("xml-rep-uso", "Uso CFDI", GrupoReportesXml, "bi-tag", "agrupado:uso", Todos),
+        new("xml-rep-metodo", "Método de pago", GrupoReportesXml, "bi-credit-card", "agrupado:metodo", Todos),
+        new("xml-rep-tipo", "Tipo", GrupoReportesXml, "bi-collection", "agrupado:tipo", Todos),
+        new("xml-rep-pareto", "Análisis 80-20 (Pareto) con dashboard", GrupoReportesXml, "bi-bar-chart", "pareto", Todos)
+    ];
+
+    /// <summary>Grupos de Administración de XML que Configuración → Usuarios muestra aparte del menú.</summary>
+    public static readonly IReadOnlyList<(string Grupo, string Icono)> GruposAdministracionXml =
+        [(GrupoHerramientasXml, "bi-tools"), (GrupoReportesXml, "bi-file-earmark-bar-graph")];
+
+    /// <summary>Menú, herramientas y reportes: todo lo que se puede asignar o quitar a un usuario.</summary>
+    private static readonly IReadOnlyList<Tarea> Todas = [.. Catalogo, .. HerramientasXml, .. ReportesXml];
+
+    /// <summary>
+    /// Lo que un usuario nuevo (o que cambia a ese rol) empieza sin tener: a Consulta no se le dan de inicio las
+    /// herramientas que modifican archivos o datos o envían CFDI a terceros; se le pueden marcar después.
+    /// </summary>
+    public static IEnumerable<string> DenegadasPorOmision(string rol) =>
+        rol == Roles.Consulta
+            ? ["xml-importar", "xml-externos", "xml-renombrar", "xml-logos", "xml-validar-sat", "xml-enviar-cfdi"]
+            : [];
 
     private static readonly Dictionary<string, Tarea> PorClave = Todas.ToDictionary(t => t.Clave);
 
