@@ -257,8 +257,10 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
 }
 
 .barra-busqueda ::deep .mud-input-control { margin: 0; }
-.barra-busqueda ::deep .busqueda { flex: 0 1 320px; }
-.barra-busqueda ::deep .reporte { flex: 0 1 280px; }
+/* Campos de ancho fijo; la barra de progreso y avisos (.progreso, flex: 1) toma el resto. */
+.campo { flex: none; min-width: 0; }
+.campo.busqueda { width: 300px; }
+.campo.reporte { width: 240px; }
 
 /* La barra de progreso es el fondo de la caja; el texto y Cancelar van encima. */
 .progreso {
@@ -465,7 +467,7 @@ td.ajusta { white-space: normal; }
 .conteo .bi { color: var(--bs-secondary-color); }
 
 .pie ::deep .mud-input-control { margin: 0; }
-.pie ::deep .filtrar { flex: 0 0 250px; }
+.campo.filtrar { width: 230px; }
 .pie ::deep .importe { font-size: .76rem; }
 .pie ::deep .mud-button { text-transform: none; }
 

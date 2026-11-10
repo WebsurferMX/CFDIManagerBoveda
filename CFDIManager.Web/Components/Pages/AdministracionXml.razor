@@ -132,20 +132,26 @@
             </div>
 
             <div class="barra-busqueda">
-                <MudTextField T="string" Value="Busqueda" ValueChanged="CambiarBusqueda" DebounceInterval="350" Immediate="true"
-                              Label="Buscar por" Placeholder="UUID, RFC, nombre, serie o folio" Variant="Variant.Outlined" Margin="Margin.Dense"
-                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Class="busqueda" />
+                @* Contenedores propios con ancho fijo: la clase de MudSelect no queda en su elemento exterior y el
+                   campo crecía; así la barra de progreso y avisos toma el resto. *@
+                <div class="campo busqueda">
+                    <MudTextField T="string" Value="Busqueda" ValueChanged="CambiarBusqueda" DebounceInterval="350" Immediate="true"
+                                  Label="Buscar por" Placeholder="UUID, RFC, nombre, serie o folio" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" />
+                </div>
 
                 @* Solo los reportes asignados al usuario (Configuración → Usuarios → Reportes de XML). *@
                 @if (ReportesVisibles.Count > 0)
                 {
-                    <MudSelect T="string" @bind-Value="TipoReporte" Label="Nvo. reporte de" Variant="Variant.Outlined" Margin="Margin.Dense"
-                               Dense="true" Class="reporte">
-                        @foreach (var (tipo, nombre) in ReportesVisibles)
-                        {
-                            <MudSelectItem Value="@tipo">@nombre</MudSelectItem>
-                        }
-                    </MudSelect>
+                    <div class="campo reporte">
+                        <MudSelect T="string" @bind-Value="TipoReporte" Label="Nvo. reporte de" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                   Dense="true">
+                            @foreach (var (tipo, nombre) in ReportesVisibles)
+                            {
+                                <MudSelectItem Value="@tipo">@nombre</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </div>
                 }
 
                 <div class="progreso" role="progressbar" aria-label="Progreso del proceso">
@@ -260,16 +266,18 @@
 
                 <span class="flex-grow-1"></span>
 
-                <MudSelect T="string" Value="Filtrar" ValueChanged="CambiarFiltrar" Label="Filtrar" Variant="Variant.Outlined" Margin="Margin.Dense"
-                           Dense="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.FilterAlt" Class="filtrar">
-                    <MudSelectItem Value="@("")">Todos</MudSelectItem>
-                    <MudSelectItem Value="@("vigentes")">Vigentes</MudSelectItem>
-                    <MudSelectItem Value="@("cancelados")">Cancelados</MudSelectItem>
-                    <MudSelectItem Value="@("sinvalidar")">Sin validar en SAT</MudSelectItem>
-                    <MudSelectItem Value="@("duplicados")">Duplicados (mismo UUID en varios XML)</MudSelectItem>
-                    <MudSelectItem Value="@("ppd")">PPD (pago en parcialidades)</MudSelectItem>
-                    <MudSelectItem Value="@("relacionados")">Relacionados (el que relaciona y el relacionado)</MudSelectItem>
-                </MudSelect>
+                <div class="campo filtrar">
+                    <MudSelect T="string" Value="Filtrar" ValueChanged="CambiarFiltrar" Label="Filtrar" Variant="Variant.Outlined" Margin="Margin.Dense"
+                               Dense="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.FilterAlt">
+                        <MudSelectItem Value="@("")">Todos</MudSelectItem>
+                        <MudSelectItem Value="@("vigentes")">Vigentes</MudSelectItem>
+                        <MudSelectItem Value="@("cancelados")">Cancelados</MudSelectItem>
+                        <MudSelectItem Value="@("sinvalidar")">Sin validar en SAT</MudSelectItem>
+                        <MudSelectItem Value="@("duplicados")">Duplicados (mismo UUID en varios XML)</MudSelectItem>
+                        <MudSelectItem Value="@("ppd")">PPD (pago en parcialidades)</MudSelectItem>
+                        <MudSelectItem Value="@("relacionados")">Relacionados (el que relaciona y el relacionado)</MudSelectItem>
+                    </MudSelect>
+                </div>
 
                 <MudButtonGroup Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default">
                     <MudButton StartIcon="@Icons.Material.Filled.ViewColumn" OnClick='() => AbrirModal("columnas")'>Columnas</MudButton>
