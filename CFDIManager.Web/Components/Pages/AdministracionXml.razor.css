@@ -95,50 +95,53 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
 }
 
 /* Listas de año, mes y día: renglones compactos; el elegido va con el color primario. */
-.admin-xml ::deep .lista {
+.lista {
+    display: flex;
+    flex-direction: column;
     overflow-y: auto;
     border: 1px solid var(--bs-border-color);
     border-radius: var(--bs-border-radius);
     background: var(--bs-body-bg);
 }
 
-.admin-xml ::deep .lista.corta { max-height: 84px; }
-.admin-xml ::deep .lista.alta { height: 172px; }
+.lista.corta { max-height: 84px; }
+.lista.alta { height: 172px; }
 
-.admin-xml ::deep .lista .mud-list-item {
-    min-height: 0;
-    padding: .2rem .6rem;
+.lista .item {
+    display: flex;
+    flex: none;
+    align-items: center;
+    width: 100%;
+    padding: .25rem .6rem;
+    border: 0;
+    background: transparent;
+    color: var(--bs-body-color);
     font-size: .8rem;
+    text-align: left;
     cursor: pointer;
     user-select: none;
+    transition: background-color .15s;
 }
 
-.admin-xml ::deep .lista .mud-list-item + .mud-list-item {
+.lista .item + .item {
     border-top: 1px solid var(--bs-border-color-translucent);
 }
 
-.admin-xml ::deep .lista .mud-list-item-text {
-    margin: 0;
-}
-
-.admin-xml ::deep .lista .mud-list-item:hover {
+.lista .item:hover {
     background: var(--mud-palette-action-default-hover);
 }
 
-/* MudList marca por su cuenta el último renglón con clic (mud-selected-item); aquí solo cuenta "elegido",
-   que respeta Ctrl + clic. */
-.admin-xml ::deep .lista .mud-selected-item:not(.elegido),
-.admin-xml ::deep .herramientas .mud-selected-item {
-    background: transparent;
-    color: inherit;
+.lista .item:focus-visible {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: -2px;
 }
 
-.admin-xml ::deep .lista .mud-list-item.elegido {
+.lista .item.elegido {
     background: var(--mud-palette-primary);
     color: var(--mud-palette-primary-text);
 }
 
-.admin-xml ::deep .lista .sin-coincidencias:not(.elegido) { opacity: .45; }
+.lista .sin-coincidencias:not(.elegido) { opacity: .45; }
 
 .mes-num { font-variant-numeric: tabular-nums; }
 .mes-num.secundario,
@@ -158,8 +161,8 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
     font-variant-numeric: tabular-nums;
 }
 
-.admin-xml ::deep .elegido .mes-num,
-.admin-xml ::deep .elegido .cantidad {
+.elegido .mes-num,
+.elegido .cantidad {
     color: inherit;
     opacity: .85;
 }
@@ -677,19 +680,26 @@ td.ajusta { white-space: normal; }
     text-transform: uppercase;
 }
 
-.admin-xml ::deep .herramienta {
-    min-height: 0;
+.herramienta {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    width: 100%;
     padding: .3rem .75rem;
+    border: 0;
+    background: transparent;
+    color: var(--bs-body-color);
     font-size: .8rem;
+    text-align: left;
     cursor: pointer;
+    transition: background-color .15s;
 }
 
-.admin-xml ::deep .herramienta .mud-list-item-text { margin: 0; }
-.admin-xml ::deep .herramienta:hover { background: var(--mud-palette-action-default-hover); }
+.herramienta:hover { background: var(--mud-palette-action-default-hover); }
 
-.admin-xml ::deep .herramienta .renglon {
-    justify-content: flex-start;
-    gap: .6rem;
+.herramienta:focus-visible {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: -2px;
 }
 
 .ic {
@@ -704,7 +714,7 @@ td.ajusta { white-space: normal; }
     font-size: .9rem;
 }
 
-.admin-xml ::deep .herramienta:hover .ic {
+.herramienta:hover .ic {
     background: var(--tono);
     color: #fff;
 }

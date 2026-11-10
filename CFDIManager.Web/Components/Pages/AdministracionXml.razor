@@ -48,13 +48,14 @@
                         </MudToggleGroup>
 
                         <span class="etiqueta mt-2">Año</span>
-                        @* La selección la lleva la página (clase "elegido"); el resaltado propio de MudList se anula en el CSS. *@
-                        <MudList T="int" Dense="true" Padding="false" Class="lista corta">
+                        @* Renglones propios y no MudListItem: MudList lleva su propia selección (un solo renglón) y no respeta
+                           Ctrl + clic; aquí la selección es la de la página (clase "elegido"). *@
+                        <div class="lista corta" role="listbox">
                             @foreach (int a in Anios)
                             {
-                                <MudListItem T="int" Value="a" Class="@(a == Anio ? "elegido" : "")" OnClick="() => CambiarAnio(a)">@a</MudListItem>
+                                <button type="button" role="option" class="item @(a == Anio ? "elegido" : "")" @onclick="() => CambiarAnio(a)">@a</button>
                             }
-                        </MudList>
+                        </div>
                     </div>
 
                     <div class="lista-filtro">
@@ -63,14 +64,14 @@
                             <MudSwitch T="bool" Value="Acumular" ValueChanged="CambiarAcumular" Size="Size.Small" Color="Color.Primary"
                                        Label="Acumular" Class="acumular" />
                         </span>
-                        <MudList T="int" Dense="true" Padding="false" Class="lista alta" title="Ctrl + clic para elegir varios meses">
+                        <div class="lista alta" role="listbox" title="Ctrl + clic para elegir varios meses">
                             @foreach (int m in MesesDisponibles)
                             {
-                                <MudListItem T="int" Value="m" Class="@(MesesElegidos.Contains(m) ? "elegido" : "")" OnClick="e => ElegirMes(m, e)">
+                                <button type="button" role="option" class="item @(MesesElegidos.Contains(m) ? "elegido" : "")" @onclick="e => ElegirMes(m, e)">
                                     <span class="mes-num me-1">@m.ToString("00")</span>@Cultura.DateTimeFormat.GetMonthName(m)
-                                </MudListItem>
+                                </button>
                             }
-                        </MudList>
+                        </div>
                     </div>
 
                     <div class="lista-filtro dias">
@@ -83,21 +84,19 @@
                         </span>
                         @if (MuestraDias)
                         {
-                            <MudList T="int" Dense="true" Padding="false" Class="lista alta" title="Ctrl + clic para elegir varios días">
-                                <MudListItem T="int" Value="0" Class="@(DiasElegidos.Count == 0 ? "elegido" : "")" OnClick="TodosLosDias">
-                                    <span class="renglon">Todo el mes <span class="cantidad">@DiasDisponibles.Sum(d => d.Cantidad).ToString("N0")</span></span>
-                                </MudListItem>
+                            <div class="lista alta" role="listbox" title="Ctrl + clic para elegir varios días">
+                                <button type="button" role="option" class="item renglon @(DiasElegidos.Count == 0 ? "elegido" : "")" @onclick="TodosLosDias">
+                                    Todo el mes <span class="cantidad">@DiasDisponibles.Sum(d => d.Cantidad).ToString("N0")</span>
+                                </button>
                                 @foreach (var (dia, cantidad) in DiasDisponibles)
                                 {
-                                    <MudListItem T="int" Value="dia" Class="@($"{(DiasElegidos.Contains(dia) ? "elegido" : "")} {(cantidad == 0 ? "sin-coincidencias" : "")}")"
-                                                 OnClick="e => ElegirDia(dia, e)">
-                                        <span class="renglon">
-                                            <span><span class="mes-num fw-semibold me-1">@dia.ToString("00")</span><span class="mes-num secundario">@NombreDia(dia)</span></span>
-                                            <span class="cantidad">@cantidad.ToString("N0")</span>
-                                        </span>
-                                    </MudListItem>
+                                    <button type="button" role="option" class="item renglon @(DiasElegidos.Contains(dia) ? "elegido" : "") @(cantidad == 0 ? "sin-coincidencias" : "")"
+                                            @onclick="e => ElegirDia(dia, e)">
+                                        <span><span class="mes-num fw-semibold me-1">@dia.ToString("00")</span><span class="mes-num secundario">@NombreDia(dia)</span></span>
+                                        <span class="cantidad">@cantidad.ToString("N0")</span>
+                                    </button>
                                 }
-                            </MudList>
+                            </div>
                         }
                         else
                         {
@@ -469,14 +468,12 @@
             @foreach (var (seccion, acciones) in Herramientas)
             {
                 <div class="seccion">@seccion</div>
-                <MudList T="string" Dense="true" Padding="false">
-                    @foreach (var (texto, icono, tono, accion) in acciones)
-                    {
-                        <MudListItem T="string" Class="herramienta" OnClick="() => accion()">
-                            <span class="renglon"><span class="ic tono-@tono"><i class="bi @icono"></i></span>@texto</span>
-                        </MudListItem>
-                    }
-                </MudList>
+                @foreach (var (texto, icono, tono, accion) in acciones)
+                {
+                    <button type="button" class="herramienta" @onclick="accion">
+                        <span class="ic tono-@tono"><i class="bi @icono"></i></span>@texto
+                    </button>
+                }
             }
         </MudPaper>
     }
