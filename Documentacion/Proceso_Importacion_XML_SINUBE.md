@@ -145,6 +145,7 @@ factura). Por eso:
 | Proveedores con folio ocupado | Igual, solo **después de Revisar en SINUBE** (SINUBE no dice el UUID en su respuesta) | Herramientas → "Facturas, notas y pagos de proveedores", p. ej. `+*,+FR`. Otra opción: en SINUBE, proveedor → **Omitir serie y folio al importar XML** |
 | XML Azulejeras | Series alternas propias sobre la serie ya convertida (72AA → 72AAA) | Parámetros de XML Azulejeras, p. ej. `+*,+**` |
 | Marcados como "ya en SINUBE" que SINUBE no tiene con su UUID | No cuentan como subidos; aviso con botón **Quitar marca** para volver a subirlos | — (nunca usar "Marcar como ya en SINUBE" cuando es otro comprobante) |
+| Subidos por la app (OK) que después **borraron en SINUBE** | Al **Revisar en SINUBE** manda SINUBE, no la bitácora: se cuentan como **Borrados en SINUBE** y quedan en "Por subir". Solo facturas y notas de crédito de clientes (`DbFactura` guarda su UUID); pagos y proveedores siguen la bitácora. También en Empresas → Analizar | Para forzar todo: **Reenviar los que SINUBE ya aceptó** (Importación a SINUBE y XML Azulejeras) |
 | Traslados propios (emisor = receptor) | Se suben como cliente **y** como proveedor, estén guardados en Emitidos o en Recibidos | Casilla **Traslado** en proveedores |
 | Rechazo "no tiene un rango de folios" | Es configuración del certificado/serie en SINUBE (rango agotado); no es un problema de la app | Ampliar el rango de folios en SINUBE |
 

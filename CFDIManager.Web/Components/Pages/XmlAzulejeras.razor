@@ -331,6 +331,12 @@
                                     Subir @((Revision?.PorSubir.Count ?? 0).ToString("N0")) a SINUBE
                                 </button>
                             }
+
+                            @* Cambia lo que se revisa: hay que volver a revisar. *@
+                            <label class="form-check ms-2 mb-0 small">
+                                <input class="form-check-input" type="checkbox" @bind="Reenviar" @bind:after="() => Revision = null" disabled="@Ocupado" />
+                                <span class="form-check-label">Reenviar los que SINUBE ya aceptó</span>
+                            </label>
                         </div>
 
                         @if (Subiendo)
@@ -372,6 +378,11 @@
                             <div class="kpis-fila">
                                 @Tarjeta("Generados", Resultado.Archivos.Count.ToString("N0"), "bi-files", "secondary")
                                 @Tarjeta("Ya en SINUBE", Revision.EnSinube.ToString("N0"), "bi-cloud-check", "info")
+                                @if (Revision.Borrados.Count > 0)
+                                {
+                                    @Tarjeta("Borrados en SINUBE", Revision.Borrados.Count.ToString("N0"), "bi-cloud-slash", "warning",
+                                        detalle: "Subidos antes; se vuelven a subir")
+                                }
                                 @if (Revision.YaExistenSinConfirmar.Count > 0)
                                 {
                                     @Tarjeta("Ya existe (sin confirmar)", Revision.YaExistenSinConfirmar.Count.ToString("N0"), "bi-question-circle", "secondary")
@@ -697,7 +708,7 @@
                     clientes: true,
                     tanda,
                     tiposComprobante: null,
-                    reenviar: false,
+                    reenviar: Reenviar,
                     enviarConAdvertenciaIeps: EnviarConIeps,
                     (envio, actual, total) => InvokeAsync(() =>
                     {
@@ -710,7 +721,8 @@
                     }),
                     CancelacionSinube.Token,
                     sinFolio: null,
-                    yaEnSinube));
+                    yaEnSinube,
+                    borradosEnSinube: Revision.Borrados));
 
                 previos += tanda.Count;
             }
@@ -766,8 +778,14 @@
         /// <summary>Por subir que SINUBE rechazó porque "ya existe" ese serie-folio; solo el usuario confirma que es el mismo.</summary>
         public List<string> YaExistenSinConfirmar { get; init; } = [];
 
+        /// <summary>Subidos por la app que SINUBE ya no tiene (los borraron allá): están en PorSubir para volver a subirlos.</summary>
+        public HashSet<string> Borrados { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
         public List<string> PorSubir { get; init; } = [];
     }
+
+    /// <summary>Vuelve a subir también lo que SINUBE ya aceptó según la bitácora (igual que en Importación a SINUBE).</summary>
+    private bool Reenviar;
 
     private RevisionSinube? Revision;
     private bool Revisando;
@@ -818,19 +836,29 @@
             meses.Add(m);
 
         HashSet<string> enSinube = await DatosSinube.UuidsFacturasClientesAsync(ConfigSinube!, meses);
-        HashSet<string> enviados = Sinube.UuidsEnviados(empresa, clientes: true);
+        HashSet<string> enviados = Reenviar ? [] : Sinube.UuidsEnviados(empresa, clientes: true);
         HashSet<string> yaExisten = Repo.ObtenerUuidsYaExistenSinube(empresa.EmpresaId, "C");
 
         string Uuid(string archivo) => Path.GetFileNameWithoutExtension(archivo);
-        bool Arriba(string a) => enSinube.Contains(Uuid(a)) || enviados.Contains(Uuid(a));
 
-        List<string> porSubir = Resultado!.Archivos.Where(a => !Arriba(a)).ToList();
+        // SINUBE manda: los que la app subió (OK) y SINUBE ya no tiene se borraron allá y vuelven a quedar por subir.
+        Dictionary<string, string> tipos = Resultado!.Detalles
+            .GroupBy(d => d.UUID, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First().TipoCfdi, StringComparer.OrdinalIgnoreCase);
+        HashSet<string> borrados = Sinube.BorradosEnSinube(
+            empresa, clientes: true,
+            Resultado.Archivos.Select(a => (Uuid(a), tipos.GetValueOrDefault(Uuid(a), "I"))), enSinube);
+
+        bool Arriba(string a) => enSinube.Contains(Uuid(a)) || (enviados.Contains(Uuid(a)) && !borrados.Contains(Uuid(a)));
+
+        List<string> porSubir = Resultado.Archivos.Where(a => !Arriba(a)).ToList();
 
         return new RevisionSinube
         {
             YaEnSinube = enSinube,
             EnSinube = Resultado.Archivos.Count(Arriba),
             YaExistenSinConfirmar = porSubir.Select(Uuid).Where(yaExisten.Contains).ToList(),
+            Borrados = borrados,
             PorSubir = porSubir
         };
     }

@@ -666,6 +666,9 @@
         /// </summary>
         public List<(string Uuid, string Serie, string Folio)> ConfirmadosSinEncontrar { get; init; } = [];
 
+        /// <summary>Subidos por la app que SINUBE ya no tiene (los borraron allá): están en PorSubir para volver a subirlos.</summary>
+        public List<(string Uuid, string Serie, string Folio)> Borrados { get; init; } = [];
+
         /// <summary>Por tipo de comprobante: XML del periodo, ya en SINUBE y por subir.</summary>
         public List<(string Tipo, string Nombre, int Xml, int EnSinube, int PorSubir)> Desglose { get; init; } = [];
 
@@ -725,6 +728,18 @@
                     <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" @onclick="() => MarcarYaEnSinube(r)">
                         <i class="bi bi-check2-all me-1"></i>Marcar @r.YaExistenSinConfirmar.Count.ToString("N0") como ya en SINUBE
                     </button>
+                </div>
+            }
+
+            @* Subidos por la app que SINUBE ya no tiene: los borraron allá; ya están contados en "Por subir". *@
+            @if (r.Borrados.Count > 0 && !Enviando)
+            {
+                <div class="alert alert-info d-flex align-items-start gap-2 py-2 px-3 mb-0 small">
+                    <i class="bi bi-cloud-slash"></i>
+                    <span>
+                        Borrados en SINUBE después de subirlos (@r.Borrados.Count.ToString("N0")), se vuelven a subir:
+                        <b>@string.Join(", ", r.Borrados.Select(c => $"{c.Serie}{c.Folio}"))</b>
+                    </span>
                 </div>
             }
 
@@ -869,7 +884,13 @@
         bool SeSubeConAlterna(string a) =>
             config.SeriesAlternasPara(datos[a].Serie).Any(s => !pagosEnSinube!.ContainsKey(PagoSinube.SerieFolio(s, datos[a].Folio)));
 
-        List<string> pendientes = facturas.Where(a => !EnSinube(a) && !enviados.Contains(datos[a].Uuid)).ToList();
+        // SINUBE manda: los que la app subió (OK) y SINUBE ya no tiene se borraron allá y vuelven a quedar por subir.
+        // Solo donde se puede saber por UUID (facturas y notas de crédito de clientes).
+        HashSet<string> borrados = Sinube.BorradosEnSinube(
+            empresa, clientes, facturas.Select(a => (datos[a].Uuid, datos[a].Tipo)), enSinube);
+        bool Borrado(string a) => borrados.Contains(datos[a].Uuid);
+
+        List<string> pendientes = facturas.Where(a => !EnSinube(a) && (!enviados.Contains(datos[a].Uuid) || Borrado(a))).ToList();
 
         // Proveedores: solo los tipos marcados se envían; los demás se cuentan aparte.
         HashSet<string>? tipos = clientes ? null : TiposSeleccionados();
@@ -885,7 +906,7 @@
         HashSet<string> sinEncontrar = facturas
             .Where(a => confirmados.Contains(datos[a].Uuid) && !EnSinube(a) && !(clientes && datos[a].Tipo == "P"))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        bool Arriba(string a) => EnSinube(a) || (enviados.Contains(datos[a].Uuid) && !sinEncontrar.Contains(a));
+        bool Arriba(string a) => EnSinube(a) || (enviados.Contains(datos[a].Uuid) && !sinEncontrar.Contains(a) && !Borrado(a));
 
         (string Tipo, string Nombre)[] porTipo =
             [("I", "Facturas"), ("E", "Notas de crédito"), ("N", "Nómina"), ("P", "Pagos"), ("T", "Traslados")];
@@ -919,6 +940,10 @@
                 .Select(a => datos[a].Uuid)
                 .ToList(),
             PagosEnSinube = pagosEnSinube,
+            Borrados = facturas.Where(Borrado)
+                .Select(a => (datos[a].Uuid, datos[a].Serie, datos[a].Folio))
+                .OrderBy(x => x.Serie).ThenBy(x => x.Folio)
+                .ToList(),
             PorSubir = porSubir
         };
     }
@@ -1088,7 +1113,8 @@
                 Cancelacion.Token,
                 sinFolio,
                 yaEnSinube,
-                pagosEnSinube));
+                pagosEnSinube,
+                Revision?.Borrados.Select(b => b.Uuid).ToHashSet(StringComparer.OrdinalIgnoreCase)));
 
             terminado = true;
         }

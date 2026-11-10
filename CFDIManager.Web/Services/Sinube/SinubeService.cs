@@ -319,6 +319,30 @@ public class SinubeService
     public HashSet<string> UuidsEnviados(EmpresaDto empresa, bool clientes) =>
         _repo.ObtenerUuidsEnviadosSinube(empresa.EmpresaId, clientes ? "C" : "P");
 
+    /// <summary>
+    /// Se sabe por UUID si SINUBE lo tiene: facturas y notas de crédito de clientes (DbFactura guarda el UUID de todas).
+    /// Los pagos y los de proveedores no siempre se encuentran por UUID: para ellos manda la bitácora.
+    /// </summary>
+    public static bool VerificablePorUuid(bool clientes, string tipoComprobante) =>
+        clientes && tipoComprobante is "I" or "E";
+
+    /// <summary>
+    /// Subidos por la app (OK en la bitácora) que SINUBE ya no tiene: alguien los borró en SINUBE. Solo de
+    /// <paramref name="candidatos"/> (UUID y tipo) verificables por UUID; con <paramref name="enSinube"/> recién consultado.
+    /// </summary>
+    public HashSet<string> BorradosEnSinube(
+        EmpresaDto empresa, bool clientes, IEnumerable<(string Uuid, string Tipo)> candidatos, IReadOnlySet<string> enSinube)
+    {
+        string tipo = clientes ? "C" : "P";
+        HashSet<string> subidos = _repo.ObtenerUuidsEnviadosSinube(empresa.EmpresaId, tipo);
+        subidos.ExceptWith(_repo.ObtenerUuidsConfirmadosSinube(empresa.EmpresaId, tipo));
+
+        return candidatos
+            .Where(c => VerificablePorUuid(clientes, c.Tipo) && subidos.Contains(c.Uuid) && !enSinube.Contains(c.Uuid))
+            .Select(c => c.Uuid)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    }
+
     public Task EnviarAsync(
         EmpresaDto empresa,
         SinubeConfiguracionDto configuracion,
@@ -349,7 +373,8 @@ public class SinubeService
         CancellationToken cancelacion,
         SinubeSinFolioDto? sinFolio = null,
         IReadOnlySet<string>? yaEnSinube = null,
-        IReadOnlyDictionary<string, string>? pagosEnSinube = null)
+        IReadOnlyDictionary<string, string>? pagosEnSinube = null,
+        IReadOnlySet<string>? borradosEnSinube = null)
     {
         string? falta = FaltanDatos(configuracion, requierePassword: clientes);
         HashSet<string> uuidsPagosEnSinube = pagosEnSinube is null ? [] : pagosEnSinube.Values.ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -362,6 +387,10 @@ public class SinubeService
 
         string tipo = clientes ? "C" : "P";
         HashSet<string> enviados = reenviar ? [] : _repo.ObtenerUuidsEnviadosSinube(empresa.EmpresaId, tipo);
+
+        // Borrados en SINUBE después de subirlos (revisión previa): la bitácora no impide volver a subirlos.
+        if (borradosEnSinube is not null)
+            enviados.ExceptWith(borradosEnSinube);
         string password = clientes ? Password(configuracion) : "";
         var cacheIeps = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 

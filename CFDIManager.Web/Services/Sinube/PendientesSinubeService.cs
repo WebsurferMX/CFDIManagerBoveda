@@ -71,7 +71,11 @@ public class PendientesSinubeService(PostgreSqlRepository repo, SinubeService si
                     if (clientes && xml.Any(x => x.Tipo == "P"))
                         enSinube.UnionWith(await datos.UuidsDepositosAsync(config, [desde.AddMonths(-1), desde, desde.AddMonths(1)], cancelacion));
 
-                    enSinube.UnionWith(repo.ObtenerUuidsEnviadosSinube(empresa.EmpresaId, clientes ? "C" : "P"));
+                    // La bitácora cuenta como subido, salvo lo que la app subió y SINUBE ya no tiene (lo borraron allá).
+                    HashSet<string> borrados = sinube.BorradosEnSinube(empresa, clientes, xml, enSinube);
+                    HashSet<string> bitacora = repo.ObtenerUuidsEnviadosSinube(empresa.EmpresaId, clientes ? "C" : "P");
+                    bitacora.ExceptWith(borrados);
+                    enSinube.UnionWith(bitacora);
 
                     var pendientes = xml.Where(x => !enSinube.Contains(x.Uuid)).ToList();
 
