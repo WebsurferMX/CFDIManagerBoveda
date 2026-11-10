@@ -7,17 +7,41 @@
 @inject NavigationManager Navigation
 @inject AccesoEmpresasService Acceso
 @inject EmpresaContext EmpresaContext
+@inject TemaUi Tema
+@inject IJSRuntime JS
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+<MudThemeProvider Theme="TemaUi.Tema" IsDarkMode="Tema.Oscuro" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
 
-    <main>
-        <div class="top-row px-4">
+<MudLayout>
+    <MudAppBar Elevation="1" Class="barra-superior">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                       title="@(MenuAbierto ? "Contraer menú" : "Expandir menú")"
+                       aria-label="@(MenuAbierto ? "Contraer menú" : "Expandir menú")"
+                       OnClick="AlternarMenu" />
+        <div class="barra-superior-contenido">
             <EmpresaSelector />
         </div>
+    </MudAppBar>
 
+    @* Mini: contraído deja solo los iconos. *@
+    <MudDrawer Open="MenuAbierto" OpenChanged="MenuCambio" Variant="DrawerVariant.Mini" ClipMode="DrawerClipMode.Never"
+               Elevation="2" Class="menu-lateral">
+        <MudDrawerHeader Class="menu-lateral-encabezado">
+            <a href="" class="menu-lateral-marca" title="CFDI Manager">
+                <i class="bi bi-safe2-fill" aria-hidden="true"></i>
+                @if (MenuAbierto)
+                {
+                    <span>CFDI Manager</span>
+                }
+            </a>
+        </MudDrawerHeader>
+        <NavMenu />
+    </MudDrawer>
+
+    <MudMainContent>
         <article class="content px-4">
             @if (SinEmpresas)
             {
@@ -29,8 +53,8 @@
 
             @Body
         </article>
-    </main>
-</div>
+    </MudMainContent>
+</MudLayout>
 
 <div id="blazor-error-ui"
      data-nosnippet>
@@ -50,9 +74,36 @@
 {
     private bool SinEmpresas;
 
+    private bool MenuAbierto = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        // Tema y estado del menú guardados en el navegador (js/theme.js).
+        Tema.Establecer(await JS.InvokeAsync<string>("cfdiTheme.current") == "dark");
+        bool abierto = await JS.InvokeAsync<bool>("cfdiMenu.abierto");
+
+        if (abierto != MenuAbierto)
+        {
+            MenuAbierto = abierto;
+            StateHasChanged();
+        }
+    }
+
+    private Task AlternarMenu() => MenuCambio(!MenuAbierto);
+
+    private async Task MenuCambio(bool abierto)
+    {
+        MenuAbierto = abierto;
+        await JS.InvokeVoidAsync("cfdiMenu.guardar", abierto);
+    }
+
     protected override async Task OnInitializedAsync()
     {
         EmpresaContext.OnChange += ContextChanged;
+        Tema.Cambio += ContextChanged;
 
         // Con contraseña temporal no se usa la aplicación hasta elegir una personal.
         if ((await Acceso.ObtenerUsuarioActualAsync()).HasClaim(c => c.Type == UsuarioClaimsFactory.DebeCambiarPassword))
@@ -103,5 +154,6 @@
     public void Dispose()
     {
         EmpresaContext.OnChange -= ContextChanged;
+        Tema.Cambio -= ContextChanged;
     }
 }

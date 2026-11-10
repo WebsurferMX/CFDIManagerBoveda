@@ -1,64 +1,44 @@
 @implements IDisposable
 @inject NavigationManager Navegacion
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">CFDI Manager</a>
-    </div>
-</div>
-
-<input type="checkbox"
-       title="Menú de navegación"
-       class="navbar-toggler" />
-
-@* El menú sale del catálogo de tareas (Services\Seguridad\Tareas.cs): cada opción aparece solo si el
-   rol del usuario la incluye y no se la quitaron en Configuración → Usuarios. *@
-<div class="nav-scrollable"
-     onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="flex-column">
-        @foreach (Tarea tarea in Tareas.Catalogo)
-        {
-            <AuthorizeView Policy="@tarea.Politica" Context="permiso">
-                @if (tarea.Opciones.Count > 0)
-                {
-                    @* Submenú desplegable; abierto cuando la ruta actual es de alguna de sus opciones. El clic en el
-                       título no debe cerrar el menú en pantallas chicas (onclick del contenedor). *@
-                    <details class="nav-item nav-grupo px-3" open="@EnRuta(tarea.Ruta)">
-                        <summary class="nav-link" onclick="event.stopPropagation()">
-                            <span class="bi @tarea.Icono" aria-hidden="true"></span>
-                            @tarea.Nombre
-                        </summary>
-                        @foreach (OpcionMenu opcion in tarea.Opciones)
-                        {
-                            <div class="nav-subitem">
-                                <NavLink class="nav-link"
-                                         href="@opcion.Ruta"
-                                         Match="@(opcion.CoincidenciaExacta ? NavLinkMatch.All : NavLinkMatch.Prefix)">
-                                    <span class="bi @opcion.Icono" aria-hidden="true"></span>
-                                    @opcion.Nombre
-                                </NavLink>
-                            </div>
-                        }
-                    </details>
-                }
-                else
-                {
-                    <div class="nav-item px-3">
-                        <NavLink class="nav-link"
-                                 href="@tarea.Ruta"
-                                 Match="@(tarea.CoincidenciaExacta ? NavLinkMatch.All : NavLinkMatch.Prefix)">
-                            <span class="bi @tarea.Icono" aria-hidden="true"></span>
-                            @tarea.Nombre
-                        </NavLink>
-                    </div>
-                }
-            </AuthorizeView>
-        }
-    </nav>
-</div>
+@* El menú sale del catálogo de tareas (Services\Seguridad\Tareas.cs): cada opción aparece solo si el rol del
+   usuario la incluye y no se la quitaron en Configuración → Usuarios. Los iconos son de Bootstrap Icons (clases
+   "bi bi-..."): MudBlazor los dibuja como icono de fuente. Estilos en wwwroot/css/layout.css. *@
+<MudNavMenu>
+    @foreach (Tarea tarea in Tareas.Catalogo)
+    {
+        <AuthorizeView Policy="@tarea.Politica" Context="permiso">
+            @if (tarea.Opciones.Count > 0)
+            {
+                @* Submenú; abierto cuando la ruta actual es de alguna de sus opciones. *@
+                <MudNavGroup Title="@tarea.Nombre" Icon="@Icono(tarea.Icono)" Expanded="@EnRuta(tarea.Ruta)">
+                    @foreach (OpcionMenu opcion in tarea.Opciones)
+                    {
+                        <MudNavLink Href="@Ruta(opcion.Ruta)" Icon="@Icono(opcion.Icono)" title="@opcion.Nombre"
+                                    Match="@(opcion.CoincidenciaExacta ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                            @opcion.Nombre
+                        </MudNavLink>
+                    }
+                </MudNavGroup>
+            }
+            else
+            {
+                <MudNavLink Href="@Ruta(tarea.Ruta)" Icon="@Icono(tarea.Icono)" title="@tarea.Nombre"
+                            Match="@(tarea.CoincidenciaExacta ? NavLinkMatch.All : NavLinkMatch.Prefix)">
+                    @tarea.Nombre
+                </MudNavLink>
+            }
+        </AuthorizeView>
+    }
+</MudNavMenu>
 
 @code {
     protected override void OnInitialized() => Navegacion.LocationChanged += Navego;
+
+    private static string Icono(string icono) => "bi " + icono;
+
+    /// <summary>El Resumen tiene ruta vacía; "./" es la raíz de la app (base href).</summary>
+    private static string Ruta(string ruta) => ruta.Length == 0 ? "./" : ruta;
 
     /// <summary>La ruta actual es la de la tarea o una de sus subrutas.</summary>
     private bool EnRuta(string ruta)

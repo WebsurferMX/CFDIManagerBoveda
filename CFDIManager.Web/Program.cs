@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using CFDIManager.Web.Services.Seguridad;
 using Microsoft.AspNetCore.Components.Authorization;
+using MudBlazor.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Hosting.WindowsServices;
@@ -267,6 +268,16 @@ builder.Services.AddScoped<CuentasUsuarioService>();
 
 // Correo SMTP (Configuración → Correo): bienvenidas, contraseñas temporales y envío de reportes.
 builder.Services.AddScoped<CFDIManager.Web.Services.Correo.CorreoService>();
+
+// MudBlazor (layout, menú lateral y componentes nuevos) y el modo claro/oscuro compartido con su tema.
+builder.Services.AddMudServices(c =>
+{
+    // Abajo al centro: a la derecha taparían el panel de herramientas de las vistas.
+    c.SnackbarConfiguration.PositionClass = MudBlazor.Defaults.Classes.Position.BottomCenter;
+    c.SnackbarConfiguration.PreventDuplicates = true;
+    c.SnackbarConfiguration.MaxDisplayedSnackbars = 3;
+});
+builder.Services.AddScoped<TemaUi>();
 
 builder.Services
     .AddRazorComponents()

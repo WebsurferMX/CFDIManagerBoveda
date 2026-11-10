@@ -63,3 +63,14 @@ window.cfdiTheme = {
         return this.applyTheme(newTheme);
     }
 };
+
+// Menú lateral abierto o contraído a solo iconos (MainLayout); se recuerda por navegador.
+window.cfdiMenu = {
+    abierto: function () {
+        try { return localStorage.getItem("cfdi-menu") !== "contraido"; } catch { return true; }
+    },
+
+    guardar: function (abierto) {
+        try { localStorage.setItem("cfdi-menu", abierto ? "abierto" : "contraido"); } catch { }
+    }
+};

@@ -1,0 +1,129 @@
+/* Layout con MudBlazor (Components/Layout/MainLayout.razor y NavMenu.razor). */
+
+/* ===== Contenido ===== */
+
+.mud-main-content {
+    /* Sin esto una tabla ancha estira la página en lugar de hacer scroll en .content. */
+    min-width: 0;
+    min-height: 100vh;
+    background: #e6e9ee;
+}
+
+html[data-theme="dark"] .mud-main-content {
+    background: #09111f;
+}
+
+/* ===== Barra superior ===== */
+
+.barra-superior.mud-appbar {
+    border-bottom: 1px solid #d3d9e1;
+    box-shadow: 0 1px 3px rgb(15 23 42 / 6%);
+}
+
+html[data-theme="dark"] .barra-superior.mud-appbar {
+    border-bottom-color: #2e415b;
+}
+
+.barra-superior .mud-toolbar {
+    gap: .5rem;
+}
+
+.barra-superior-contenido {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Bootstrap le pone margen inferior a los label; en la barra rompe la alineación. */
+.barra-superior-contenido label {
+    margin-bottom: 0;
+}
+
+/* ===== Menú lateral ===== */
+
+.menu-lateral.mud-drawer {
+    background: linear-gradient(180deg, #071b52 0%, #052767 70%, #021a4a 100%);
+    overflow-x: hidden;
+}
+
+.menu-lateral-encabezado.mud-drawer-header {
+    min-height: 4rem;
+    padding: 0 1rem;
+    display: flex;
+    align-items: center;
+    background: rgb(0 0 0 / 25%);
+}
+
+.menu-lateral-marca {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    color: #fff !important;
+    text-decoration: none !important;
+    font-size: 1.1rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.menu-lateral-marca .bi {
+    font-size: 1.4rem;
+    line-height: 1;
+}
+
+.menu-lateral .mud-navmenu {
+    padding: .5rem 0 1rem;
+}
+
+.menu-lateral .mud-nav-link {
+    color: rgb(255 255 255 / 82%) !important;
+    text-decoration: none !important;
+    white-space: nowrap;
+    font-size: .9rem;
+    min-height: 44px;
+}
+
+.menu-lateral .mud-nav-link:hover:not(.mud-nav-link-disabled) {
+    background-color: rgb(255 255 255 / 10%);
+    color: #fff !important;
+}
+
+.menu-lateral .mud-nav-link.active:not(.mud-nav-link-disabled) {
+    background-color: rgb(255 255 255 / 22%);
+    color: #fff !important;
+    font-weight: 600;
+}
+
+/* Iconos de Bootstrap Icons en lugar de SVG de Material. */
+.menu-lateral .mud-nav-link-icon.bi,
+.menu-lateral .mud-nav-link-icon.mud-icon-root.bi {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    font-size: 1.2rem;
+    line-height: 1;
+    color: inherit;
+}
+
+.menu-lateral .mud-nav-link-icon.bi::before {
+    line-height: 1;
+    vertical-align: 0;
+}
+
+/* Opciones de un submenú, un poco más chicas. */
+.menu-lateral .mud-nav-group .mud-collapse-container .mud-nav-link {
+    font-size: .85rem;
+    min-height: 38px;
+}
+
+.menu-lateral .mud-nav-group .mud-collapse-container .mud-nav-link-icon.bi {
+    font-size: 1.05rem;
+}
+
+/* Contraído (solo iconos): la flecha de los submenús no cabe. */
+.menu-lateral.mud-drawer--closed .mud-nav-link-expand-icon {
+    display: none;
+}

@@ -11,12 +11,19 @@
     <script src="js/theme.js"></script>
     <script>window.cfdiTheme.initialize();</script>
 
+    @* MudBlazor (layout y menú lateral) antes de Bootstrap: su reset global no debe ganarle a Bootstrap ni a
+       app.css en las vistas existentes. El login no lo usa. *@
+    @if (SesionIniciada)
+    {
+        <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css" />
+    }
     <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="lib/bootstrap-icons/font/bootstrap-icons.min.css" />
     @* Iconos de Tabler 3.49 (clases ti ti-*); no chocan con Bootstrap Icons (bi bi-*). *@
     <link rel="stylesheet" href="lib/tabler-icons/tabler-icons.min.css" />
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="css/cuenta.css" />
+    <link rel="stylesheet" href="css/layout.css" />
     <link rel="stylesheet" href="CFDIManager.Web.styles.css" />
     <HeadOutlet @rendermode="RenderModeForPage" />
 </head>
@@ -51,6 +58,10 @@
         </script>
     }
     <script src="_framework/blazor.web.js"></script>
+    @if (SesionIniciada)
+    {
+        <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    }
 </body>
 
 </html>
