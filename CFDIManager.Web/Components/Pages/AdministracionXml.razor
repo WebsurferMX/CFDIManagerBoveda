@@ -22,6 +22,7 @@
 @inject CFDIManager.Web.Services.Sat.EstadoDescargaAutomaticaSat DescargaSat
 @inject CFDIManager.Web.Services.AdministracionXml.ValidacionSatSegundoPlano ValidacionesSat
 @inject EnvioCfdiService EnvioCfdi
+@inject ISnackbar Snackbar
 
 <PageTitle>Administración de XML</PageTitle>
 
@@ -29,180 +30,170 @@
 
     @if (!EmpresaContext.TieneEmpresaActiva)
     {
-        <div class="alert alert-warning d-flex align-items-center gap-2 m-3">
-            <i class="bi bi-building-exclamation fs-5"></i>
-            Selecciona una empresa activa para administrar sus XML.
-        </div>
+        <MudAlert Severity="Severity.Warning" Class="ma-3">Selecciona una empresa activa para administrar sus XML.</MudAlert>
     }
     else
     {
         <section class="principal">
 
-            @* Dos tarjetas: filtros (tipo, año, mes) y resumen del comprobante elegido. *@
+            @* Dos tarjetas: filtros (tipo, año, mes, día) y vista previa del comprobante elegido. *@
             <div class="encabezado">
-                <div class="card shadow-sm filtros">
-                    <div class="card-body d-flex gap-3 p-2">
-                        <div class="lista-filtro">
-                            <span class="etiqueta">Tipo</span>
-                            <div class="list-group list-group-sm">
-                                <button type="button" class="list-group-item list-group-item-action @(Clasificacion == "EMITIDO" ? "active" : "")" @onclick='() => CambiarClasificacion("EMITIDO")'>
-                                    <i class="bi bi-box-arrow-up-right me-1"></i>Emitidos
-                                </button>
-                                <button type="button" class="list-group-item list-group-item-action @(Clasificacion == "RECIBIDO" ? "active" : "")" @onclick='() => CambiarClasificacion("RECIBIDO")'>
-                                    <i class="bi bi-box-arrow-in-down-left me-1"></i>Recibidos
-                                </button>
-                            </div>
+                <MudPaper Elevation="1" Class="filtros">
+                    <div class="lista-filtro">
+                        <span class="etiqueta">Tipo</span>
+                        <MudToggleGroup T="string" Value="Clasificacion" ValueChanged="CambiarClasificacion" Vertical="true" Outlined="true"
+                                        Size="Size.Small" Color="Color.Primary" Class="tipo">
+                            <MudToggleItem Value="@("EMITIDO")"><i class="bi bi-box-arrow-up-right me-1"></i>Emitidos</MudToggleItem>
+                            <MudToggleItem Value="@("RECIBIDO")"><i class="bi bi-box-arrow-in-down-left me-1"></i>Recibidos</MudToggleItem>
+                        </MudToggleGroup>
 
-                            <span class="etiqueta mt-2">Año</span>
-                            <div class="list-group list-group-sm corta">
-                                @foreach (int a in Anios)
-                                {
-                                    <button type="button" class="list-group-item list-group-item-action @(a == Anio ? "active" : "")" @onclick="() => CambiarAnio(a)">@a</button>
-                                }
-                            </div>
-                        </div>
-
-                        <div class="lista-filtro">
-                            <span class="etiqueta d-flex justify-content-between align-items-center gap-2">
-                                Mes
-                                <span class="form-check form-switch m-0 small fw-normal">
-                                    <input class="form-check-input" type="checkbox" id="acumular" checked="@Acumular" @onchange="CambiarAcumular" />
-                                    <label class="form-check-label" for="acumular">Acumular</label>
-                                </span>
-                            </span>
-                            <div class="list-group list-group-sm alta" title="Ctrl + clic para elegir varios meses">
-                                @foreach (int m in MesesDisponibles)
-                                {
-                                    <button type="button" class="list-group-item list-group-item-action @(MesesElegidos.Contains(m) ? "active" : "")" @onclick="e => ElegirMes(m, e)">
-                                        <span class="text-body-secondary me-1 mes-num">@m.ToString("00")</span>@Cultura.DateTimeFormat.GetMonthName(m)
-                                    </button>
-                                }
-                            </div>
-                        </div>
-
-                        <div class="lista-filtro dias">
-                            <span class="etiqueta d-flex justify-content-between align-items-center gap-2">
-                                Día
-                                @if (DiasElegidos.Count > 0)
-                                {
-                                    <span class="badge rounded-pill text-bg-primary fw-semibold">@DiasElegidos.Count</span>
-                                }
-                            </span>
-                            @if (MuestraDias)
+                        <span class="etiqueta mt-2">Año</span>
+                        @* La selección la lleva la página (clase "elegido"); el resaltado propio de MudList se anula en el CSS. *@
+                        <MudList T="int" Dense="true" Padding="false" Class="lista corta">
+                            @foreach (int a in Anios)
                             {
-                                <div class="list-group list-group-sm alta" title="Ctrl + clic para elegir varios días">
-                                    <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between @(DiasElegidos.Count == 0 ? "active" : "")" @onclick="TodosLosDias">
-                                        Todo el mes <span class="cantidad">@DiasDisponibles.Sum(d => d.Cantidad).ToString("N0")</span>
-                                    </button>
-                                    @foreach (var (dia, cantidad) in DiasDisponibles)
-                                    {
-                                        <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between gap-2 @(DiasElegidos.Contains(dia) ? "active" : "") @(cantidad == 0 ? "sin-coincidencias" : "")" @onclick="e => ElegirDia(dia, e)">
-                                            <span><span class="mes-num fw-semibold me-1">@dia.ToString("00")</span><span class="text-body-secondary mes-num">@NombreDia(dia)</span></span>
-                                            <span class="cantidad">@cantidad.ToString("N0")</span>
-                                        </button>
-                                    }
-                                </div>
+                                <MudListItem T="int" Value="a" Class="@(a == Anio ? "elegido" : "")" OnClick="() => CambiarAnio(a)">@a</MudListItem>
                             }
-                            else
-                            {
-                                <div class="dias-aviso alta">
-                                    <i class="bi bi-calendar-day fs-5 opacity-50"></i>
-                                    <span>Elige un solo mes, sin acumular, para filtrar por día.</span>
-                                </div>
-                            }
-                        </div>
+                        </MudList>
                     </div>
-                </div>
 
-                <div class="card shadow-sm resumen">
-                    <div class="card-body p-2">
-                        @if (Activa is { } sel)
+                    <div class="lista-filtro">
+                        <span class="etiqueta d-flex justify-content-between align-items-center gap-2">
+                            Mes
+                            <MudSwitch T="bool" Value="Acumular" ValueChanged="CambiarAcumular" Size="Size.Small" Color="Color.Primary"
+                                       Label="Acumular" Class="acumular" />
+                        </span>
+                        <MudList T="int" Dense="true" Padding="false" Class="lista alta" title="Ctrl + clic para elegir varios meses">
+                            @foreach (int m in MesesDisponibles)
+                            {
+                                <MudListItem T="int" Value="m" Class="@(MesesElegidos.Contains(m) ? "elegido" : "")" OnClick="e => ElegirMes(m, e)">
+                                    <span class="mes-num me-1">@m.ToString("00")</span>@Cultura.DateTimeFormat.GetMonthName(m)
+                                </MudListItem>
+                            }
+                        </MudList>
+                    </div>
+
+                    <div class="lista-filtro dias">
+                        <span class="etiqueta d-flex justify-content-between align-items-center gap-2">
+                            Día
+                            @if (DiasElegidos.Count > 0)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Class="ma-0">@DiasElegidos.Count</MudChip>
+                            }
+                        </span>
+                        @if (MuestraDias)
                         {
-                            @* El XML y su representación impresa lado a lado, a todo el ancho. *@
-                            <div class="vista-previa">
-                                <pre class="vista-xml" title="Doble clic para abrir el XML" @ondblclick="AbrirXml">@XmlVista</pre>
-                                @* Imagen de la primera página generada desde el XML: no depende del visor de PDF del navegador. *@
-                                <div class="vista-pdf-marco" title="Doble clic para abrir el PDF" @ondblclick="GenerarPdf">
-                                    <img class="vista-pdf" src="@UrlCfdi(sel.CfdiId, "vista")" alt="Representación impresa" loading="lazy" />
-                                </div>
-                            </div>
+                            <MudList T="int" Dense="true" Padding="false" Class="lista alta" title="Ctrl + clic para elegir varios días">
+                                <MudListItem T="int" Value="0" Class="@(DiasElegidos.Count == 0 ? "elegido" : "")" OnClick="TodosLosDias">
+                                    <span class="renglon">Todo el mes <span class="cantidad">@DiasDisponibles.Sum(d => d.Cantidad).ToString("N0")</span></span>
+                                </MudListItem>
+                                @foreach (var (dia, cantidad) in DiasDisponibles)
+                                {
+                                    <MudListItem T="int" Value="dia" Class="@($"{(DiasElegidos.Contains(dia) ? "elegido" : "")} {(cantidad == 0 ? "sin-coincidencias" : "")}")"
+                                                 OnClick="e => ElegirDia(dia, e)">
+                                        <span class="renglon">
+                                            <span><span class="mes-num fw-semibold me-1">@dia.ToString("00")</span><span class="mes-num secundario">@NombreDia(dia)</span></span>
+                                            <span class="cantidad">@cantidad.ToString("N0")</span>
+                                        </span>
+                                    </MudListItem>
+                                }
+                            </MudList>
                         }
                         else
                         {
-                            <div class="h-100 d-flex flex-column align-items-center justify-content-center text-body-secondary">
-                                <i class="bi bi-file-earmark-text fs-1 opacity-50"></i>
-                                <span>Selecciona un comprobante para ver su resumen.</span>
+                            <div class="dias-aviso alta">
+                                <i class="bi bi-calendar-day fs-5 opacity-50"></i>
+                                <span>Elige un solo mes, sin acumular, para filtrar por día.</span>
                             </div>
                         }
                     </div>
-                </div>
+                </MudPaper>
+
+                <MudPaper Elevation="1" Class="resumen">
+                    @if (Activa is { } sel)
+                    {
+                        @* El XML y su representación impresa lado a lado, a todo el ancho. *@
+                        <div class="vista-previa">
+                            <pre class="vista-xml" title="Doble clic para abrir el XML" @ondblclick="AbrirXml">@XmlVista</pre>
+                            @* Imagen de la primera página generada desde el XML: no depende del visor de PDF del navegador. *@
+                            <div class="vista-pdf-marco" title="Doble clic para abrir el PDF" @ondblclick="GenerarPdf">
+                                <img class="vista-pdf" src="@UrlCfdi(sel.CfdiId, "vista")" alt="Representación impresa" loading="lazy" />
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="vacio">
+                            <i class="bi bi-file-earmark-text fs-1 opacity-50"></i>
+                            <span>Selecciona un comprobante para ver su resumen.</span>
+                        </div>
+                    }
+                </MudPaper>
             </div>
 
             <div class="barra-busqueda">
-                <div class="busqueda">
-                    <label class="etiqueta" for="buscar-xml">Buscar por</label>
-                    <div class="input-group input-group-sm">
-                        <span class="input-group-text"><i class="bi bi-search"></i></span>
-                        <input id="buscar-xml" class="form-control" placeholder="UUID, RFC, nombre, serie o folio"
-                               @bind="Busqueda" @bind:event="oninput" @bind:after="BuscarConPausa" />
-                    </div>
-                </div>
-                <div class="reporte">
-                    <label class="etiqueta" for="tipo-reporte">Nvo. reporte de</label>
-                    <select id="tipo-reporte" class="form-select form-select-sm" @bind="TipoReporte">
-                        <option value="general">Reporte general (por tipo)</option>
-                        <option value="conceptos">Conceptos</option>
-                        @if (Clasificacion == "RECIBIDO")
-                        {
-                            <option value="agrupado:emisor">Agrupado por emisor</option>
-                        }
-                        else
-                        {
-                            <option value="agrupado:receptor">Agrupado por receptor</option>
-                        }
-                        @if (VariosMeses)
-                        {
-                            <option value="agrupado:mes">Agrupado por mes</option>
-                        }
-                        <option value="agrupado:uso">Uso CFDI</option>
-                        <option value="agrupado:metodo">Método de pago</option>
-                        <option value="agrupado:tipo">Tipo</option>
-                        <option value="pareto">Análisis 80-20 (Pareto) con dashboard</option>                    </select>
-                </div>
-                <div class="progreso progress" role="progressbar" aria-label="Progreso del proceso">
-                    <div class="progress-bar @(EnProceso ? "progress-bar-striped progress-bar-animated" : "")"
-                         style="width:@(Proceso is { Total: > 0 } p ? (p.Hechos * 100 / p.Total) : 0)%"></div>
+                <MudTextField T="string" Value="Busqueda" ValueChanged="CambiarBusqueda" DebounceInterval="350" Immediate="true"
+                              Label="Buscar por" Placeholder="UUID, RFC, nombre, serie o folio" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" Class="busqueda" />
+
+                <MudSelect T="string" @bind-Value="TipoReporte" Label="Nvo. reporte de" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           Dense="true" Class="reporte">
+                    <MudSelectItem Value="@("general")">Reporte general (por tipo)</MudSelectItem>
+                    <MudSelectItem Value="@("conceptos")">Conceptos</MudSelectItem>
+                    @if (Clasificacion == "RECIBIDO")
+                    {
+                        <MudSelectItem Value="@("agrupado:emisor")">Agrupado por emisor</MudSelectItem>
+                    }
+                    else
+                    {
+                        <MudSelectItem Value="@("agrupado:receptor")">Agrupado por receptor</MudSelectItem>
+                    }
+                    @if (VariosMeses)
+                    {
+                        <MudSelectItem Value="@("agrupado:mes")">Agrupado por mes</MudSelectItem>
+                    }
+                    <MudSelectItem Value="@("agrupado:uso")">Uso CFDI</MudSelectItem>
+                    <MudSelectItem Value="@("agrupado:metodo")">Método de pago</MudSelectItem>
+                    <MudSelectItem Value="@("agrupado:tipo")">Tipo</MudSelectItem>
+                    <MudSelectItem Value="@("pareto")">Análisis 80-20 (Pareto) con dashboard</MudSelectItem>
+                </MudSelect>
+
+                <div class="progreso" role="progressbar" aria-label="Progreso del proceso">
+                    <MudProgressLinear Value="@(Proceso is { Total: > 0 } p ? (p.Hechos * 100.0 / p.Total) : 0)" Striped="EnProceso"
+                                       Color="Color.Primary" Class="barra" />
                     <span class="progreso-texto">@TextoProceso</span>
                     @if (EnProceso)
                     {
-                        <button class="btn btn-sm btn-danger cancelar" @onclick="CancelarProceso"><i class="bi bi-stop-fill me-1"></i>Cancelar</button>
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.Stop"
+                                   OnClick="CancelarProceso" Class="cancelar">Cancelar</MudButton>
                     }
                 </div>
             </div>
 
-            <div class="card shadow-sm rejilla-card">
-                <div class="card-header bg-body-tertiary p-1 pb-0 border-bottom-0">
-                    <div class="pestanas">
-                        @foreach (var (clave, titulo, cantidad) in Pestanas)
+            <MudPaper Elevation="1" Class="rejilla-card">
+                <div class="pestanas">
+                    @foreach (var (clave, titulo, cantidad) in Pestanas)
+                    {
+                        // Igual que la tarjeta: Nómina 1.1 solo si el filtro trae alguna (o si es la pestaña abierta).
+                        if (clave == "nomina11" && cantidad == 0 && Pestana != clave)
                         {
-                            // Igual que la tarjeta: Nómina 1.1 solo si el filtro trae alguna (o si es la pestaña abierta).
-                            if (clave == "nomina11" && cantidad == 0 && Pestana != clave)
-                            {
-                                continue;
-                            }
-
-                            <button type="button" class="pestana tono-@ColorPestana(clave) @(Pestana == clave ? "activa" : "")" @onclick="() => CambiarPestana(clave)">
-                                @titulo <span class="badge rounded-pill cantidad">@cantidad.ToString("N0")</span>
-                            </button>
+                            continue;
                         }
-                    </div>
+
+                        <button type="button" class="pestana tono-@ColorPestana(clave) @(Pestana == clave ? "activa" : "")" @onclick="() => CambiarPestana(clave)">
+                            @titulo <span class="cantidad">@cantidad.ToString("N0")</span>
+                        </button>
+                    }
                 </div>
 
                 <div class="rejilla">
-                    <table class="table table-sm table-hover align-middle mb-0">
+                    <MudSimpleTable Dense="true" Hover="true" Elevation="0" Square="true">
                         <thead>
                             <tr>
-                                <th class="sel"><input class="form-check-input" type="checkbox" checked="@TodoElFiltro" @onchange="MarcarTodoElFiltro" title="Seleccionar todo el filtro (todas las páginas)" /></th>
+                                <th class="sel">
+                                    <MudCheckBox T="bool" Value="TodoElFiltro" ValueChanged="MarcarTodoElFiltro" Size="Size.Small" Dense="true"
+                                                 title="Seleccionar todo el filtro (todas las páginas)" />
+                                </th>
                                 @foreach (Columna c in ColumnasVisibles)
                                 {
                                     <th class="ordenable @(c.Numero ? "num" : "") @(Orden == c.Clave ? "ordenada" : "")"
@@ -219,7 +210,8 @@
                                 <tr class="@(x.CfdiId == ActivaId ? "activa" : "")" @onclick="e => ClicFila(x, e)" @ondblclick="AbrirXml"
                                     title="Ctrl + clic marca o desmarca · Shift + clic marca un rango">
                                     <td class="sel" @onclick:stopPropagation="true">
-                                        <input class="form-check-input" type="checkbox" checked="@(TodoElFiltro || Marcadas.Contains(x.CfdiId))" @onchange="e => Marcar(x.CfdiId, e)" />
+                                        <MudCheckBox T="bool" Value="@(TodoElFiltro || Marcadas.Contains(x.CfdiId))" ValueChanged="v => Marcar(x.CfdiId, v)"
+                                                     Size="Size.Small" Dense="true" />
                                     </td>
                                     @foreach (Columna c in ColumnasVisibles)
                                     {
@@ -230,79 +222,70 @@
                             @if (Filas.Count == 0)
                             {
                                 <tr>
-                                    <td colspan="@(ColumnasVisibles.Count + 1)" class="text-center text-body-secondary py-4">
+                                    <td colspan="@(ColumnasVisibles.Count + 1)" class="sin-filas">
                                         <i class="bi bi-inbox fs-4 d-block"></i>
                                         Sin comprobantes para este filtro.
                                         @if (!string.IsNullOrWhiteSpace(Busqueda) && MesesElegidos.Count < MesesDisponibles.Count)
                                         {
                                             <div class="mt-2">
-                                                <button type="button" class="btn btn-sm btn-outline-primary" @onclick="BuscarEnTodoElAnio">
-                                                    <i class="bi bi-search me-1"></i>Buscar en todo @Anio
-                                                </button>
+                                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                                           StartIcon="@Icons.Material.Filled.Search" OnClick="BuscarEnTodoElAnio">Buscar en todo @Anio</MudButton>
                                             </div>
                                         }
                                     </td>
                                 </tr>
                             }
                         </tbody>
-                    </table>
+                    </MudSimpleTable>
                 </div>
-            </div>
+            </MudPaper>
 
             <div class="pie">
-                <span class="small">
-                    <i class="bi bi-files text-body-secondary me-1"></i>
+                <span class="conteo">
+                    <i class="bi bi-files me-1"></i>
                     <b>@(Filas.Count == 0 ? 0 : Pagina * TamanoPagina + 1)–@(Pagina * TamanoPagina + Filas.Count)</b> de <b>@((Totales?.EnPestana ?? 0).ToString("N0"))</b> en el filtro
                     @if (TodoElFiltro)
                     {
-                        <span class="badge text-bg-primary ms-1">todo el filtro marcado</span>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary">todo el filtro marcado</MudChip>
                     }
                     else if (Marcadas.Count > 0)
                     {
-                        <span class="badge text-bg-primary ms-1">@Marcadas.Count marcados</span>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary">@Marcadas.Count marcados</MudChip>
                     }
                 </span>
 
                 @if (TotalPaginas > 1)
                 {
-                    <div class="input-group input-group-sm paginador">
-                        <button class="btn btn-outline-secondary" disabled="@(Pagina == 0)" @onclick="() => IrPagina(0)" title="Primera"><i class="bi bi-chevron-double-left"></i></button>
-                        <button class="btn btn-outline-secondary" disabled="@(Pagina == 0)" @onclick="() => IrPagina(Pagina - 1)" title="Anterior"><i class="bi bi-chevron-left"></i></button>
-                        <span class="input-group-text">Página</span>
-                        <input class="form-control text-center" type="number" min="1" max="@TotalPaginas" value="@(Pagina + 1)" @onchange="IrPaginaEscrita" />
-                        <span class="input-group-text">de @TotalPaginas</span>
-                        <button class="btn btn-outline-secondary" disabled="@(Pagina >= TotalPaginas - 1)" @onclick="() => IrPagina(Pagina + 1)" title="Siguiente"><i class="bi bi-chevron-right"></i></button>
-                        <button class="btn btn-outline-secondary" disabled="@(Pagina >= TotalPaginas - 1)" @onclick="() => IrPagina(TotalPaginas - 1)" title="Última"><i class="bi bi-chevron-double-right"></i></button>
-                    </div>
+                    <MudPagination Count="TotalPaginas" Selected="@(Pagina + 1)" SelectedChanged="p => IrPagina(p - 1)"
+                                   ShowFirstButton="true" ShowLastButton="true" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary"
+                                   MiddleCount="3" BoundaryCount="1" />
                 }
 
-                <span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle importe">
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" Class="importe">
                     Vigente <b>$@((Totales?.Vigente ?? 0).ToString("N2"))</b>
-                </span>
-                <span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle importe">
+                </MudChip>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Class="importe">
                     Cancelado <b>$@((Totales?.Cancelado ?? 0).ToString("N2"))</b>
-                </span>
+                </MudChip>
 
                 <span class="flex-grow-1"></span>
 
-                <div class="input-group input-group-sm filtrar">
-                    <span class="input-group-text"><i class="bi bi-funnel me-1"></i>Filtrar</span>
-                    <select class="form-select" @bind="Filtrar" @bind:after="Consultar">
-                        <option value="">Todos</option>
-                        <option value="vigentes">Vigentes</option>
-                        <option value="cancelados">Cancelados</option>
-                        <option value="sinvalidar">Sin validar en SAT</option>
-                        <option value="duplicados">Duplicados (mismo UUID en varios XML)</option>
-                        <option value="ppd">PPD (pago en parcialidades)</option>
-                        <option value="relacionados" title="El que relaciona y el relacionado">Relacionados</option>
-                    </select>
-                </div>
-                <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-secondary" @onclick='() => AbrirModal("columnas")'><i class="bi bi-layout-three-columns me-1"></i>Columnas</button>
-                    <button class="btn btn-outline-secondary" @onclick="() => MostrarDetalles = !MostrarDetalles">
-                        <i class="bi @(MostrarDetalles ? "bi-chevron-bar-down" : "bi-chevron-bar-up") me-1"></i>@(MostrarDetalles ? "Ocultar detalles" : "Mostrar detalles")
-                    </button>
-                </div>
+                <MudSelect T="string" Value="Filtrar" ValueChanged="CambiarFiltrar" Label="Filtrar" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           Dense="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.FilterAlt" Class="filtrar">
+                    <MudSelectItem Value="@("")">Todos</MudSelectItem>
+                    <MudSelectItem Value="@("vigentes")">Vigentes</MudSelectItem>
+                    <MudSelectItem Value="@("cancelados")">Cancelados</MudSelectItem>
+                    <MudSelectItem Value="@("sinvalidar")">Sin validar en SAT</MudSelectItem>
+                    <MudSelectItem Value="@("duplicados")">Duplicados (mismo UUID en varios XML)</MudSelectItem>
+                    <MudSelectItem Value="@("ppd")">PPD (pago en parcialidades)</MudSelectItem>
+                    <MudSelectItem Value="@("relacionados")">Relacionados (el que relaciona y el relacionado)</MudSelectItem>
+                </MudSelect>
+
+                <MudButtonGroup Size="Size.Small" Variant="Variant.Outlined" Color="Color.Default">
+                    <MudButton StartIcon="@Icons.Material.Filled.ViewColumn" OnClick='() => AbrirModal("columnas")'>Columnas</MudButton>
+                    <MudButton StartIcon="@(MostrarDetalles ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ExpandLess)"
+                               OnClick="() => MostrarDetalles = !MostrarDetalles">@(MostrarDetalles ? "Ocultar detalles" : "Mostrar detalles")</MudButton>
+                </MudButtonGroup>
             </div>
 
             @* Detalle a la izquierda y totales por tipo a la derecha en 2 columnas; sin detalle, los totales en una fila. *@
@@ -347,35 +330,34 @@
             @if (MostrarDetalles)
             {
                 <div class="detalles @(VerRelacionados && Relacionados.Count > 0 ? "con-relacionados" : "")">
-                    <div class="card shadow-sm detalle-tablas">
-                        <div class="card-header bg-body-tertiary py-0 px-2">
-                            <ul class="nav nav-tabs card-header-tabs">
-                                @foreach (var (clave, titulo) in new[] { ("conceptos", "Conceptos"), ("impuestos", "Impuestos"), ("locales", "Impuestos locales"), ("complemento", "Complemento") })
+                    <MudPaper Elevation="1" Class="detalle-tablas">
+                        <div class="detalle-encabezado">
+                            @* Las pestañas solo eligen qué se ve abajo; el contenido se pinta fuera de MudTabs. *@
+                            <MudTabs ActivePanelIndex="IndiceDetalle" ActivePanelIndexChanged="i => CambiarDetalle(PestanasDetalle[i].Clave)"
+                                     Elevation="0" Color="Color.Transparent" SliderColor="Color.Primary" MinimumTabWidth="0px"
+                                     Class="detalle-pestanas" TabPanelsClass="d-none">
+                                @foreach (var (_, titulo) in PestanasDetalle)
                                 {
-                                    <li class="nav-item">
-                                        <button type="button" class="nav-link @(Det == clave ? "active" : "")" @onclick="() => CambiarDetalle(clave)">@titulo</button>
-                                    </li>
+                                    <MudTabPanel Text="@titulo" />
                                 }
-                                @* Solo cuando el comprobante relaciona otros CFDI o algún CFDI lo relaciona a él. *@
-                                @if (Relacionados.Count > 0)
-                                {
-                                    <li class="nav-item">
-                                        <button type="button" class="nav-link @(VerRelacionados ? "active" : "")" @onclick="() => VerRelacionados = !VerRelacionados">
-                                            Relacionados
-                                            <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis ms-1">@Relacionados.Count</span>
-                                        </button>
-                                    </li>
-                                }
-                            </ul>
+                            </MudTabs>
+                            @* Solo cuando el comprobante relaciona otros CFDI o algún CFDI lo relaciona a él. *@
+                            @if (Relacionados.Count > 0)
+                            {
+                                <MudButton Size="Size.Small" Variant="@(VerRelacionados ? Variant.Filled : Variant.Text)" Color="Color.Primary"
+                                           StartIcon="@Icons.Material.Filled.Link" OnClick="() => VerRelacionados = !VerRelacionados" Class="me-1">
+                                    Relacionados (@Relacionados.Count)
+                                </MudButton>
+                            }
                         </div>
                         <div class="detalle-cuerpo">
                             @if (Activa is null)
                             {
-                                <p class="text-body-secondary p-3 mb-0">Selecciona un comprobante.</p>
+                                <p class="secundario pa-3 mb-0">Selecciona un comprobante.</p>
                             }
                             else if (Det == "conceptos")
                             {
-                                <table class="table table-sm table-striped mb-0">
+                                <MudSimpleTable Dense="true" Striped="true" Elevation="0" Square="true">
                                     <thead><tr><th>ClaveProdServ</th><th>NoIdentificación</th><th class="num">Cantidad</th><th>Clave unidad</th><th>Unidad</th><th>Descripción</th><th class="num">Valor unitario</th><th class="num">Descuento</th><th class="num">Importe</th></tr></thead>
                                     <tbody>
                                         @foreach (ConceptoDto k in Conceptos)
@@ -383,11 +365,11 @@
                                             <tr><td>@k.ClaveProdServ</td><td>@k.NoIdentificacion</td><td class="num">@k.Cantidad.ToString("N2")</td><td>@k.ClaveUnidad</td><td>@k.Unidad</td><td class="largo" title="@k.Descripcion">@k.Descripcion</td><td class="num">@k.ValorUnitario.ToString("N2")</td><td class="num">@((k.Descuento ?? 0).ToString("N2"))</td><td class="num">@k.Importe.ToString("N2")</td></tr>
                                         }
                                     </tbody>
-                                </table>
+                                </MudSimpleTable>
                             }
                             else if (Det == "impuestos")
                             {
-                                <table class="table table-sm table-striped mb-0">
+                                <MudSimpleTable Dense="true" Striped="true" Elevation="0" Square="true">
                                     <thead><tr><th>Concepto</th><th>Tipo</th><th>Impuesto</th><th>Factor</th><th class="num">Tasa o cuota</th><th class="num">Base</th><th class="num">Importe</th></tr></thead>
                                     <tbody>
                                         @for (int i = 0; i < Conceptos.Count; i++)
@@ -399,20 +381,20 @@
                                             }
                                         }
                                     </tbody>
-                                </table>
-                                <div class="d-flex flex-wrap gap-2 p-2 small">
-                                    <span class="badge bg-body-secondary text-body border">IVA @Activa.Iva.ToString("N2")</span>
-                                    <span class="badge bg-body-secondary text-body border">IEPS @Activa.Ieps.ToString("N2")</span>
-                                    <span class="badge bg-body-secondary text-body border">Ret. IVA @Activa.RetIva.ToString("N2")</span>
-                                    <span class="badge bg-body-secondary text-body border">Ret. ISR @Activa.RetIsr.ToString("N2")</span>
+                                </MudSimpleTable>
+                                <div class="d-flex flex-wrap gap-1 pa-1">
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">IVA @Activa.Iva.ToString("N2")</MudChip>
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">IEPS @Activa.Ieps.ToString("N2")</MudChip>
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Ret. IVA @Activa.RetIva.ToString("N2")</MudChip>
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Ret. ISR @Activa.RetIsr.ToString("N2")</MudChip>
                                 </div>
                             }
                             else if (Det == "complemento")
                             {
-                                <div class="p-2">
+                                <div class="pa-2">
                                     @if (ComplementosDetalle.Count == 0)
                                     {
-                                        <p class="text-body-secondary mb-0">Sin complementos.</p>
+                                        <p class="secundario mb-0">Sin complementos.</p>
                                     }
                                     @foreach (NodoXml n in ComplementosDetalle)
                                     {
@@ -422,7 +404,7 @@
                             }
                             else
                             {
-                                <table class="table table-sm table-striped mb-0">
+                                <MudSimpleTable Dense="true" Striped="true" Elevation="0" Square="true">
                                     <thead><tr><th>Tipo</th><th>Impuesto</th><th class="num">Tasa</th><th class="num">Importe</th></tr></thead>
                                     <tbody>
                                         @foreach (ImpuestoLocalDto l in ImpuestosLocales)
@@ -431,28 +413,28 @@
                                         }
                                         @if (ImpuestosLocales.Count == 0)
                                         {
-                                            <tr><td colspan="4" class="text-body-secondary">Sin impuestos locales.</td></tr>
+                                            <tr><td colspan="4" class="secundario">Sin impuestos locales.</td></tr>
                                         }
                                     </tbody>
-                                </table>
+                                </MudSimpleTable>
                             }
                         </div>
-                    </div>
-                    @* Se abre con la pestaña Relacionados; se cierra con la misma pestaña o al cambiar de comprobante. *@
+                    </MudPaper>
+                    @* Se abre con el botón Relacionados; se cierra con el mismo botón o al cambiar de comprobante. *@
                     @if (VerRelacionados && Relacionados.Count > 0)
                     {
-                        <div class="card shadow-sm relacionados">
-                            <div class="card-header bg-body-tertiary py-1 px-2 d-flex align-items-center">
+                        <MudPaper Elevation="1" Class="relacionados">
+                            <div class="relacionados-encabezado">
                                 <span class="flex-grow-1"><i class="bi bi-link-45deg me-1"></i>Relacionados</span>
-                                <button type="button" class="btn-close btn-sm" aria-label="Cerrar" @onclick="() => VerRelacionados = false"></button>
+                                <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="Cerrar" OnClick="() => VerRelacionados = false" />
                             </div>
-                            <ul class="list-group list-group-flush">
+                            <div class="relacionados-lista">
                                 @foreach (var grupo in Relacionados.GroupBy(r => r.RelacionaAEste))
                                 {
-                                    <li class="list-group-item grupo">@(grupo.Key ? "Lo relacionan" : "Este CFDI relaciona")</li>
+                                    <div class="grupo">@(grupo.Key ? "Lo relacionan" : "Este CFDI relaciona")</div>
                                     @foreach (CfdiRelacionadoDto r in grupo)
                                     {
-                                        <li class="list-group-item @(r.RelacionaAEste && r.TipoRelacion == "04" ? "sustituido" : "")">
+                                        <div class="relacionado @(r.RelacionaAEste && r.TipoRelacion == "04" ? "sustituido" : "")">
                                             <span class="tipo-relacion" title="Tipo de relación @r.TipoRelacion · @NombreTipoRelacion(r.TipoRelacion)">
                                                 @r.TipoRelacion · @(r.RelacionaAEste ? NombreRelacionInversa(r.TipoRelacion) : NombreTipoRelacion(r.TipoRelacion))
                                             </span>
@@ -463,133 +445,122 @@
                                                     · @r.FechaEmision?.ToString("dd/MM/yyyy") · $@r.Total.ToString("N2")
                                                     @if (r.EstadoSat.StartsWith("Cancel", StringComparison.OrdinalIgnoreCase))
                                                     {
-                                                        <span class="badge bg-danger-subtle text-danger-emphasis ms-1">Cancelado</span>
+                                                        <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined" Class="ms-1">Cancelado</MudChip>
                                                     }
                                                 </span>
                                             }
                                             else
                                             {
-                                                <span class="datos text-body-secondary">No está en la bóveda</span>
+                                                <span class="datos secundario">No está en la bóveda</span>
                                             }
                                             <span class="font-monospace uuid" title="@r.UUID">@r.UUID</span>
-                                        </li>
+                                        </div>
                                     }
                                 }
-                            </ul>
-                        </div>
+                            </div>
+                        </MudPaper>
                     }
                 </div>
             }
             </div>
         </section>
 
-        <aside class="herramientas">
+        <MudPaper Elevation="1" Class="herramientas">
             @foreach (var (seccion, acciones) in Herramientas)
             {
                 <div class="seccion">@seccion</div>
-                <div class="list-group list-group-flush">
+                <MudList T="string" Dense="true" Padding="false">
                     @foreach (var (texto, icono, tono, accion) in acciones)
                     {
-                        <button type="button" class="list-group-item list-group-item-action herramienta" @onclick="accion">
-                            <span class="ic tono-@tono"><i class="bi @icono"></i></span>
-                            @texto
-                        </button>
+                        <MudListItem T="string" Class="herramienta" OnClick="() => accion()">
+                            <span class="renglon"><span class="ic tono-@tono"><i class="bi @icono"></i></span>@texto</span>
+                        </MudListItem>
                     }
-                </div>
+                </MudList>
             }
-        </aside>
+        </MudPaper>
     }
 
-    @if (Aviso != "")
-    {
-        <div class="toast show aviso align-items-center border-0 shadow @(AvisoError ? "text-bg-danger" : "text-bg-dark")" role="status">
-            <div class="d-flex align-items-center gap-2 p-2 ps-3">
-                <i class="bi @(AvisoError ? "bi-exclamation-octagon-fill" : "bi-check-circle-fill") fs-5"></i>
-                <span class="flex-grow-1">@Aviso</span>
-                @if (CarpetaAviso != "")
-                {
-                    <button class="btn btn-sm btn-light text-nowrap" @onclick="() => AbrirCarpeta(CarpetaAviso)"><i class="bi bi-folder2-open me-1"></i>Abrir carpeta</button>
-                }
-                <button type="button" class="btn-close btn-close-white" aria-label="Cerrar" @onclick='() => Aviso = ""'></button>
-            </div>
-        </div>
-    }
+    <MudDialog Visible="@(Modal != "")" VisibleChanged="v => { if (!v) CerrarModal(); }" Options="OpcionesModal">
+        <TitleContent>
+            <span class="d-flex align-items-center gap-2">
+                <i class="bi @IconoModal"></i>@TituloModal
+            </span>
+        </TitleContent>
+        <DialogContent>
+            <div class="dialogo">
+            @switch (Modal)
+            {
+                case "xml":
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Download"
+                                   Href="@UrlCfdi(ActivaId, "xml", true)" Target="_blank">Descargar XML</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PictureAsPdf" OnClick="GenerarPdf">Ver PDF</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.FolderOpen" OnClick="Localizar">Localizar en carpeta</MudButton>
+                    </div>
+                    <pre class="codigo">@TextoXml</pre>
+                    break;
 
-    <Modal Visible="@(Modal != "")"
-           Titulo="@TituloModal"
-           Icono="@IconoModal"
-           Tamano="@(Modal is "columnas" or "renombrar" or "red" or "imagen" ? "modal-lg" : "modal-xl")"
-           OnCerrar="CerrarModal">
-        @switch (Modal)
-        {
-            case "xml":
-                <div class="d-flex flex-wrap gap-2 mb-3">
-                    <a class="btn btn-sm btn-primary" href="@UrlCfdi(ActivaId, "xml", true)" target="_blank"><i class="bi bi-download me-1"></i>Descargar XML</a>
-                    <button class="btn btn-sm btn-outline-secondary" @onclick="GenerarPdf"><i class="bi bi-file-earmark-pdf me-1"></i>Ver PDF</button>
-                    <button class="btn btn-sm btn-outline-secondary" @onclick="Localizar"><i class="bi bi-folder2-open me-1"></i>Localizar en carpeta</button>
-                </div>
-                <pre class="codigo">@TextoXml</pre>
-                break;
+                case "columnas":
+                    <p class="secundario small">La selección se guarda en este navegador.</p>
+                    <div class="columnas-elegir">
+                        @foreach (Columna c in Columnas)
+                        {
+                            <MudCheckBox T="bool" Value="@(!Ocultas.Contains(c.Clave))" ValueChanged="v => AlternarColumna(c.Clave, v)"
+                                         Label="@c.Titulo" Size="Size.Small" Dense="true" Color="Color.Primary" />
+                        }
+                    </div>
+                    break;
 
-            case "columnas":
-                <p class="small text-body-secondary">Elige las columnas que se muestran en la tabla. La selección se guarda en este navegador.</p>
-                <div class="columnas-elegir">
-                    @foreach (Columna c in Columnas)
-                    {
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="col-@c.Clave" checked="@(!Ocultas.Contains(c.Clave))" @onchange="e => AlternarColumna(c.Clave, e)" />
-                            <label class="form-check-label" for="col-@c.Clave">@c.Titulo</label>
-                        </div>
-                    }
-                </div>
-                break;
-
-            case "importar":
-            case "externos":
-                <div class="alert alert-info small d-flex gap-2">
-                    <i class="bi bi-info-circle-fill"></i>
-                    <span>
+                case "importar":
+                case "externos":
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
                         Los XML se importan a <b>@EmpresaContext.NombreEmpresa</b> igual que en Importaciones: se clasifican como
                         emitidos o recibidos, se copian a <b>@RutaEmpresa</b> y se registran en la base de datos. Los repetidos se actualizan.
-                    </span>
-                </div>
-                @if (Modal == "importar")
-                {
-                    <label class="form-label fw-semibold small">Archivos XML</label>
-                    <div class="input-group mb-3">
-                        <InputFile class="form-control" multiple accept=".xml" OnChange="ElegirArchivos" />
-                        <button class="btn btn-primary" disabled="@(ArchivosElegidos.Count == 0 || Cancelacion is not null)" @onclick="ImportarArchivos">
-                            <i class="bi bi-upload me-1"></i>Importar @ArchivosElegidos.Count archivo(s)
-                        </button>
+                    </MudAlert>
+                    @if (Modal == "importar")
+                    {
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                            <MudFileUpload T="IReadOnlyList<IBrowserFile>" Accept=".xml" MaximumFileCount="5000" OnFilesChanged="ElegirArchivos">
+                                <CustomContent>
+                                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.AttachFile" OnClick="@context.OpenFilePickerAsync">
+                                        Elegir archivos XML
+                                    </MudButton>
+                                </CustomContent>
+                            </MudFileUpload>
+                            <span class="secundario small">@(ArchivosElegidos.Count == 0 ? "Ningún archivo elegido" : $"{ArchivosElegidos.Count:N0} archivo(s) elegido(s)")</span>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Upload" Class="ms-auto"
+                                       Disabled="@(ArchivosElegidos.Count == 0 || Cancelacion is not null)" OnClick="ImportarArchivos">
+                                Importar @ArchivosElegidos.Count archivo(s)
+                            </MudButton>
+                        </div>
+                        <MudDivider Class="mb-3" />
+                    }
+                    <div class="d-flex align-items-center gap-2">
+                        <MudTextField T="string" @bind-Value="CarpetaImportar" Label="Carpeta completa (incluye subcarpetas), por ejemplo la bóveda de AdminXML"
+                                      Placeholder="@($@"C:\AdminXML\BovedaCFDi\{EmpresaContext.Rfc}")" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Folder" />
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CreateNewFolder" Class="text-nowrap"
+                                   Disabled="@(Cancelacion is not null)" OnClick="ImportarCarpeta">Importar carpeta</MudButton>
                     </div>
-                    <hr />
-                }
-                <label class="form-label fw-semibold small">Importar una carpeta completa (incluye subcarpetas), por ejemplo la bóveda de AdminXML</label>
-                <div class="input-group">
-                    <span class="input-group-text"><i class="bi bi-folder"></i></span>
-                    <input class="form-control" @bind="CarpetaImportar" placeholder="C:\AdminXML\BovedaCFDi\@EmpresaContext.Rfc" />
-                    <button class="btn btn-primary text-nowrap" disabled="@(Cancelacion is not null)" @onclick="ImportarCarpeta"><i class="bi bi-folder-plus me-1"></i>Importar carpeta</button>
-                </div>
-                break;
+                    break;
 
-            case "agrupaciones":
-                <div class="d-flex flex-wrap gap-2 align-items-end mb-2">
-                    <div class="input-group input-group-sm w-auto">
-                        <span class="input-group-text">Agrupar por</span>
-                        <select class="form-select" @bind="AgruparPor" @bind:after="CargarAgrupaciones">
-                            <option value="emisor">Emisor</option>
-                            <option value="receptor">Receptor</option>
-                            <option value="mes">Mes</option>
-                            <option value="uso">Uso CFDI</option>
-                            <option value="metodo">Método de pago</option>
-                            <option value="tipo">Tipo</option>
-                        </select>
+                case "agrupaciones":
+                    <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                        <MudSelect T="string" @bind-Value="AgruparPor" @bind-Value:after="CargarAgrupaciones" Label="Agrupar por"
+                                   Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" FullWidth="false" Style="min-width: 200px">
+                            <MudSelectItem Value="@("emisor")">Emisor</MudSelectItem>
+                            <MudSelectItem Value="@("receptor")">Receptor</MudSelectItem>
+                            <MudSelectItem Value="@("mes")">Mes</MudSelectItem>
+                            <MudSelectItem Value="@("uso")">Uso CFDI</MudSelectItem>
+                            <MudSelectItem Value="@("metodo")">Método de pago</MudSelectItem>
+                            <MudSelectItem Value="@("tipo")">Tipo</MudSelectItem>
+                        </MudSelect>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Success" StartIcon="@Icons.Material.Filled.GridOn"
+                                   OnClick='() => Exportar("agrupado:" + AgruparPor)'>Exportar a Excel</MudButton>
                     </div>
-                    <button class="btn btn-sm btn-outline-success" @onclick='() => Exportar("agrupado:" + AgruparPor)'><i class="bi bi-file-earmark-excel me-1"></i>Exportar a Excel</button>
-                </div>
-                <p class="text-body-secondary small">Facturas menos notas de crédito del filtro actual (sin importar la pestaña).</p>
-                <div class="table-responsive">
-                    <table class="table table-sm table-striped table-hover">
+                    <p class="secundario small">Facturas menos notas de crédito del filtro actual (sin importar la pestaña).</p>
+                    <MudSimpleTable Dense="true" Striped="true" Hover="true" Elevation="0" Outlined="true">
                         <thead><tr><th>Clave</th><th>Nombre</th><th class="num">Comprobantes</th><th class="num">SubTotal</th><th class="num">IVA</th><th class="num">Total</th></tr></thead>
                         <tbody>
                             @foreach (AdminXmlAgrupacionDto a in Agrupaciones)
@@ -597,51 +568,53 @@
                                 <tr><td class="font-monospace">@a.Clave</td><td class="largo" title="@a.Nombre">@a.Nombre</td><td class="num">@a.Cantidad</td><td class="num">@a.Subtotal.ToString("N2")</td><td class="num">@a.Iva.ToString("N2")</td><td class="num fw-semibold">@a.Total.ToString("N2")</td></tr>
                             }
                         </tbody>
-                    </table>
-                </div>
-                break;
+                    </MudSimpleTable>
+                    break;
 
-            case "renombrar":
-                <CFDIManager.Web.Components.AdministracionXml.RenombrarXmlAsistente
-                    Ejemplo="@(Activa ?? Filas.FirstOrDefault())"
-                    Alcance="@DescribirAlcance()"
-                    OnIniciar="Renombrar" />
-                break;
+                case "renombrar":
+                    <CFDIManager.Web.Components.AdministracionXml.RenombrarXmlAsistente
+                        Ejemplo="@(Activa ?? Filas.FirstOrDefault())"
+                        Alcance="@DescribirAlcance()"
+                        OnIniciar="Renombrar" />
+                    break;
 
-            case "logos":
-                <p class="text-body-secondary small">El logo del RFC emisor aparece en sus PDF. PNG o JPG.</p>
-                <div class="input-group mb-3">
-                    <span class="input-group-text">RFC</span>
-                    <input class="form-control font-monospace text-uppercase" style="max-width: 180px" @bind="RfcLogo" />
-                    <InputFile class="form-control" accept=".png,.jpg,.jpeg" OnChange="GuardarLogo" />
-                </div>
-                <div class="input-group mb-3">
-                    <span class="input-group-text"><i class="bi bi-cloud-download me-1"></i>De SINUBE</span>
-                    <input class="form-control" placeholder="Dirección del logo o HTML del formato de SINUBE" @bind="LogoSinube" />
-                    <button type="button" class="btn btn-outline-primary" @onclick="ImportarLogo" disabled="@(string.IsNullOrWhiteSpace(LogoSinube))">Importar</button>
-                </div>
-                <div class="logos">
-                    @foreach (string rfc in LogosGuardados)
-                    {
-                        <div class="card logo">
-                            <div class="card-body d-flex flex-column align-items-center gap-2 p-2">
+                case "logos":
+                    <p class="secundario small">El logo del RFC emisor aparece en sus PDF. PNG o JPG.</p>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                        <MudTextField T="string" @bind-Value="RfcLogo" Label="RFC" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                      Class="rfc-logo" InputClass="font-monospace text-uppercase" />
+                        <MudFileUpload T="IBrowserFile" Accept=".png,.jpg,.jpeg" OnFilesChanged="GuardarLogo">
+                            <CustomContent>
+                                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Image" OnClick="@context.OpenFilePickerAsync">Subir logo</MudButton>
+                            </CustomContent>
+                        </MudFileUpload>
+                    </div>
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <MudTextField T="string" @bind-Value="LogoSinube" Label="De SINUBE" Placeholder="Dirección del logo o HTML del formato de SINUBE"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"
+                                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.CloudDownload" />
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="ImportarLogo" Disabled="@(string.IsNullOrWhiteSpace(LogoSinube))">Importar</MudButton>
+                    </div>
+                    <div class="logos">
+                        @foreach (string rfc in LogosGuardados)
+                        {
+                            <MudPaper Outlined="true" Class="logo">
                                 <img src="/api/logos/@rfc?v=@VersionLogos" alt="Logo de @rfc" />
                                 <span class="small font-monospace">@rfc</span>
-                                <button class="btn btn-sm btn-outline-danger" @onclick="() => QuitarLogo(rfc)"><i class="bi bi-trash me-1"></i>Quitar</button>
-                            </div>
-                        </div>
-                    }
-                    @if (LogosGuardados.Count == 0)
-                    {
-                        <p class="text-body-secondary">Aún no hay logos.</p>
-                    }
-                </div>
-                break;
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Delete"
+                                           OnClick="() => QuitarLogo(rfc)">Quitar</MudButton>
+                            </MudPaper>
+                        }
+                        @if (LogosGuardados.Count == 0)
+                        {
+                            <p class="secundario">Aún no hay logos.</p>
+                        }
+                    </div>
+                    break;
 
-            case "series":
-                <p class="text-body-secondary small">Folios numéricos del filtro actual (sin importar la pestaña).</p>
-                <div class="table-responsive">
-                    <table class="table table-sm table-striped">
+                case "series":
+                    <p class="secundario small">Folios numéricos del filtro actual (sin importar la pestaña).</p>
+                    <MudSimpleTable Dense="true" Striped="true" Elevation="0" Outlined="true">
                         <thead><tr><th>Serie</th><th>Tipos</th><th class="num">Desde</th><th class="num">Hasta</th><th class="num">Cantidad</th><th>Faltantes</th><th>Repetidos</th></tr></thead>
                         <tbody>
                             @foreach (AdminXmlSerieDto s in Series)
@@ -653,46 +626,46 @@
                                 </tr>
                             }
                         </tbody>
-                    </table>
-                </div>
-                break;
+                    </MudSimpleTable>
+                    break;
 
-            case "complemento":
-                @if (Complementos.Count == 0)
-                {
-                    <p class="text-body-secondary">Sin complementos.</p>
-                }
-                @foreach (NodoXml n in Complementos)
-                {
-                    @PintarNodo(n)
-                }
-                break;
+                case "complemento":
+                    @if (Complementos.Count == 0)
+                    {
+                        <p class="secundario">Sin complementos.</p>
+                    }
+                    @foreach (NodoXml n in Complementos)
+                    {
+                        @PintarNodo(n)
+                    }
+                    break;
 
-            case "red":
-                <p>Los XML de <b>@EmpresaContext.NombreEmpresa</b> se guardan en:</p>
-                <pre class="codigo">@RutaEmpresa</pre>
-                <p class="text-body-secondary small mb-0">
-                    Todas las empresas usan la ruta XML general <code>@Rutas.CarpetaGeneral</code> más su RFC.
-                    Para usar una carpeta de red (por ejemplo <code>\\servidor\Boveda</code>), cambia <code>AppSettings:CarpetaXml</code>
-                    en appsettings.json y reinicia la aplicación.
-                </p>
-                break;
+                case "red":
+                    <p>Los XML de <b>@EmpresaContext.NombreEmpresa</b> se guardan en:</p>
+                    <pre class="codigo">@RutaEmpresa</pre>
+                    <p class="secundario small mb-0 mt-2">
+                        Todas las empresas usan la ruta XML general <code>@Rutas.CarpetaGeneral</code> más su RFC.
+                        Para usar una carpeta de red (por ejemplo <code>\\servidor\Boveda</code>), cambia <code>AppSettings:CarpetaXml</code>
+                        en appsettings.json y reinicia la aplicación.
+                    </p>
+                    break;
 
-            case "enviarcfdi":
-                @if (PreparandoEnvio)
-                {
-                    <div class="text-body-secondary py-4 text-center"><span class="spinner-border spinner-border-sm me-2"></span>Consultando correos…</div>
-                }
-                else
-                {
-                    <div class="table-responsive mb-3">
-                        <table class="table table-sm align-middle mb-0">
+                case "enviarcfdi":
+                    @if (PreparandoEnvio)
+                    {
+                        <div class="secundario py-4 text-center">
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />Consultando correos…
+                        </div>
+                    }
+                    else
+                    {
+                        <MudSimpleTable Dense="true" Elevation="0" Outlined="true" Class="mb-3">
                             <thead>
                                 <tr>
                                     <th style="width: 2rem"></th>
                                     <th>Para</th>
-                                    <th class="text-end">CFDI</th>
-                                    <th class="text-end">Total</th>
+                                    <th class="num">CFDI</th>
+                                    <th class="num">Total</th>
                                     <th style="min-width: 18rem">Correo</th>
                                     <th></th>
                                 </tr>
@@ -701,129 +674,117 @@
                                 @foreach (GrupoEnvioCfdi g in GruposEnvio)
                                 {
                                     <tr>
-                                        <td><input type="checkbox" class="form-check-input" @bind="g.Enviar" disabled="@EnviandoCfdi" /></td>
+                                        <td><MudCheckBox T="bool" @bind-Value="g.Enviar" Disabled="@EnviandoCfdi" Size="Size.Small" Dense="true" Color="Color.Primary" /></td>
                                         <td>
                                             <div class="fw-semibold small">@g.Nombre</div>
-                                            <div class="small text-body-secondary font-monospace">@g.Rfc@(g.NombreComercial != "" ? $" · {g.NombreComercial}" : "")</div>
+                                            <div class="small secundario font-monospace">@g.Rfc@(g.NombreComercial != "" ? $" · {g.NombreComercial}" : "")</div>
                                         </td>
-                                        <td class="text-end small" title="@string.Join(", ", g.Cfdis.Select(x => $"{x.Serie}{x.Folio}"))">@g.Cfdis.Count</td>
-                                        <td class="text-end small">@g.Total.ToString("C2")</td>
-                                        <td>
-                                            <input class="form-control form-control-sm" @bind="g.Para" placeholder="Sin correo en SINUBE" disabled="@EnviandoCfdi"
-                                                   title="Del catálogo de clientes de SINUBE" />
-                                            <div class="form-text mt-0 mb-1">@(g.Origen == "SINUBE" ? "Del catálogo de clientes de SINUBE" : "SINUBE no tiene correo para este cliente")</div>
-                                            <input class="form-control form-control-sm" @bind="g.Adicionales" placeholder="Correos adicionales" disabled="@EnviandoCfdi"
-                                                   title="Se recuerdan para este RFC; si los dejas vacíos, se borran" />
-                                            <div class="form-text mt-0">Adicionales: se recuerdan para este RFC</div>
+                                        <td class="num small" title="@string.Join(", ", g.Cfdis.Select(x => $"{x.Serie}{x.Folio}"))">@g.Cfdis.Count</td>
+                                        <td class="num small">@g.Total.ToString("C2")</td>
+                                        <td class="correos">
+                                            <MudTextField T="string" @bind-Value="g.Para" Placeholder="Sin correo en SINUBE" Disabled="@EnviandoCfdi"
+                                                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                                                          HelperText="@(g.Origen == "SINUBE" ? "Del catálogo de clientes de SINUBE" : "SINUBE no tiene correo para este cliente")" />
+                                            <MudTextField T="string" @bind-Value="g.Adicionales" Placeholder="Correos adicionales" Disabled="@EnviandoCfdi"
+                                                          Variant="Variant.Outlined" Margin="Margin.Dense"
+                                                          HelperText="Adicionales: se recuerdan para este RFC; si los dejas vacíos, se borran" />
                                         </td>
                                         <td class="small">
                                             @if (g.Resultado == "Enviado")
                                             {
-                                                <span class="badge text-bg-success">Enviado</span>
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Success">Enviado</MudChip>
                                             }
                                             else if (g.Resultado != "")
                                             {
-                                                <span class="text-danger">@g.Resultado</span>
+                                                <span class="mal">@g.Resultado</span>
                                             }
                                         </td>
                                     </tr>
                                 }
                             </tbody>
-                        </table>
-                    </div>
+                        </MudSimpleTable>
 
-                    <div class="row g-2 mb-3">
-                        @if (GruposEnvio.Any(g => g.Cfdis.Any(x => x.TipoCfdi is not ("P" or "N"))))
-                        {
-                            <div class="col-md-6">
-                                <label class="form-label small fw-semibold mb-1">Formato del PDF</label>
-                                <select class="form-select form-select-sm" @bind="FormatoCfdiEnvio" disabled="@EnviandoCfdi">
+                        <div class="formulario-envio mb-3">
+                            @if (GruposEnvio.Any(g => g.Cfdis.Any(x => x.TipoCfdi is not ("P" or "N"))))
+                            {
+                                <MudSelect T="string" @bind-Value="FormatoCfdiEnvio" Disabled="@EnviandoCfdi" Label="Formato del PDF"
+                                           Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
                                     @foreach (FormatoImpresionSinube f in FormatosEnvio.Where(f => f.Tipo == SinubeDatosService.FormatoFactura))
                                     {
-                                        <option value="@f.Nombre">@f.Nombre</option>
+                                        <MudSelectItem Value="@f.Nombre">@f.Nombre</MudSelectItem>
                                     }
-                                    <option value="">Formato propio de CFDI Manager</option>
-                                </select>
-                            </div>
-                        }
-                        @if (GruposEnvio.Any(g => g.Cfdis.Any(x => x.TipoCfdi == "P")))
-                        {
-                            <div class="col-md-6">
-                                <label class="form-label small fw-semibold mb-1">Formato de los pagos</label>
-                                <select class="form-select form-select-sm" @bind="FormatoPagoEnvio" disabled="@EnviandoCfdi">
+                                    <MudSelectItem Value="@("")">Formato propio de CFDI Manager</MudSelectItem>
+                                </MudSelect>
+                            }
+                            @if (GruposEnvio.Any(g => g.Cfdis.Any(x => x.TipoCfdi == "P")))
+                            {
+                                <MudSelect T="string" @bind-Value="FormatoPagoEnvio" Disabled="@EnviandoCfdi" Label="Formato de los pagos"
+                                           Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true">
                                     @foreach (FormatoImpresionSinube f in FormatosEnvio.Where(f => f.Tipo == SinubeDatosService.FormatoPago))
                                     {
-                                        <option value="@f.Nombre">@f.Nombre</option>
+                                        <MudSelectItem Value="@f.Nombre">@f.Nombre</MudSelectItem>
                                     }
-                                    <option value="">Formato propio de CFDI Manager</option>
-                                </select>
+                                    <MudSelectItem Value="@("")">Formato propio de CFDI Manager</MudSelectItem>
+                                </MudSelect>
+                            }
+                        </div>
+
+                        <div class="formulario-envio mb-3">
+                            <div>
+                                <MudTextField T="string" @bind-Value="CcEnvio" Disabled="@EnviandoCfdi" Label="Con copia (CC)"
+                                              Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                @if (MiCorreoEnvio != "")
+                                {
+                                    <MudCheckBox T="bool" @bind-Value="CopiaParaMiEnvio" Disabled="@EnviandoCfdi" Size="Size.Small" Dense="true"
+                                                 Color="Color.Primary" Label="@($"Enviarme una copia ({MiCorreoEnvio})")" Class="mt-1" />
+                                }
                             </div>
-                        }
-                    </div>
-
-                    <div class="row g-2 mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold mb-1">Con copia (CC)</label>
-                            <input class="form-control form-control-sm" @bind="CcEnvio" disabled="@EnviandoCfdi" />
-                            @if (MiCorreoEnvio != "")
-                            {
-                                <div class="form-check mt-2">
-                                    <input class="form-check-input" type="checkbox" id="cfdi-copia" @bind="CopiaParaMiEnvio" disabled="@EnviandoCfdi" />
-                                    <label class="form-check-label small" for="cfdi-copia">Enviarme una copia (@MiCorreoEnvio)</label>
-                                </div>
-                            }
+                            <MudTextField T="string" @bind-Value="MensajeEnvio" Disabled="@EnviandoCfdi" Label="Mensaje" Lines="3"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" />
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-semibold mb-1">Mensaje</label>
-                            <textarea class="form-control form-control-sm" rows="3" @bind="MensajeEnvio" disabled="@EnviandoCfdi"></textarea>
+
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="small secundario">PDF y XML de cada CFDI · un correo por destinatario</span>
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ms-auto" OnClick="EnviarCfdis"
+                                       Disabled="@(EnviandoCfdi || !GruposEnvio.Any(g => g.Enviar && g.Resultado != "Enviado"))"
+                                       StartIcon="@(EnviandoCfdi ? null : Icons.Material.Filled.Send)">
+                                @if (EnviandoCfdi)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                                }
+                                Enviar @GruposEnvio.Count(g => g.Enviar && g.Resultado != "Enviado") correo(s)
+                            </MudButton>
                         </div>
-                    </div>
-
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="small text-body-secondary">PDF y XML de cada CFDI · un correo por destinatario</span>
-                        <button type="button" class="btn btn-primary ms-auto" @onclick="EnviarCfdis"
-                                disabled="@(EnviandoCfdi || !GruposEnvio.Any(g => g.Enviar && g.Resultado != "Enviado"))">
-                            @if (EnviandoCfdi)
-                            {
-                                <span class="spinner-border spinner-border-sm me-1"></span>
-                            }
-                            else
-                            {
-                                <i class="bi bi-send me-1"></i>
-                            }
-                            Enviar @GruposEnvio.Count(g => g.Enviar && g.Resultado != "Enviado") correo(s)
-                        </button>
-                    </div>
-                }
-                break;
-
-            case "imagen":
-                <div class="d-flex flex-column gap-2 mb-3">
-                    @foreach (var (clave, titulo, icono) in FormasImagen)
-                    {
-                        <label class="border rounded-3 p-2 px-3 d-flex align-items-center gap-2 @(FormaImagen == clave ? "border-primary bg-primary-subtle" : "")" style="cursor:pointer">
-                            <input type="radio" class="form-check-input m-0" name="forma-imagen" checked="@(FormaImagen == clave)" @onchange="() => FormaImagen = clave" />
-                            <i class="bi @icono"></i>@titulo
-                        </label>
                     }
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                    <span class="small text-body-secondary">@TextoPeriodo()</span>
-                    <button type="button" class="btn btn-primary ms-auto" @onclick="ImagenResumen" disabled="@GenerandoImagen">
-                        @if (GenerandoImagen)
+                    break;
+
+                case "imagen":
+                    <MudRadioGroup T="string" @bind-Value="FormaImagen" Class="formas-imagen mb-3">
+                        @foreach (var (clave, titulo, icono) in FormasImagen)
                         {
-                            <span class="spinner-border spinner-border-sm me-1"></span>
+                            <MudPaper Outlined="true" Class="@($"forma-imagen {(FormaImagen == clave ? "elegida" : "")}")">
+                                <MudRadio T="string" Value="clave" Color="Color.Primary" Dense="true">
+                                    <i class="bi @icono me-2"></i>@titulo
+                                </MudRadio>
+                            </MudPaper>
                         }
-                        else
-                        {
-                            <i class="bi bi-download me-1"></i>
-                        }
-                        Descargar imagen
-                    </button>
-                </div>
-                break;
-        }
-    </Modal>
+                    </MudRadioGroup>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="small secundario">@TextoPeriodo()</span>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ms-auto" OnClick="ImagenResumen" Disabled="@GenerandoImagen"
+                                   StartIcon="@(GenerandoImagen ? null : Icons.Material.Filled.Download)">
+                            @if (GenerandoImagen)
+                            {
+                                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="me-2" />
+                            }
+                            Descargar imagen
+                        </MudButton>
+                    </div>
+                    break;
+            }
+            </div>
+        </DialogContent>
+    </MudDialog>
 </div>
 
 <EnviarCorreoModal Visible="AdjuntosCorreo.Count > 0"
@@ -1083,6 +1044,11 @@
     private string Det = "conceptos";
     private bool VerRelacionados;
     private long? _relacionadosDe;
+
+    private static readonly (string Clave, string Titulo)[] PestanasDetalle =
+        [("conceptos", "Conceptos"), ("impuestos", "Impuestos"), ("locales", "Impuestos locales"), ("complemento", "Complemento")];
+
+    private int IndiceDetalle => Math.Max(0, Array.FindIndex(PestanasDetalle, p => p.Clave == Det));
     private List<ConceptoDto> Conceptos = new();
     private List<CfdiRelacionadoDto> Relacionados = new();
     private List<ImpuestoLocalDto> ImpuestosLocales = new();
@@ -1104,10 +1070,6 @@
     private ResultadoProcesoXml? Proceso;
     private string TextoProceso = "";
     private CancellationTokenSource? Cancelacion;
-    private string Aviso = "";
-    private bool AvisoError;
-    private string CarpetaAviso = "";
-    private CancellationTokenSource? _pausaBusqueda;
 
     private string RutaEmpresa => Rutas.CarpetaEmpresa(EmpresaContext.Rfc);
 
@@ -1303,7 +1265,6 @@
         DescargaSat.Cambio -= DescargaSatCambio;
         ValidacionesSat.Cambio -= ValidacionSatCambio;
         Cancelacion?.Cancel();
-        _pausaBusqueda?.Cancel();
     }
 
     private AdminXmlFiltroDto Filtro() => new()
@@ -1465,28 +1426,17 @@
         }
     }
 
-    private void IrPaginaEscrita(ChangeEventArgs e)
+    // MudTextField espera 350 ms sin teclear (DebounceInterval) antes de avisar el cambio.
+    private Task CambiarBusqueda(string? texto)
     {
-        if (int.TryParse(e.Value?.ToString(), out int pagina))
-        {
-            IrPagina(pagina - 1);
-        }
+        Busqueda = texto ?? "";
+        return Consultar();
     }
 
-    private async Task BuscarConPausa()
+    private Task CambiarFiltrar(string filtrar)
     {
-        _pausaBusqueda?.Cancel();
-        _pausaBusqueda = new CancellationTokenSource();
-
-        try
-        {
-            await Task.Delay(350, _pausaBusqueda.Token);
-            await Consultar();
-        }
-        catch (TaskCanceledException)
-        {
-            // Llegó otra tecla; esa búsqueda la reemplaza.
-        }
+        Filtrar = filtrar;
+        return Consultar();
     }
 
     private Task CambiarClasificacion(string c)
@@ -1536,9 +1486,9 @@
         return Consultar();
     }
 
-    private Task CambiarAcumular(ChangeEventArgs e)
+    private Task CambiarAcumular(bool acumular)
     {
-        Acumular = e.Value is true;
+        Acumular = acumular;
         return Consultar();
     }
 
@@ -1548,16 +1498,16 @@
         return Consultar();
     }
 
-    private void Marcar(long id, ChangeEventArgs e)
+    private void Marcar(long id, bool marcada)
     {
         SalirDeTodoElFiltro();
-        if (e.Value is true) Marcadas.Add(id); else Marcadas.Remove(id);
+        if (marcada) Marcadas.Add(id); else Marcadas.Remove(id);
         _ancla = id;
     }
 
-    private void MarcarTodoElFiltro(ChangeEventArgs e)
+    private void MarcarTodoElFiltro(bool todo)
     {
-        TodoElFiltro = e.Value is true;
+        TodoElFiltro = todo;
         Marcadas.Clear();
     }
 
@@ -1715,9 +1665,9 @@
         }
     }
 
-    private async Task AlternarColumna(string clave, ChangeEventArgs e)
+    private async Task AlternarColumna(string clave, bool visible)
     {
-        if (e.Value is true) Ocultas.Remove(clave); else Ocultas.Add(clave);
+        if (visible) Ocultas.Remove(clave); else Ocultas.Add(clave);
 
         try
         {
@@ -1730,28 +1680,25 @@
     }
 
     // ---------- avisos y modales ----------
+    // Snackbar de MudBlazor: los avisos de éxito se quitan solos a los 6 s; los errores se quedan hasta cerrarlos.
     private void Avisar(string texto, bool error = false, string carpeta = "")
     {
-        Aviso = texto;
-        AvisoError = error;
-        CarpetaAviso = carpeta;
-
-        // Los avisos de éxito se quitan solos; los errores se quedan hasta cerrarlos.
-        if (!error)
+        Snackbar.Add(texto, error ? Severity.Error : Severity.Success, o =>
         {
-            _ = OcultarAvisoAsync(texto);
-        }
-    }
+            o.RequireInteraction = error;
+            o.VisibleStateDuration = 6000;
+            o.ShowCloseIcon = true;
 
-    private async Task OcultarAvisoAsync(string texto)
-    {
-        await Task.Delay(TimeSpan.FromSeconds(6));
-
-        if (Aviso == texto && !AvisoError)
-        {
-            Aviso = "";
-            await InvokeAsync(StateHasChanged);
-        }
+            if (carpeta != "")
+            {
+                o.Action = "Abrir carpeta";
+                o.OnClick = _ =>
+                {
+                    AbrirCarpeta(carpeta);
+                    return Task.CompletedTask;
+                };
+            }
+        });
     }
 
     private bool RequiereActiva()
@@ -1814,6 +1761,14 @@
     }
 
     private void CerrarModal() => Modal = "";
+
+    private DialogOptions OpcionesModal => new()
+    {
+        MaxWidth = Modal is "columnas" or "renombrar" or "red" or "imagen" ? MaxWidth.Medium : MaxWidth.ExtraLarge,
+        FullWidth = true,
+        CloseButton = true,
+        CloseOnEscapeKey = true
+    };
 
     private static readonly (string Clave, string Titulo, string Icono)[] FormasImagen =
     [

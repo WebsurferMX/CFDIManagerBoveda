@@ -1,5 +1,7 @@
 /* Administración de XML: tabla principal a la izquierda, herramientas a la derecha.
-   Colores y fondos salen de las variables de Bootstrap (--bs-*): el tema claro/oscuro se aplica solo. */
+   Los controles son de MudBlazor; su HTML no lleva el atributo del CSS aislado, por eso sus reglas van con ::deep
+   desde un elemento de esta página (.admin-xml, .rejilla, .dialogo...). Los colores siguen saliendo de las variables
+   de Bootstrap (--bs-*) y de MudBlazor (--mud-palette-*): el tema claro/oscuro se aplica solo. */
 
 .admin-xml {
     display: grid;
@@ -29,6 +31,8 @@
     text-transform: uppercase;
 }
 
+.secundario { color: var(--bs-secondary-color); }
+
 /* Colores de estado que asignan las columnas (Estado SAT, Verificado…). */
 .ok { color: var(--bs-success-text-emphasis); }
 .mal { color: var(--bs-danger-text-emphasis); }
@@ -43,7 +47,7 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
 .tono-morado { --tono: #7e22ce; --tono-fondo: #f3e8ff; --tono-texto: #6b21a8; --tono-borde: #e9d5ff; }
 .tono-todos { --tono: var(--bs-secondary); --tono-fondo: var(--bs-secondary-bg-subtle); --tono-texto: var(--bs-secondary-text-emphasis); --tono-borde: var(--bs-secondary-border-subtle); }
 
-/* ---------- filtros y resumen ---------- */
+/* ---------- filtros y vista previa ---------- */
 
 .encabezado {
     display: flex;
@@ -51,8 +55,11 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
     min-width: 0;
 }
 
-.filtros {
+.admin-xml ::deep .filtros {
+    display: flex;
     flex: 0 0 auto;
+    gap: .75rem;
+    padding: .5rem;
 }
 
 .lista-filtro {
@@ -61,27 +68,101 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
     min-width: 140px;
 }
 
-.list-group-sm .list-group-item {
+.lista-filtro.dias { min-width: 130px; }
+
+/* Tipo: botones de alternar en columna. */
+.admin-xml ::deep .tipo {
+    width: 100%;
+}
+
+.admin-xml ::deep .tipo .mud-toggle-item {
+    justify-content: flex-start;
     padding: .2rem .6rem;
     font-size: .8rem;
+    text-transform: none;
+}
+
+/* Interruptor "Acumular" dentro de la etiqueta en mayúsculas. */
+.admin-xml ::deep .acumular {
+    margin: 0;
+}
+
+.admin-xml ::deep .acumular .mud-typography {
+    font-size: .72rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+/* Listas de año, mes y día: renglones compactos; el elegido va con el color primario. */
+.admin-xml ::deep .lista {
+    overflow-y: auto;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-body-bg);
+}
+
+.admin-xml ::deep .lista.corta { max-height: 84px; }
+.admin-xml ::deep .lista.alta { height: 172px; }
+
+.admin-xml ::deep .lista .mud-list-item {
+    min-height: 0;
+    padding: .2rem .6rem;
+    font-size: .8rem;
+    cursor: pointer;
     user-select: none;
 }
 
-.list-group.corta { max-height: 84px; overflow-y: auto; }
-.list-group.alta { height: 172px; overflow-y: auto; }
+.admin-xml ::deep .lista .mud-list-item + .mud-list-item {
+    border-top: 1px solid var(--bs-border-color-translucent);
+}
 
-.list-group-item.active .mes-num { color: inherit !important; opacity: .8; }
+.admin-xml ::deep .lista .mud-list-item-text {
+    margin: 0;
+}
 
-/* Columna de días: número, día de la semana y cuántos comprobantes hay. */
-.lista-filtro.dias { min-width: 130px; }
+.admin-xml ::deep .lista .mud-list-item:hover {
+    background: var(--mud-palette-action-default-hover);
+}
 
-.list-group-item .cantidad {
+/* MudList marca por su cuenta el último renglón con clic (mud-selected-item); aquí solo cuenta "elegido",
+   que respeta Ctrl + clic. */
+.admin-xml ::deep .lista .mud-selected-item:not(.elegido),
+.admin-xml ::deep .herramientas .mud-selected-item {
+    background: transparent;
+    color: inherit;
+}
+
+.admin-xml ::deep .lista .mud-list-item.elegido {
+    background: var(--mud-palette-primary);
+    color: var(--mud-palette-primary-text);
+}
+
+.admin-xml ::deep .lista .sin-coincidencias:not(.elegido) { opacity: .45; }
+
+.mes-num { font-variant-numeric: tabular-nums; }
+.mes-num.secundario,
+.lista-filtro .mes-num:not(.fw-semibold) { color: var(--bs-secondary-color); }
+
+.renglon {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    width: 100%;
+}
+
+.cantidad {
     color: var(--bs-secondary-color);
     font-size: .72rem;
     font-variant-numeric: tabular-nums;
 }
 
-.list-group-item.active .cantidad { color: inherit; opacity: .85; }
+.admin-xml ::deep .elegido .mes-num,
+.admin-xml ::deep .elegido .cantidad {
+    color: inherit;
+    opacity: .85;
+}
 
 .dias-aviso {
     display: flex;
@@ -90,6 +171,7 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
     justify-content: center;
     gap: .35rem;
     max-width: 140px;
+    height: 172px;
     padding: .5rem;
     border: 1px dashed var(--bs-border-color);
     border-radius: var(--bs-border-radius);
@@ -98,13 +180,21 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
     text-align: center;
 }
 
-.resumen {
+.admin-xml ::deep .resumen {
     flex: 1;
     min-width: 260px;
     height: 230px;
+    padding: .5rem;
 }
 
-.resumen .card-body { height: 100%; min-height: 0; }
+.vacio {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--bs-secondary-color);
+}
 
 .vista-previa {
     display: grid;
@@ -115,18 +205,14 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
     min-height: 0;
 }
 
-.vista-xml,
-.vista-pdf {
+.vista-xml {
     width: 100%;
     height: 100%;
     min-height: 0;
     margin: 0;
+    padding: .4rem .5rem;
     border: 1px solid var(--bs-border-color);
     border-radius: var(--bs-border-radius);
-}
-
-.vista-xml {
-    padding: .4rem .5rem;
     background: var(--bs-tertiary-bg);
     color: var(--bs-body-color);
     font-size: .72rem;
@@ -147,12 +233,10 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
     cursor: pointer;
 }
 
-.vista-pdf-marco .vista-pdf {
+.vista-pdf {
     display: block;
     width: 100%;
     height: auto;
-    border: 0;
-    border-radius: 0;
 }
 
 .vista-pdf-marco:hover { box-shadow: inset 0 0 0 2px var(--bs-primary); }
@@ -161,47 +245,54 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
 
 .barra-busqueda {
     display: flex;
+    align-items: center;
     gap: .6rem;
-    align-items: flex-end;
 }
 
-.busqueda { flex: 0 1 320px; }
-.reporte { flex: 0 1 260px; }
+.barra-busqueda ::deep .mud-input-control { margin: 0; }
+.barra-busqueda ::deep .busqueda { flex: 0 1 320px; }
+.barra-busqueda ::deep .reporte { flex: 0 1 280px; }
 
+/* La barra de progreso es el fondo de la caja; el texto y Cancelar van encima. */
 .progreso {
     position: relative;
     flex: 1;
-    height: 31px;
+    height: 40px;
+    overflow: hidden;
     border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
     background: var(--bs-body-bg);
 }
 
-.progreso .progress-bar {
-    background: var(--bs-primary-bg-subtle);
-    transition: width .3s;
+.progreso ::deep .barra {
+    position: absolute;
+    inset: 0;
+    height: 100% !important;
+    opacity: .22;
 }
 
 .progreso-texto {
     position: absolute;
-    inset: 0 6rem 0 0;
-    padding: 6px 10px;
+    inset: 0 7rem 0 0;
+    padding: 10px 12px;
     color: var(--bs-body-color);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.progreso .cancelar {
+.progreso ::deep .cancelar {
     position: absolute;
-    top: 3px;
-    right: 4px;
-    padding: .05rem .5rem;
+    top: 5px;
+    right: 6px;
 }
 
 /* ---------- pestañas y tabla ---------- */
 
-.rejilla-card {
+.admin-xml ::deep .rejilla-card {
+    display: flex;
     flex: 1;
+    flex-direction: column;
     min-height: 160px;
     overflow: hidden;
 }
@@ -210,6 +301,8 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
+    padding: .25rem .25rem 0;
+    background: var(--bs-tertiary-bg);
 }
 
 .pestana {
@@ -228,6 +321,8 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
 .pestana:hover { filter: brightness(.96); }
 
 .pestana .cantidad {
+    padding: .1rem .45rem;
+    border-radius: 1rem;
     background: color-mix(in srgb, var(--tono) 18%, transparent);
     color: inherit;
     font-weight: 600;
@@ -242,25 +337,32 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
 .pestana.activa .cantidad { background: rgb(255 255 255 / 25%); }
 
 .rejilla {
-    height: calc(100% - 34px);
+    flex: 1;
+    min-height: 0;
     overflow: auto;
     border-top: 2px solid var(--bs-border-color);
 }
 
-.rejilla table,
-.detalle-cuerpo table,
-.admin-xml .table {
-    font-size: .8rem;
+/* El scroll lo lleva .rejilla (y .detalle-cuerpo): así el encabezado fijo (sticky) funciona. */
+.rejilla ::deep .mud-table-container,
+.detalle-cuerpo ::deep .mud-table-container {
+    overflow: visible;
+}
+
+.rejilla ::deep .mud-simple-table,
+.detalle-cuerpo ::deep .mud-simple-table {
+    background: transparent;
+}
+
+th,
+td {
+    white-space: nowrap;
 }
 
 /* Rejilla principal: filas limpias sin cebra, letra chica sin negrita, hover suave. */
-.rejilla .table {
-    --bs-table-hover-bg: color-mix(in srgb, var(--bs-primary) 7%, transparent);
-    --bs-table-border-color: var(--bs-border-color-translucent);
-}
-
 .rejilla tbody td {
     padding: .3rem .55rem;
+    border-bottom: 1px solid var(--bs-border-color-translucent);
     font-size: .74rem;
     font-weight: 400;
 }
@@ -276,11 +378,6 @@ td.uuid { font-family: var(--bs-font-monospace); font-size: .74rem; }
     font-size: .68rem;
     font-weight: 600;
     line-height: 1.35;
-}
-
-th,
-td {
-    white-space: nowrap;
 }
 
 .rejilla thead th,
@@ -312,16 +409,29 @@ th.ordenada .bi { opacity: 1; }
     border-left: 1px solid var(--bs-border-color-translucent);
 }
 
-/* Fila elegida: fondo azul claro con barra azul a la izquierda (Bootstrap pinta las celdas con estas variables). */
+/* Fila elegida: fondo azul claro con barra azul a la izquierda. */
 .rejilla tbody tr { cursor: default; }
 
 .rejilla tbody tr.activa > td {
-    --bs-table-bg-state: var(--bs-primary-bg-subtle);
-    --bs-table-color-state: var(--bs-emphasis-color);
+    background: var(--bs-primary-bg-subtle);
+    color: var(--bs-emphasis-color);
 }
 
 .rejilla tbody tr.activa > td:first-child {
     box-shadow: inset 3px 0 0 var(--bs-primary);
+}
+
+/* Casilla de selección compacta. */
+th.sel,
+td.sel { width: 34px; padding: 0 .25rem !important; }
+
+.rejilla ::deep .sel .mud-checkbox { margin: 0; }
+.rejilla ::deep .sel .mud-button-root { padding: 2px; }
+
+td.sin-filas {
+    padding: 1.5rem !important;
+    color: var(--bs-secondary-color);
+    text-align: center;
 }
 
 td.num,
@@ -330,45 +440,39 @@ th.num { text-align: right; font-variant-numeric: tabular-nums; }
 td.largo { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
 td.ajusta { white-space: normal; }
 
-th.sel,
-td.sel { width: 30px; }
-
 /* ---------- pie, detalle y totales ---------- */
 
 .pie {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: .6rem;
-    flex-wrap: wrap;
 }
 
-.paginador { width: auto; }
-.paginador .form-control { max-width: 4.5rem; }
-
-.importe {
-    padding: .4rem .7rem;
-    font-size: .76rem;
-    font-weight: 600;
+.conteo {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
 }
 
-.filtrar { width: auto; }
-.filtrar .form-select { min-width: 190px; }
+.conteo .bi { color: var(--bs-secondary-color); }
+
+.pie ::deep .mud-input-control { margin: 0; }
+.pie ::deep .filtrar { flex: 0 0 250px; }
+.pie ::deep .importe { font-size: .76rem; }
+.pie ::deep .mud-button { text-transform: none; }
 
 .detalles {
     display: grid;
+    flex: 0 0 auto;
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
     gap: .6rem;
-    flex: 0 0 auto;
 }
-
-/* El detalle crece con las partidas: encabezado + hasta 3 renglones, después scroll. */
-.detalles .detalle-cuerpo { max-height: 6.4rem; }
-.detalles .relacionados { max-height: 8.5rem; }
 
 .detalles.con-relacionados { grid-template-columns: minmax(0, 1fr) 360px; }
 
-.relacionados {
+.admin-xml ::deep .detalle-tablas {
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -376,20 +480,69 @@ td.sel { width: 30px; }
     overflow: hidden;
 }
 
-.relacionados .card-header { font-size: .78rem; font-weight: 600; }
-.relacionados .list-group { overflow: auto; }
+.detalle-encabezado {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--bs-border-color);
+    background: var(--bs-tertiary-bg);
+}
 
-.relacionados .list-group-item {
+.detalle-encabezado ::deep .detalle-pestanas { flex: 1; min-width: 0; }
+.detalle-encabezado ::deep .mud-tabs-tabbar { background: transparent; }
+
+.detalle-encabezado ::deep .mud-tab {
+    min-height: 34px;
+    padding: 4px 14px;
+    font-size: .78rem;
+    font-weight: 600;
+    text-transform: none;
+}
+
+.detalle-encabezado ::deep .mud-button { text-transform: none; }
+
+/* El detalle crece con las partidas: encabezado + hasta 3 renglones, después scroll. */
+.detalle-cuerpo {
+    flex: 1;
+    min-height: 0;
+    max-height: 6.4rem;
+    overflow: auto;
+}
+
+.detalle-cuerpo td,
+.detalle-cuerpo th {
+    padding: .2rem .55rem;
+    font-size: .76rem;
+}
+
+.admin-xml ::deep .relacionados {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    max-height: 8.5rem;
+    overflow: hidden;
+}
+
+.relacionados-encabezado {
+    display: flex;
+    align-items: center;
+    padding: 0 .25rem 0 .7rem;
+    border-bottom: 1px solid var(--bs-border-color);
+    background: var(--bs-tertiary-bg);
+    font-size: .78rem;
+    font-weight: 600;
+}
+
+.relacionados-lista { overflow: auto; }
+
+.relacionado {
     display: flex;
     flex-direction: column;
     gap: .1rem;
     padding: .4rem .7rem;
+    border-bottom: 1px solid var(--bs-border-color-translucent);
 }
 
-.relacionados .tipo-relacion { color: var(--bs-secondary-color); font-size: .72rem; font-weight: 600; }
-.relacionados .datos { font-size: .76rem; font-variant-numeric: tabular-nums; }
-
-.relacionados .list-group-item.grupo {
+.relacionados-lista .grupo {
     padding: .2rem .7rem;
     background: var(--bs-tertiary-bg);
     color: var(--bs-secondary-color);
@@ -399,26 +552,13 @@ td.sel { width: 30px; }
     text-transform: uppercase;
 }
 
+.tipo-relacion { color: var(--bs-secondary-color); font-size: .72rem; font-weight: 600; }
+.datos { font-size: .76rem; font-variant-numeric: tabular-nums; }
+
 /* Este CFDI fue sustituido: lo que importa es cuál lo reemplaza. */
-.relacionados .sustituido { border-left: 3px solid var(--bs-warning); background: var(--bs-warning-bg-subtle); }
-.relacionados .sustituido .tipo-relacion { color: var(--bs-warning-text-emphasis); }
-.relacionados .uuid { font-size: .74rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: all; }
-
-.detalle-tablas {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-}
-
-.detalle-tablas .nav-link {
-    padding: .35rem .75rem;
-    font-size: .78rem;
-    font-weight: 600;
-}
-
-.detalle-cuerpo { flex: 1; min-height: 0; overflow: auto; }
+.relacionado.sustituido { border-left: 3px solid var(--bs-warning); background: var(--bs-warning-bg-subtle); }
+.relacionado.sustituido .tipo-relacion { color: var(--bs-warning-text-emphasis); }
+.relacionado .uuid { font-size: .74rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: all; }
 
 /* Detalle a la izquierda y totales por tipo (6 tipos + archivos XML) a la derecha, en 2 columnas compactas.
    Sin detalle, los totales van en una sola fila que se desplaza de lado si no cabe. */
@@ -472,8 +612,6 @@ td.sel { width: 30px; }
     background: linear-gradient(135deg, color-mix(in srgb, var(--tono) 40%, var(--bs-body-bg)) 0%, var(--bs-body-bg) 80%);
 }
 
-.kpi .ic { border: 1px solid color-mix(in srgb, var(--tono) 45%, transparent); }
-
 .kpi .ic {
     display: inline-flex;
     flex: 0 0 auto;
@@ -481,6 +619,7 @@ td.sel { width: 30px; }
     justify-content: center;
     width: 1.35rem;
     height: 1.35rem;
+    border: 1px solid color-mix(in srgb, var(--tono) 45%, transparent);
     border-radius: 50%;
     background: var(--tono-fondo);
     color: var(--tono);
@@ -506,7 +645,7 @@ td.sel { width: 30px; }
     border-radius: 1rem;
     background: var(--tono-fondo);
     color: var(--tono-texto);
-    font-variant-numeric: tabular-nums;
+    font-size: inherit;
 }
 
 .kpi-valor {
@@ -519,16 +658,12 @@ td.sel { width: 30px; }
 
 /* ---------- panel de herramientas ---------- */
 
-.herramientas {
-    margin: .75rem 0 .75rem 0;
-    border: 1px solid var(--bs-border-color);
-    border-radius: var(--bs-border-radius-lg);
-    background: var(--bs-body-bg);
-    box-shadow: var(--bs-box-shadow-sm);
+.admin-xml ::deep .herramientas {
+    margin: .75rem 0;
     overflow-y: auto;
 }
 
-.herramientas .seccion {
+.seccion {
     position: sticky;
     top: 0;
     z-index: 1;
@@ -542,12 +677,19 @@ td.sel { width: 30px; }
     text-transform: uppercase;
 }
 
-.herramienta {
-    display: flex;
-    align-items: center;
-    gap: .6rem;
-    padding: .38rem .75rem;
+.admin-xml ::deep .herramienta {
+    min-height: 0;
+    padding: .3rem .75rem;
     font-size: .8rem;
+    cursor: pointer;
+}
+
+.admin-xml ::deep .herramienta .mud-list-item-text { margin: 0; }
+.admin-xml ::deep .herramienta:hover { background: var(--mud-palette-action-default-hover); }
+
+.admin-xml ::deep .herramienta .renglon {
+    justify-content: flex-start;
+    gap: .6rem;
 }
 
 .ic {
@@ -562,21 +704,12 @@ td.sel { width: 30px; }
     font-size: .9rem;
 }
 
-.herramienta:hover .ic {
+.admin-xml ::deep .herramienta:hover .ic {
     background: var(--tono);
     color: #fff;
 }
 
-/* ---------- avisos y diálogos ---------- */
-
-.aviso {
-    position: fixed;
-    right: 260px;
-    bottom: 18px;
-    z-index: 1060;
-    width: auto;
-    max-width: 560px;
-}
+/* ---------- diálogos ---------- */
 
 .codigo {
     max-height: 60vh;
@@ -593,7 +726,7 @@ td.sel { width: 30px; }
 .columnas-elegir {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: .35rem .75rem;
+    gap: 0 .75rem;
 }
 
 .nodo {
@@ -617,22 +750,62 @@ td.sel { width: 30px; }
 .nodo dt { color: var(--bs-secondary-color); font-weight: 600; }
 .nodo dd { margin: 0; overflow-wrap: anywhere; }
 
+.dialogo ::deep .mud-input-control { margin: 0; }
+.dialogo ::deep .mud-button { text-transform: none; }
+.dialogo ::deep .rfc-logo { flex: 0 0 180px; }
+
+.dialogo td,
+.dialogo th {
+    padding: .3rem .6rem;
+    font-size: .8rem;
+}
+
 .logos {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: .6rem;
 }
 
-.logo img { max-width: 140px; max-height: 70px; object-fit: contain; }
+.dialogo ::deep .logo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: .5rem;
+    padding: .5rem;
+}
+
+.logos img { max-width: 140px; max-height: 70px; object-fit: contain; }
+
+.formulario-envio {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: .75rem;
+}
+
+td.correos { white-space: normal; }
+td.correos ::deep .mud-input-control + .mud-input-control { margin-top: .4rem; }
+
+.dialogo ::deep .formas-imagen {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+}
+
+.dialogo ::deep .forma-imagen {
+    padding: .1rem .5rem;
+}
+
+.dialogo ::deep .forma-imagen.elegida {
+    border-color: var(--mud-palette-primary);
+    background: color-mix(in srgb, var(--mud-palette-primary) 10%, transparent);
+}
 
 @media (max-width: 1100px) {
     .admin-xml { grid-template-columns: 1fr; height: auto; }
     .principal { padding-right: 0; overflow: visible; }
     .encabezado { flex-direction: column; }
-    .rejilla-card { min-height: 420px; }
-    .herramientas { margin-top: 0; }
-    .detalles,
-    .aviso { right: 16px; }
+    .admin-xml ::deep .rejilla-card { min-height: 420px; }
+    .admin-xml ::deep .herramientas { margin-top: 0; }
 }
 
 /* Pantalla angosta: los totales bajan debajo del detalle, en 3 columnas. */
@@ -647,6 +820,3 @@ html[data-theme="dark"] .tono-morado { --tono: #8b3fd1; --tono-fondo: #241640; -
 html[data-theme="dark"] .tono-ambar { --tono: #c2700f; }
 /* La hoja impresa se queda blanca también en modo oscuro. */
 html[data-theme="dark"] .vista-pdf-marco { border-color: #34465b; }
-
-/* Día con XML en el mes pero sin coincidencias en la pestaña o búsqueda actual. */
-.list-group-item.sin-coincidencias:not(.active) { opacity: .45; }
