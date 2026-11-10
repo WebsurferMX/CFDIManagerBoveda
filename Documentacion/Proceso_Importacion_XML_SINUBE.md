@@ -152,9 +152,10 @@ factura). Por eso:
 Formato de las series alternas: separadas por coma; `+X` agrega X a la serie original; `*` dentro del sufijo es la
 última letra de la serie (`+*`: 72AA → 72AAA, 76EE → 76EEE; sin serie no aplica); una serie sin `+` es fija (`COMFR`).
 
-En XML Azulejeras, las series con regla propia convierten **todas** sus facturas (público general cambia además el
+En XML Azulejeras, las series con regla convierten **todas** sus facturas (público general cambia además el
 nombre a CLIENTE MOSTRADOR; clientes con RFC conservan su nombre). En MAJAR, 72A–75A → xxAA y 76E → 76EE; en Azulejera
-BM, 7A → 7AA y 50E se queda en 50E.
+BM, 7A → 7AA y 50E se queda en 50E. ASN (regla general `*`) conserva la serie y también sube a los clientes con RFC,
+igual que las demás: toda la serie del periodo (sin nómina) sale de esta pantalla.
 
 ---
 

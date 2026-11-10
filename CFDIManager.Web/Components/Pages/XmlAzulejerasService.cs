@@ -171,7 +171,9 @@ public sealed class XmlAzulejerasService
             {
                 EquivalenciaSerie? regla = Regla(reglas, g.Key);
                 List<CfdiConsultaDto> publico = g.Where(EsPublicoGeneral).ToList();
-                List<CfdiConsultaDto> conRfc = regla is not null && IncluyeConRfc(reglas, regla, g.Key)
+                // Clientes con RFC de la serie también se suben desde aquí (con la serie convertida si cambia, p. ej.
+                // 72A → 72AA, o tal cual, p. ej. 50E o ASN), igual en todas las azulejeras: toda la serie del periodo.
+                List<CfdiConsultaDto> conRfc = regla is not null
                     ? g.Where(c => !EsPublicoGeneral(c) && !EsNomina(c)).ToList()
                     : [];
 
@@ -193,12 +195,6 @@ public sealed class XmlAzulejerasService
     }
 
     private static bool EsNomina(CfdiConsultaDto c) => c.TipoCfdi.Equals("N", StringComparison.OrdinalIgnoreCase);
-
-    // Clientes con RFC de la serie también se suben desde aquí (con la serie convertida si cambia, p. ej. 72A → 72AA,
-    // o tal cual, p. ej. 50E) cuando la serie tiene regla propia; la regla general "*" solo toca a público general.
-    private static bool IncluyeConRfc(Dictionary<string, EquivalenciaSerie> reglas, EquivalenciaSerie regla, string serie) =>
-        reglas.ContainsKey(serie) ||
-        !string.Equals(regla.SerieNueva, serie, StringComparison.OrdinalIgnoreCase);
 
     // A público general y que no sea nómina: la nómina no se modifica ni se sube a SINUBE.
     private static bool EsPublicoGeneral(CfdiConsultaDto c) =>
@@ -236,8 +232,7 @@ public sealed class XmlAzulejerasService
 
             if (EsNomina(cfdi) ||
                 !series.Contains(cfdi.Serie.Trim()) ||
-                Regla(reglas, cfdi.Serie.Trim()) is not { } equivalencia ||
-                (!publico && !IncluyeConRfc(reglas, equivalencia, cfdi.Serie.Trim())))
+                Regla(reglas, cfdi.Serie.Trim()) is not { } equivalencia)
             {
                 resultado.SinCambios++;
                 resultado.ImporteSinCambios += cfdi.Total;
