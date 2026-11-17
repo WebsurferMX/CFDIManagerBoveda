@@ -1890,8 +1890,8 @@
             return f;
         }
 
-        string periodo = TextoPeriodo();
-        var secciones = new List<CFDIManager.Web.Services.AdministracionXml.ResumenImagen.Seccion>();
+        string periodo = TextoPeriodoImagen();
+        var secciones =new List<CFDIManager.Web.Services.AdministracionXml.ResumenImagen.Seccion>();
 
         if (forma != "recibidos")
             secciones.Add(new("Emitidos", "ingresos", Repo.ObtenerTotalesAdministracionXml(Para("EMITIDO"))));
@@ -1919,6 +1919,37 @@
             : $"{Mes(meses[0])} – {Mes(meses[^1])} {anio}";
 
         return MuestraDias && DiasElegidos.Count > 0 ? $"{texto} · días {string.Join(", ", DiasElegidos.Order())}" : texto;
+    }
+
+    /// <summary>
+    /// Periodo de la imagen del resumen: con un solo mes que no está completo (días elegidos seguidos, o el mes en curso
+    /// hasta hoy) va el rango "De : 01/11/2026-17/11/2026"; con el mes completo, el nombre del mes como en la pantalla.
+    /// </summary>
+    private string TextoPeriodoImagen()
+    {
+        if (Anio is not int anio || !MuestraDias)
+            return TextoPeriodo();
+
+        int mes = MesesElegidos.First();
+        int ultimo = DateTime.DaysInMonth(anio, mes);
+        List<int> dias = DiasElegidos.Order().ToList();
+
+        // Días sueltos (no seguidos) no caben en un rango: se quedan como "· días 3, 7, 9".
+        if (dias.Count > 0 && dias[^1] - dias[0] + 1 != dias.Count)
+            return TextoPeriodo();
+
+        int desde = dias.Count > 0 ? dias[0] : 1;
+        int hasta = dias.Count > 0 ? dias[^1] : ultimo;
+
+        DateTime hoy = DateTime.Today;
+        if (dias.Count == 0 && anio == hoy.Year && mes == hoy.Month)
+            hasta = hoy.Day;
+
+        if (desde == 1 && hasta == ultimo)
+            return TextoPeriodo();
+
+        string Fecha(int dia) => new DateTime(anio, mes, dia).ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+        return $"De : {Fecha(desde)}-{Fecha(hasta)}";
     }
 
     private AdminXmlFiltroDto FiltroSinPestana()
