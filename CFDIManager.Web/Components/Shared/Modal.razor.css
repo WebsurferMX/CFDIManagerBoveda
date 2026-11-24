@@ -15,3 +15,7 @@
 .modal-content {
     border-radius: .9rem;
 }
+
+/* Por encima de la barra superior y el menú de MudBlazor (z-index 1300 y 1100), que si no tapan el encabezado. */
+.modal { z-index: 1360; }
+.modal-backdrop { z-index: 1350; }
