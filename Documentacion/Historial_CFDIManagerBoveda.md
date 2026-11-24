@@ -303,8 +303,8 @@ Desde aquí cada cambio se anota el mismo día en que se hace, con su commit. Lo
 | Enviar por correo | Adjunta el reporte de **Emitidos y el de Recibidos** del periodo (el del otro lado sin pestaña ni búsqueda; el agrupado por contraparte cambia a emisor/receptor; no se adjunta si ese lado no tiene comprobantes). Con renglones marcados, solo el del lado actual. En el diálogo se puede quitar cualquier adjunto | `7f04c30` |
 | SINUBE | Series alternas con "Obtener serie/folio del atributo Folio": también se cambia el prefijo del Folio (FAC139 → FACC139), porque SINUBE ignora el atributo Serie | `7f04c30` |
 | Servicio | Al encender el equipo espera hasta ~3 min a PostgreSQL antes de decidir la carpeta de datos (antes caía en silencio a `Storage` junto a la app y los datos quedaban repartidos) | `7f04c30` |
-| Enviar por correo (submenú) | El botón abre en el panel un submenú en árbol: **Emitidos**, **Recibidos**, **Emitidos y Recibidos**; cada uno adjunta solo esos reportes (el lado de la pantalla con su pestaña, búsqueda y marcados; el otro con el periodo, y no se adjunta si no tiene comprobantes). En el diálogo la ✕ ya aparece en todos los adjuntos (antes desaparecía al quedar uno) y los archivos llevan ícono de hoja con distintivo (Excel, PDF, XML, ZIP) | *sin commit* |
-| Diálogos (Modal) | Los diálogos de Bootstrap quedaban debajo de la barra superior de MudBlazor (z-index 1300) y se les cortaba el encabezado; ahora van encima | *sin commit* |
+| Enviar por correo (submenú) | El botón abre en el panel un submenú en árbol: **Emitidos**, **Recibidos**, **Emitidos y Recibidos**; cada uno adjunta solo esos reportes (el lado de la pantalla con su pestaña, búsqueda y marcados; el otro con el periodo, y no se adjunta si no tiene comprobantes). En el diálogo la ✕ ya aparece en todos los adjuntos (antes desaparecía al quedar uno) y los archivos llevan ícono de hoja con distintivo (Excel, PDF, XML, ZIP) | `5583a7e` |
+| Diálogos (Modal) | Los diálogos de Bootstrap quedaban debajo de la barra superior de MudBlazor (z-index 1300) y se les cortaba el encabezado; ahora van encima | `5583a7e` |
 
 ## Dónde está cada cosa
 
