@@ -1,6 +1,7 @@
 # CFDIManagerBoveda: historial de implementación
 
-Cómo nació CFDIManagerBoveda y qué se le fue agregando, del 27 de octubre al 7 de noviembre de 2026. Reconstruido de las
+Cómo nació CFDIManagerBoveda y qué se le fue agregando, del 27 de octubre de 2026 en adelante; la [bitácora de cambios](#8-bitácora-de-cambios-desde-el-711) se
+actualiza con cada cambio. Reconstruido de las
 sesiones de Claude Code de los equipos donde se trabajó (usuario `websu`, **ERNESTO-CGA** y, desde el 31/10,
 **CFDIManagerPC-CGA**) y de los commits en GitHub. Fechas y horas en hora local.
 
@@ -257,6 +258,51 @@ Se crean solas al arrancar.
 | **Enviar CFDI** | Herramienta de Administración de XML: PDF y XML de los marcados (o el activo), un correo por contraparte. Propone el correo del catálogo de clientes de SINUBE (`DbCliente`, con su nombre comercial para el PDF) más los correos adicionales recordados por RFC (lo que quede al enviar se guarda; vacío los borra); CC recordado por empresa y copia para quien envía | `2d81a08`, `725dc0e` |
 
 Versiones etiquetadas en GitHub: **v0.1.0** (imagen del resumen con KPI) y **v0.2.0** (Enviar CFDI), ambas del 7/11.
+
+## 8. Bitácora de cambios (desde el 7/11)
+
+Desde aquí cada cambio se anota el mismo día en que se hace, con su commit. Lo que todavía no tiene commit se marca
+*sin commit* y se completa al subirlo.
+
+### 7/11 (tarde): PDF con el formato de SINUBE
+
+| Tema | Qué se hizo | Commit |
+|---|---|---|
+| Enviar CFDI | PDF con el formato de impresión vigente de SINUBE (`DbReporte`) convertido con Edge; selector de formato de factura y de pago recordado por empresa; variables del reporteador desde el XML y direcciones del cliente (`DbClienteDireccion`) y de la empresa (`DbMatrizSucursal`) | `dbebc1e` |
+| PDF formato SINUBE | El navegador prueba variantes (sin sandbox para LocalSystem, Edge y Chrome), recuerda la que funciona y registra el error de cada intento | `2195f01` |
+
+### 9/11: adendas, portapapeles y sesión
+
+| Tema | Qué se hizo | Commit |
+|---|---|---|
+| Adendas de SINUBE | Tarea que baja el XML con adenda (`DbFactura.tieneAddenda` + `DbFacturaXml`) a `Emitidos\Adendas\AAAA\MM\UUID.xml` sin tocar la copia del SAT (fuera de la sincronización de Storage); Enviar CFDI adjunta ese XML cuando existe | `55694c6` |
+| Portapapeles | Copiar sin congelar la pantalla: alternativa `execCommand` para `http://IP` (el portapapeles moderno solo existe en HTTPS/localhost), en la contraseña temporal y en el resultado de Importación a SINUBE | `370458d` |
+| Sesión | Botón **Salir** a la vista; al reabrir el navegador la sesión se cierra (latido en `localStorage`; sin latido en 3 minutos se cierra la sesión restaurada) | `5ad50b3` |
+
+### 10/11: MudBlazor, permisos por herramienta y SINUBE manda
+
+| Tema | Qué se hizo | Commit |
+|---|---|---|
+| MudBlazor 9.12 | Layout con menú lateral que se contrae a iconos (recordado en el navegador), barra superior y tema sincronizado con el modo claro/oscuro; su CSS va antes de Bootstrap y no se carga en el login | `6bf4afe` |
+| Administración de XML | Pasada a componentes MudBlazor (filtros, búsqueda, tabla, paginador, detalle, herramientas, diálogos, avisos); año, mes, día y herramientas con renglones propios en lugar de `MudListItem`; Buscar por, Nvo. reporte de y Filtrar con ancho fijo | `5d50eb1`, `376439b`, `4581e87` |
+| Permisos | Cada herramienta de Administración de XML (`Tareas.HerramientasXml`) y cada reporte de "Nvo. reporte de" (`Tareas.ReportesXml`) se asigna por usuario en Configuración → Usuarios (bloques con Todas/Ninguna). El rol **Consulta** entra a Administración de XML sin Importar XML, XML externos, Renombrar, Catálogo de logos, Valida Estado SAT ni Enviar CFDI | `403a263`, `0c1a232` |
+| SINUBE manda sobre la bitácora | Facturas y notas de crédito de clientes subidas por la app que SINUBE ya no tiene por UUID cuentan como **Borrados en SINUBE** y vuelven a quedar por subir (Importación a SINUBE, XML Azulejeras, Empresas → Analizar). Pagos y proveedores siguen la bitácora. XML Azulejeras con casilla "Reenviar los que SINUBE ya aceptó" | `59303f0` |
+| XML Azulejeras | ASN (regla general `*`) incluye también a los clientes con RFC de la serie; toda la serie del periodo (sin nómina) se revisa y sube desde esa pantalla | `b36471f` |
+
+### 17/11: rango de fechas en la imagen del resumen
+
+| Tema | Qué se hizo | Commit |
+|---|---|---|
+| Imagen del resumen | Con un mes incompleto (días seguidos elegidos o el mes en curso) pone el rango "De : 01/11/2026-17/11/2026" en lugar del nombre del mes | `da7f5f5` |
+
+### 24/11: imagen para correo/WhatsApp, arranque del servicio y correo con los dos reportes
+
+| Tema | Qué se hizo | Commit |
+|---|---|---|
+| Imagen del resumen | Botones **Copiar para correo** y **Copiar para WhatsApp** además de Descargar. PNG al doble de resolución (≈ 1920 px, con su DPI en el archivo) para que no se vea borroso; se pega a ≈ 960 px. Por `http://IP` el navegador no deja copiar: se muestra la imagen para copiarla con clic derecho | `7f04c30` |
+| Enviar por correo | Adjunta el reporte de **Emitidos y el de Recibidos** del periodo (el del otro lado sin pestaña ni búsqueda; el agrupado por contraparte cambia a emisor/receptor; no se adjunta si ese lado no tiene comprobantes). Con renglones marcados, solo el del lado actual. En el diálogo se puede quitar cualquier adjunto | `7f04c30` |
+| SINUBE | Series alternas con "Obtener serie/folio del atributo Folio": también se cambia el prefijo del Folio (FAC139 → FACC139), porque SINUBE ignora el atributo Serie | `7f04c30` |
+| Servicio | Al encender el equipo espera hasta ~3 min a PostgreSQL antes de decidir la carpeta de datos (antes caía en silencio a `Storage` junto a la app y los datos quedaban repartidos) | `7f04c30` |
 
 ## Dónde está cada cosa
 
