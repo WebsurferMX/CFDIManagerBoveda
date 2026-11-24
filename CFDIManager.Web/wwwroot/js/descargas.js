@@ -51,6 +51,38 @@ window.copiarTexto = async (texto) => {
     return copiado;
 };
 
+// Copia un PNG al portapapeles (para pegarlo en correo o WhatsApp). Solo en HTTPS o localhost; por http://IP
+// el navegador no lo permite y regresa false (entonces se muestra la imagen para copiarla con clic derecho).
+// paraCorreo: solo HTML, el <img> con su tamaño a la vista en los atributos width/height (Outlook web los
+// respeta y son los que cambia al redimensionarla con las esquinas) y max-width:100% para que no se salga del
+// correo. Sin width:100% en el estilo: eso la deja fija al ancho del correo y no se puede cambiar de tamaño.
+// Si también fuera el PNG, Outlook pegaría el PNG a sus píxeles reales. Si no (WhatsApp), solo el PNG.
+window.copiarImagenBase64 = async (contenidoBase64, anchoVista, paraCorreo) => {
+    try {
+        if (!navigator.clipboard?.write || !window.isSecureContext || typeof ClipboardItem === "undefined")
+            return false;
+
+        const bytes = Uint8Array.from(atob(contenidoBase64), c => c.charCodeAt(0));
+        let tipos;
+        if (paraCorreo) {
+            // Ancho y alto reales del PNG (IHDR, big endian) para guardar la proporción.
+            const vista = new DataView(bytes.buffer);
+            const anchoPng = vista.getUint32(16), altoPng = vista.getUint32(20);
+            const altoVista = Math.round(altoPng * anchoVista / anchoPng);
+            const html = `<img src="data:image/png;base64,${contenidoBase64}" alt="Resumen de CFDI"`
+                + ` width="${anchoVista}" height="${altoVista}" style="max-width:100%;height:auto">`;
+            tipos = { "text/html": new Blob([html], { type: "text/html" }) };
+        } else {
+            tipos = { "image/png": new Blob([bytes], { type: "image/png" }) };
+        }
+
+        await navigator.clipboard.write([new ClipboardItem(tipos)]);
+        return true;
+    } catch {
+        return false;
+    }
+};
+
 // Archivos grandes que el servidor entrega por URL (ZIP de XML y PDF).
 window.descargarUrl = (url) => {
     const enlace = document.createElement("a");

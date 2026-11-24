@@ -25,16 +25,27 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 builder.Services.AddWindowsService(opciones => opciones.ServiceName = "CFDIManager");
 
 // Carpeta de datos: la definida en Herramientas para este equipo, AppSettings:CarpetaStorage o "Storage" junto a la app.
+// Al encender el equipo el servicio puede arrancar antes que PostgreSQL: se espera a la base (hasta ~3 min) en vez
+// de caer en silencio a la carpeta de omisión, que dejaría los datos repartidos en dos carpetas.
 string? carpetaDefinida = null;
 
-try
+for (int intento = 1; ; intento++)
 {
-    carpetaDefinida = new PostgreSqlRepository(CadenaPostgres(builder.Configuration))
-        .ObtenerConfiguracionApp(CarpetaStorage.ClaveConfiguracion);
-}
-catch (Exception)
-{
-    // Sin base al arrancar: se usa la de configuración o la de omisión.
+    try
+    {
+        carpetaDefinida = new PostgreSqlRepository(CadenaPostgres(builder.Configuration))
+            .ObtenerConfiguracionApp(CarpetaStorage.ClaveConfiguracion);
+        break;
+    }
+    catch (Exception) when (intento < 36)
+    {
+        Thread.Sleep(TimeSpan.FromSeconds(5));
+    }
+    catch (Exception)
+    {
+        // Sin base tras la espera: se usa la de configuración o la de omisión.
+        break;
+    }
 }
 
 CarpetaStorage.Configurar(builder.Configuration, builder.Environment.ContentRootPath, carpetaDefinida);

@@ -36,13 +36,19 @@ public static class ResumenImagen
 
     public sealed record Seccion(string Titulo, string Subtitulo, AdminXmlTotalesDto Totales);
 
-    /// <summary>Una franja de KPI por sección, una debajo de la otra (≈ 960 px de ancho a 100 dpi).</summary>
+    /// <summary>
+    /// Píxeles por píxel de pantalla: la imagen sale al doble (≈ 1920 px) para que no se vea borrosa al pegarla en
+    /// correo o WhatsApp, que la muestran escalada; su tamaño a la vista sigue siendo ≈ 960 px.
+    /// </summary>
+    public const int Escala = 2;
+
+    /// <summary>Una franja de KPI por sección, una debajo de la otra (≈ 960 px a la vista; el PNG trae <see cref="Escala"/>×).</summary>
     /// <param name="claro">Tema claro de la app; si no, oscuro.</param>
     public static byte[] Generar(string empresa, string rfc, string periodo, IReadOnlyList<Seccion> secciones, bool claro = false)
     {
         Paleta p = claro ? Clara : Oscura;
 
-        return Document.Create(doc => doc.Page(page =>
+        byte[] png = Document.Create(doc => doc.Page(page =>
         {
             page.ContinuousSize(690);
             page.Margin(0);
@@ -66,7 +72,43 @@ public static class ResumenImagen
                 foreach (var s in secciones)
                     col.Item().Element(e => PintarSeccion(e, s, p, claro));
             });
-        })).GenerateImages(new ImageGenerationSettings { ImageFormat = ImageFormat.Png, RasterDpi = 100 }).First();
+        })).GenerateImages(new ImageGenerationSettings { ImageFormat = ImageFormat.Png, RasterDpi = 100 * Escala }).First();
+
+        return ConDpi(png, 96 * Escala);
+    }
+
+    /// <summary>
+    /// Agrega al PNG su resolución (chunk pHYs) para que Outlook, Word y otros programas que la respetan lo muestren a
+    /// tamaño de pantalla (≈ 960 px) y no a sus píxeles reales. Si ya la trae, lo deja igual.
+    /// </summary>
+    private static byte[] ConDpi(byte[] png, int dpi)
+    {
+        const int finIhdr = 8 + 8 + 13 + 4; // firma + (largo, tipo, datos, CRC) del IHDR
+        if (png.Length <= finIhdr || png.AsSpan().IndexOf("pHYs"u8) >= 0)
+            return png;
+
+        uint puntosPorMetro = (uint)Math.Round(dpi / 0.0254);
+        byte[] chunk = new byte[4 + 4 + 9 + 4];
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(chunk.AsSpan(0), 9);
+        "pHYs"u8.CopyTo(chunk.AsSpan(4));
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(chunk.AsSpan(8), puntosPorMetro);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(chunk.AsSpan(12), puntosPorMetro);
+        chunk[16] = 1; // unidad: metro
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(chunk.AsSpan(17), Crc32(chunk.AsSpan(4, 13)));
+
+        return [.. png.AsSpan(0, finIhdr), .. chunk, .. png.AsSpan(finIhdr)];
+    }
+
+    private static uint Crc32(ReadOnlySpan<byte> datos)
+    {
+        uint crc = 0xFFFFFFFF;
+        foreach (byte b in datos)
+        {
+            crc ^= b;
+            for (int i = 0; i < 8; i++)
+                crc = (crc & 1) != 0 ? (crc >> 1) ^ 0xEDB88320 : crc >> 1;
+        }
+        return ~crc;
     }
 
     private static void PintarSeccion(IContainer contenedor, Seccion s, Paleta p, bool claro)

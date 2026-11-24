@@ -759,9 +759,21 @@ public class SinubeService
         string original = $"{envio.Serie}-{envio.Folio}";
         string serieOriginal = envio.Serie;
 
+        // Con "Obtener serie/folio del atributo Folio" SINUBE toma la serie del Folio concatenado (FAC139) e ignora el
+        // atributo Serie: en las alternas también se cambia ese prefijo (FACC139).
+        string? folioSinSerie = configuracion.SerieFolioDeFolio && serieOriginal != "" &&
+                                envio.Folio.Length > serieOriginal.Length &&
+                                envio.Folio.StartsWith(serieOriginal, StringComparison.OrdinalIgnoreCase)
+            ? envio.Folio[serieOriginal.Length..]
+            : null;
+
         foreach (string serie in series)
         {
             ((XmlElement)Comprobante(documento)).SetAttribute("Serie", serie);
+
+            if (folioSinSerie is not null)
+                ((XmlElement)Comprobante(documento)).SetAttribute("Folio", serie + folioSinSerie);
+
             envio.Serie = serie;
 
             await EnviarClienteAsync(documento, envio, configuracion, password, rfcEmpresa, null, cancelacion);
@@ -780,13 +792,13 @@ public class SinubeService
 
         if (envio.Estatus == "OK" && !string.Equals(envio.Serie, serieOriginal, StringComparison.OrdinalIgnoreCase))
         {
-            envio.Mensaje = $"Serie cambiada: {original} ya existe en SINUBE, se subió como {envio.Serie}-{envio.Folio}. " + envio.Mensaje;
+            envio.Mensaje = $"Serie cambiada: {original} ya existe en SINUBE, se subió como {envio.Serie}-{folioSinSerie ?? envio.Folio}. " + envio.Mensaje;
         }
         else if (envio.Estatus != "OK" && EsDepositoDuplicado(envio.Mensaje))
         {
             envio.Estatus = "FOLIO";
-            envio.Mensaje = FolioOcupado(envio, configuracion);
             envio.Serie = serieOriginal;
+            envio.Mensaje = FolioOcupado(envio, configuracion);
         }
     }
 

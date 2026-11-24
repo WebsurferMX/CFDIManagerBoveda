@@ -98,12 +98,19 @@
                     </div>
 
                     <ul class="list-group">
-                        @foreach (AdjuntoCorreo adjunto in Adjuntos)
+                        @foreach (AdjuntoCorreo adjunto in Lista)
                         {
                             <li class="list-group-item d-flex align-items-center gap-2 small">
                                 <i class="bi @IconoArchivo(adjunto.Nombre) fs-5"></i>
                                 <span class="text-truncate flex-grow-1">@adjunto.Nombre</span>
                                 <span class="text-body-secondary">@FormatoTamano(adjunto.Contenido.Length)</span>
+                                @if (Lista.Count > 1)
+                                {
+                                    <button type="button" class="btn btn-sm btn-link text-danger p-0" title="Quitar del correo"
+                                            @onclick="() => Lista.Remove(adjunto)" disabled="@Enviando">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                }
                             </li>
                         }
                     </ul>
@@ -117,7 +124,7 @@
 
         @if (Configurado)
         {
-            <button type="button" class="btn btn-primary" @onclick="Enviar" disabled="@(Enviando || ExcedeLimite || Adjuntos.Count == 0)">
+            <button type="button" class="btn btn-primary" @onclick="Enviar" disabled="@(Enviando || ExcedeLimite || Lista.Count == 0)">
                 @if (Enviando)
                 {
                     <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
@@ -148,6 +155,9 @@
     /// <summary>PNG que puede ir dentro del cuerpo del correo (p. ej. el resumen de Administración de XML).</summary>
     [Parameter] public byte[]? Imagen { get; set; }
 
+    /// <summary>Píxeles del PNG por píxel a la vista (2 = imagen al doble de resolución, se muestra a la mitad).</summary>
+    [Parameter] public int ImagenEscala { get; set; } = 1;
+
     private bool IncluirImagen = true;
 
     [Parameter] public EventCallback OnCerrar { get; set; }
@@ -168,7 +178,10 @@
     private string MiCorreo = "";
     private string MiNombre = "";
 
-    private long TotalBytes => Adjuntos.Sum(a => (long)a.Contenido.Length);
+    /// <summary>Adjuntos que se enviarán: los recibidos al abrir, menos los que el usuario quite.</summary>
+    private List<AdjuntoCorreo> Lista = [];
+
+    private long TotalBytes => Lista.Sum(a => (long)a.Contenido.Length);
 
     private bool ExcedeLimite => TotalBytes > CorreoService.LimiteAdjuntosBytes;
 
@@ -182,6 +195,7 @@
             Para = "";
             Cc = "";
             Asunto = AsuntoSugerido;
+            Lista = Adjuntos.ToList();
             IncluirImagen = true;
             Mensaje = "Buen día:\nTe comparto el reporte adjunto generado en CFDI Manager.\nSaludos.";
 
@@ -220,11 +234,11 @@
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToList();
 
-            parrafos.Add($"Archivos adjuntos: {string.Join(", ", Adjuntos.Select(a => a.Nombre))}.");
+            parrafos.Add($"Archivos adjuntos: {string.Join(", ", Lista.Select(a => a.Nombre))}.");
 
             bool conImagen = IncluirImagen && Imagen is { Length: > 24 };
-            // Ancho real del PNG (encabezado IHDR): la tarjeta se ensancha para mostrarlo a tamaño natural.
-            int anchoImagen = conImagen ? System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(Imagen.AsSpan(16, 4)) : 0;
+            // Ancho del PNG (encabezado IHDR) entre su escala: la tarjeta se ensancha para mostrarlo a tamaño natural.
+            int anchoImagen = conImagen ? System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(Imagen.AsSpan(16, 4)) / Math.Max(1, ImagenEscala) : 0;
 
             (string html, string texto) = PlantillaCorreo.Construir(new PlantillaCorreo.Contenido
             {
@@ -244,7 +258,7 @@
                 Asunto = Asunto.Trim(),
                 CuerpoHtml = html,
                 CuerpoTexto = texto,
-                Adjuntos = Adjuntos,
+                Adjuntos = Lista,
                 Imagenes = conImagen ? [new ImagenEnLinea("resumen", "resumen.png", Imagen!)] : [],
                 EnviadoPor = MiNombre,
                 EmpresaId = EmpresaId

@@ -769,7 +769,15 @@
                     </MudRadioGroup>
                     <div class="d-flex align-items-center gap-2">
                         <span class="small secundario">@TextoPeriodo()</span>
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="ms-auto" OnClick="ImagenResumen" Disabled="@GenerandoImagen"
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="ms-auto" OnClick="@(() => ImagenResumen("correo"))"
+                                   Disabled="@GenerandoImagen" StartIcon="@Icons.Material.Filled.Email">
+                            Copiar para correo
+                        </MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => ImagenResumen("whatsapp"))"
+                                   Disabled="@GenerandoImagen" StartIcon="@Icons.Material.Filled.ContentCopy">
+                            Copiar para WhatsApp
+                        </MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => ImagenResumen("descargar"))" Disabled="@GenerandoImagen"
                                    StartIcon="@(GenerandoImagen ? null : Icons.Material.Filled.Download)">
                             @if (GenerandoImagen)
                             {
@@ -778,6 +786,11 @@
                             Descargar imagen
                         </MudButton>
                     </div>
+                    @if (ImagenParaCopiar is not null)
+                    {
+                        @* Sin HTTPS el navegador no deja copiar desde código: se copia con clic derecho → Copiar imagen. *@
+                        <img src="data:image/png;base64,@ImagenParaCopiar" alt="Resumen" class="mt-3 border rounded" style="width:100%;height:auto" />
+                    }
                     break;
             }
             </div>
@@ -791,6 +804,7 @@
                    Datos="@([("Empresa", EmpresaContext.NombreEmpresa), ("RFC", EmpresaContext.Rfc)])"
                    EmpresaId="EmpresaContext.EmpresaId"
                    Imagen="ImagenCorreo"
+                   ImagenEscala="CFDIManager.Web.Services.AdministracionXml.ResumenImagen.Escala"
                    OnCerrar="() => AdjuntosCorreo = []"
                    OnEnviado="texto => Avisar(texto)" />
 
@@ -801,7 +815,7 @@
     private Dictionary<string, (string Tono, Func<Task> Accion)> AccionesHerramientas => new()
     {
         ["xml-exportar-excel"] = ("verde", ExportarReporteElegido),
-        ["xml-imagen-resumen"] = ("morado", Sincrona(() => AbrirModal("imagen"))),
+        ["xml-imagen-resumen"] = ("morado", Sincrona(() => { ImagenParaCopiar = null; AbrirModal("imagen"); })),
         ["xml-enviar-correo"] = ("azul", PrepararCorreo),
         ["xml-enviar-cfdi"] = ("verde", PrepararEnvioCfdi),
         ["xml-abrir-xml"] = ("azul", Sincrona(AbrirXml)),
@@ -1058,18 +1072,46 @@
 
         try
         {
+            const string tipoExcel = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
             AdminXmlFiltroDto f = FiltroAccion();
             EmpresaDto empresa = EmpresaContext.EmpresaActiva!;
-            (byte[] contenido, string nombre) = await Task.Run(() => Admin.GenerarExcel(empresa, f, TipoReporte));
+            string reporte = TipoReporte;
+            (byte[] contenido, string nombre) = await Task.Run(() => Admin.GenerarExcel(empresa, f, reporte));
+            List<CFDIManager.Web.Services.Correo.AdjuntoCorreo> adjuntos = [new(nombre, tipoExcel, contenido)];
+
+            // Sin renglones marcados va también el mismo reporte del otro lado (emitidos ↔ recibidos) con el periodo
+            // de la pantalla, sin pestaña ni búsqueda (son de este lado). El agrupado por contraparte cambia a la del
+            // otro lado. Si ese lado no tiene comprobantes en el periodo, no se adjunta.
+            if (TodoElFiltro || Marcadas.Count == 0)
+            {
+                AdminXmlFiltroDto otro = FiltroSinPestana();
+                otro.Clasificacion = Clasificacion == "RECIBIDO" ? "EMITIDO" : "RECIBIDO";
+                otro.Busqueda = "";
+                otro.Filtrar = "";
+                string reporteOtro = reporte switch
+                {
+                    "agrupado:emisor" => "agrupado:receptor",
+                    "agrupado:receptor" => "agrupado:emisor",
+                    _ => reporte
+                };
+
+                if (Repo.ObtenerTotalesAdministracionXml(otro).Archivos > 0)
+                {
+                    (byte[] contenidoOtro, string nombreOtro) = await Task.Run(() => Admin.GenerarExcel(empresa, otro, reporteOtro));
+                    var adjuntoOtro = new CFDIManager.Web.Services.Correo.AdjuntoCorreo(nombreOtro, tipoExcel, contenidoOtro);
+                    // Siempre Emitidos primero.
+                    if (otro.Clasificacion == "EMITIDO")
+                        adjuntos.Insert(0, adjuntoOtro);
+                    else
+                        adjuntos.Add(adjuntoOtro);
+                }
+            }
 
             // Resumen dentro del correo, con el tema que el usuario tiene en la app.
             bool claroCorreo = await JS.InvokeAsync<string>("cfdiTheme.current") == "light";
             ImagenCorreo = await GenerarImagenResumen(empresa, "debajo", claroCorreo);
 
-            AdjuntosCorreo =
-            [
-                new(nombre, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", contenido)
-            ];
+            AdjuntosCorreo = adjuntos;
         }
         catch (Exception ex)
         {
@@ -1846,13 +1888,20 @@
     private string FormaImagen = "debajo";
     private bool GenerandoImagen;
 
-    /// <summary>PNG con los totales del periodo de emitidos (ingresos) y/o recibidos (egresos), sin pestaña ni búsqueda.</summary>
-    private async Task ImagenResumen()
+    /// <summary>Base64 del PNG mostrado en el diálogo cuando el navegador no dejó copiarlo (entrando por http://IP).</summary>
+    private string? ImagenParaCopiar;
+
+    /// <summary>
+    /// PNG con los totales del periodo de emitidos (ingresos) y/o recibidos (egresos), sin pestaña ni búsqueda:
+    /// se copia al portapapeles para pegarla en un correo ("correo") o en WhatsApp ("whatsapp"), o se descarga ("descargar").
+    /// </summary>
+    private async Task ImagenResumen(string destino)
     {
         if (EmpresaContext.EmpresaActiva is not EmpresaDto empresa)
             return;
 
         GenerandoImagen = true;
+        ImagenParaCopiar = null;
 
         try
         {
@@ -1862,10 +1911,29 @@
             // La imagen sigue el tema que el usuario tiene en la app (claro u oscuro).
             bool claro = await JS.InvokeAsync<string>("cfdiTheme.current") == "light";
             byte[] png = await GenerarImagenResumen(empresa, forma, claro);
+            string base64 = Convert.ToBase64String(png);
+
+            if (destino != "descargar")
+            {
+                int anchoVista = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(png.AsSpan(16, 4))
+                    / CFDIManager.Web.Services.AdministracionXml.ResumenImagen.Escala;
+                bool paraCorreo = destino == "correo";
+                if (await JS.InvokeAsync<bool>("copiarImagenBase64", base64, anchoVista, paraCorreo))
+                {
+                    Avisar($"Imagen copiada: pégala en {(paraCorreo ? "el correo" : "WhatsApp")} con Ctrl+V.");
+                    CerrarModal();
+                }
+                else
+                {
+                    ImagenParaCopiar = base64;
+                    Avisar("Clic derecho sobre la imagen → Copiar imagen.");
+                }
+                return;
+            }
 
             string lado = forma switch { "emitidos" => " Emitidos", "recibidos" => " Recibidos", _ => "" };
             string nombre = $"{empresa.Rfc} Resumen{lado} {periodo.Replace("–", "a").Replace(",", "")}.png";
-            await JS.InvokeVoidAsync("descargarArchivoBase64", nombre, "image/png", Convert.ToBase64String(png));
+            await JS.InvokeVoidAsync("descargarArchivoBase64", nombre, "image/png", base64);
             CerrarModal();
         }
         catch (Exception ex)
