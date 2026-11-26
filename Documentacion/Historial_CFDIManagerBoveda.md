@@ -331,11 +331,11 @@ Plan aprobado (modo Servidor y modo Local con Storage propio de la PC): https://
 
 | Tema | Qué se hizo | Commit |
 |---|---|---|
-| Instalador | Velopack (`vpk`, herramienta local en `dotnet-tools.json`): `CFDIManager.Escritorio-win-Setup.exe` de 68 MB, sin .NET dentro; si faltan, el Setup instala .NET 10 (Desktop y ASP.NET Core), WebView2 y Visual C++ 2015-2022. Instala por usuario en `%LocalAppData%\CFDIManager.Escritorio` sin pedir administrador, con acceso directo en escritorio y menú Inicio | *sin commit* |
-| Paquete más chico | App y web publicadas solo para Windows x64 y PostgreSQL recortado (sin `.lib`, wxWidgets ni traducciones salvo español): de 291 a 145 MB sin comprimir | *sin commit* |
-| Actualizaciones | `Actualizaciones.cs`: revisa GitHub Releases al iniciar y cada 6 h, baja la nueva versión y la instala al salir o desde la bandeja ("Instalar la versión… y reiniciar"). Antes de actualizar o desinstalar se detiene PostgreSQL (su carpeta se reemplaza); al desinstalar se quita el inicio con Windows y **se conserva la carpeta de datos**. `Publicar-Escritorio.ps1 -Subir` publica la versión con la etiqueta `escritorio-v<versión>` | *sin commit* |
-| Prueba | Setup silencioso en esta PC (4 s), modo Local desde la carpeta instalada (base y administrador en 11 s, inicio de sesión), desinstalación con la app y PostgreSQL corriendo: PostgreSQL detenido, programa y acceso directo borrados, datos conservados | *sin commit* |
-| Guía | [Guia_Escritorio.md](Guia_Escritorio.md): publicar versiones, instalar y cómo funciona cada modo | *sin commit* |
+| Instalador | Velopack (`vpk`, herramienta local en `dotnet-tools.json`): `CFDIManager.Escritorio-win-Setup.exe` de 68 MB, sin .NET dentro; si faltan, el Setup instala .NET 10 (Desktop y ASP.NET Core), WebView2 y Visual C++ 2015-2022. Instala por usuario en `%LocalAppData%\CFDIManager.Escritorio` sin pedir administrador, con acceso directo en escritorio y menú Inicio | `7458098` |
+| Paquete más chico | App y web publicadas solo para Windows x64 y PostgreSQL recortado (sin `.lib`, wxWidgets ni traducciones salvo español): de 291 a 145 MB sin comprimir | `7458098` |
+| Actualizaciones | `Actualizaciones.cs`: revisa GitHub Releases al iniciar y cada 6 h, baja la nueva versión y la instala al salir o desde la bandeja ("Instalar la versión… y reiniciar"). Antes de actualizar o desinstalar se detiene PostgreSQL (su carpeta se reemplaza); al desinstalar se quita el inicio con Windows y **se conserva la carpeta de datos**. `Publicar-Escritorio.ps1 -Subir` publica la versión con la etiqueta `escritorio-v<versión>` | `7458098` |
+| Prueba | Setup silencioso en esta PC (4 s), modo Local desde la carpeta instalada (base y administrador en 11 s, inicio de sesión), desinstalación con la app y PostgreSQL corriendo: PostgreSQL detenido, programa y acceso directo borrados, datos conservados | `7458098` |
+| Guía | [Guia_Escritorio.md](Guia_Escritorio.md): publicar versiones, instalar y cómo funciona cada modo | `7458098` |
 
 ## Dónde está cada cosa
 
