@@ -349,7 +349,7 @@ Plan aprobado (modo Servidor y modo Local con Storage propio de la PC): https://
 | 0.1.1 no se publicaba | En `publish\Releases` quedaban los paquetes 0.1.1 de la prueba de actualización y Velopack no armaba la 0.1.1 real. Ahora el script vacía esa carpeta en cada corrida y baja de GitHub solo lo publicado (delta 0.1.0 → 0.1.1 de 0.5 MB). `<Version>` pasa a 0.1.1 | `029a80f` |
 | 0.1.1 publicada | GitHub Releases `escritorio-v0.1.1` con Setup, paquete completo y delta (0.5 MB); `releases.win.json` la anuncia, así que las apps con 0.1.0 la toman (prueba 13 de la guía) | — |
 | Buscar actualizaciones | En la prueba no apareció la 0.1.1: cerrar la ventana deja la app en la bandeja y reabrirla no vuelve a revisar (la revisión del arranque fue antes de publicar; la siguiente, 6 horas después). Nuevo "Buscar actualizaciones" en la bandeja con el resultado en un aviso, y cada revisión (o su error) en `%LocalAppData%\CFDIManagerEscritorio\actualizaciones.log`. Sale en la 0.1.2 | `f0df62c` |
-| F4: actualización desde GitHub | En otra PC (Windows 11 Home Single Language; Setup de GitHub correcto, prueba 1), la 0.1.0 instalada de GitHub tomó la 0.1.1 tras Salir y volver a abrir (prueba 13 correcta). `<Version>` pasa a 0.1.2; armada sin publicar: delta 0.1.1 → 0.1.2 de 9 archivos | `4400485` |
+| F4: actualización desde GitHub | En otra PC (Windows 11 Home Single Language; Setup de GitHub correcto, prueba 1), la 0.1.0 instalada de GitHub tomó la 0.1.1 tras Salir y volver a abrir (prueba 13 correcta). Pruebas 2, 3 y 4 correctas: asistente en modo Local, alta de empresa con e.firma y CIEC, descarga SAT de noviembre (octubre en proceso). `<Version>` pasa a 0.1.2; armada sin publicar: delta 0.1.1 → 0.1.2 de 9 archivos | `4400485` |
 
 ## Dónde está cada cosa
 
