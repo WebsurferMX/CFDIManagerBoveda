@@ -1,20 +1,39 @@
 <#
 .SYNOPSIS
-    Arma la carpeta de CFDI Manager Escritorio lista para instalar: la app WPF, la web (carpeta web) y PostgreSQL
-    portátil (carpeta pgsql, tomada de un PostgreSQL instalado en este equipo).
+    Arma CFDI Manager Escritorio y su instalador (Velopack): la app WPF, la web (carpeta web) y PostgreSQL portátil
+    (carpeta pgsql, tomada de un PostgreSQL instalado en este equipo y recortada a lo que usa la app).
+
+    El instalador no lleva .NET ni WebView2: si faltan, los baja e instala Setup (.NET 10 Desktop y ASP.NET Core,
+    WebView2 y Visual C++ 2015-2022, que necesita PostgreSQL).
+
+.PARAMETER Version
+    Versión a publicar (p. ej. 0.2.0). Por omisión, la <Version> de CFDIManager.Escritorio.csproj.
+
+.PARAMETER Subir
+    Publica la versión en GitHub Releases (WebsurferMX/CFDIManagerBoveda) con la etiqueta escritorio-v{Version};
+    de ahí se actualizan las apps instaladas. Requiere un token de GitHub en la variable GITHUB_TOKEN.
 
 .EXAMPLE
     pwsh -File .\herramientas\Publicar-Escritorio.ps1
-    pwsh -File .\herramientas\Publicar-Escritorio.ps1 -Salida D:\CFDIManagerEscritorio -Pgsql "C:\Program Files\PostgreSQL\18"
+    pwsh -File .\herramientas\Publicar-Escritorio.ps1 -Version 0.2.0 -Subir
 #>
 param(
-    [string]$Salida = (Join-Path $PSScriptRoot "..\publish\Escritorio"),
-    [string]$Pgsql
+    [string]$Version,
+    [string]$Pgsql,
+    [switch]$Subir
 )
 
 $ErrorActionPreference = "Stop"
-$raiz = Resolve-Path (Join-Path $PSScriptRoot "..")
-$Salida = [IO.Path]::GetFullPath($Salida)
+$raiz = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$proyecto = Join-Path $raiz "CFDIManager.Escritorio\CFDIManager.Escritorio.csproj"
+$carpeta = Join-Path $raiz "publish\Escritorio"
+$versiones = Join-Path $raiz "publish\Releases"
+$repositorio = "https://github.com/WebsurferMX/CFDIManagerBoveda"
+
+if (-not $Version) {
+    $Version = ([xml](Get-Content $proyecto)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+}
+if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Versión no válida: '$Version' (se espera 0.2.0)." }
 
 if (-not $Pgsql) {
     $Pgsql = Get-ChildItem "$env:ProgramFiles\PostgreSQL" -Directory -ErrorAction SilentlyContinue |
@@ -22,23 +41,88 @@ if (-not $Pgsql) {
         Sort-Object { [int]($_.Name -replace '\D', '') } -Descending |
         Select-Object -First 1 -ExpandProperty FullName
 }
-if (-not $Pgsql -or -not (Test-Path (Join-Path $Pgsql "bin\initdb.exe"))) {
-    throw "No se encontró PostgreSQL; indícalo con -Pgsql."
-}
+if (-not $Pgsql -or -not (Test-Path (Join-Path $Pgsql "bin\initdb.exe"))) { throw "No se encontró PostgreSQL; indícalo con -Pgsql." }
+if ($Subir -and -not $env:GITHUB_TOKEN) { throw "Para -Subir define GITHUB_TOKEN con un token de GitHub con permiso de escribir releases." }
 
-Write-Host "Publicando la app de escritorio en $Salida..."
-dotnet publish (Join-Path $raiz "CFDIManager.Escritorio\CFDIManager.Escritorio.csproj") -c Release -o $Salida --nologo -v q
+Write-Host "CFDI Manager Escritorio $Version"
+
+# ---------- app y web (solo Windows x64, sin .NET dentro) ----------
+if (Test-Path $carpeta) { Remove-Item $carpeta -Recurse -Force }
+
+Write-Host "Publicando la app..."
+dotnet publish $proyecto -c Release -r win-x64 --self-contained false -p:Version=$Version -o $carpeta --nologo -v q
 if ($LASTEXITCODE -ne 0) { throw "Falló la publicación de CFDIManager.Escritorio." }
 
-Write-Host "Publicando la web en $Salida\web..."
-dotnet publish (Join-Path $raiz "CFDIManager.Web\CFDIManager.Web.csproj") -c Release -o (Join-Path $Salida "web") --nologo -v q
+Write-Host "Publicando la web..."
+dotnet publish (Join-Path $raiz "CFDIManager.Web\CFDIManager.Web.csproj") -c Release -r win-x64 --self-contained false `
+    -o (Join-Path $carpeta "web") --nologo -v q
 if ($LASTEXITCODE -ne 0) { throw "Falló la publicación de CFDIManager.Web." }
 
+# ---------- PostgreSQL portátil ----------
 Write-Host "Copiando PostgreSQL desde $Pgsql..."
-foreach ($carpeta in "bin", "lib", "share") {
-    robocopy (Join-Path $Pgsql $carpeta) (Join-Path $Salida "pgsql\$carpeta") /MIR /NFL /NDL /NJH /NJS /NP /XF *.pdb | Out-Null
-    if ($LASTEXITCODE -ge 8) { throw "Falló la copia de PostgreSQL ($carpeta)." }
+$destinoPg = Join-Path $carpeta "pgsql"
+
+# bin: los programas que usa la app (y los de diagnóstico) con todas las DLL, menos wxWidgets (de StackBuilder).
+$programas = "postgres.exe", "initdb.exe", "pg_ctl.exe", "pg_dump.exe", "pg_restore.exe", "psql.exe",
+             "pg_isready.exe", "pg_controldata.exe", "pg_resetwal.exe"
+New-Item -ItemType Directory -Force (Join-Path $destinoPg "bin") | Out-Null
+Get-ChildItem (Join-Path $Pgsql "bin") -File |
+    Where-Object { ($_.Extension -eq ".dll" -and $_.Name -notlike "wx*") -or $programas -contains $_.Name } |
+    Copy-Item -Destination (Join-Path $destinoPg "bin")
+
+# lib: solo las DLL que carga el servidor (sin bibliotecas de enlace .lib ni pgxs).
+robocopy (Join-Path $Pgsql "lib") (Join-Path $destinoPg "lib") *.dll /NFL /NDL /NJH /NJS /NP | Out-Null
+if ($LASTEXITCODE -ge 8) { throw "Falló la copia de pgsql\lib." }
+
+# share: todo menos las traducciones; de esas, solo español.
+robocopy (Join-Path $Pgsql "share") (Join-Path $destinoPg "share") /E /XD locale doc /NFL /NDL /NJH /NJS /NP | Out-Null
+if ($LASTEXITCODE -ge 8) { throw "Falló la copia de pgsql\share." }
+$espanol = Join-Path $Pgsql "share\locale\es"
+if (Test-Path $espanol) {
+    robocopy $espanol (Join-Path $destinoPg "share\locale\es") /E /NFL /NDL /NJH /NJS /NP | Out-Null
 }
 
-$mb = [math]::Round(((Get-ChildItem $Salida -Recurse -File | Measure-Object Length -Sum).Sum / 1MB), 0)
-Write-Host "Listo: $Salida ($mb MB). Ejecutable: CFDIManagerEscritorio.exe"
+foreach ($requerido in "bin\postgres.exe", "bin\initdb.exe", "bin\pg_ctl.exe", "bin\pg_dump.exe", "lib\plpgsql.dll", "share\postgres.bki") {
+    if (-not (Test-Path (Join-Path $destinoPg $requerido))) { throw "Falta pgsql\$requerido en el paquete." }
+}
+
+$mb = [math]::Round(((Get-ChildItem $carpeta -Recurse -File | Measure-Object Length -Sum).Sum / 1MB), 0)
+Write-Host "Carpeta lista: $carpeta ($mb MB sin comprimir)"
+
+# ---------- instalador y paquetes de actualización (Velopack) ----------
+Push-Location $raiz
+try {
+    dotnet tool restore | Out-Null
+
+    # Con la versión anterior a la mano, Velopack arma además el paquete delta (solo lo que cambió).
+    New-Item -ItemType Directory -Force $versiones | Out-Null
+    dotnet vpk download github --repoUrl $repositorio -o $versiones 2>$null | Out-Null
+
+    Write-Host "Armando el instalador..."
+    dotnet vpk pack `
+        --packId CFDIManager.Escritorio `
+        --packVersion $Version `
+        --runtime win-x64 `
+        --packDir $carpeta `
+        --mainExe CFDIManagerEscritorio.exe `
+        --packTitle "CFDI Manager" `
+        --packAuthors "WebsurferMX" `
+        --icon (Join-Path $raiz "CFDIManager.Escritorio\app.ico") `
+        --framework "net10-x64-desktop,net10-x64-aspnetcore,webview2,vcredist143-x64" `
+        --outputDir $versiones
+    if ($LASTEXITCODE -ne 0) { throw "Falló vpk pack." }
+
+    $setup = Get-ChildItem $versiones -Filter "*Setup.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    Write-Host ("Instalador: {0} ({1:N0} MB)" -f $setup.FullName, ($setup.Length / 1MB))
+
+    if ($Subir) {
+        Write-Host "Publicando en GitHub Releases (escritorio-v$Version)..."
+        dotnet vpk upload github --repoUrl $repositorio --token $env:GITHUB_TOKEN -o $versiones `
+            --publish --releaseName "CFDI Manager Escritorio $Version" --tag "escritorio-v$Version"
+        if ($LASTEXITCODE -ne 0) { throw "Falló la publicación en GitHub." }
+        Write-Host "Publicada: $repositorio/releases/tag/escritorio-v$Version"
+    }
+}
+finally {
+    Pop-Location
+}

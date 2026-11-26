@@ -28,6 +28,26 @@ public partial class MainWindow : Window
         RestaurarPosicion();
 
         _bandeja = new Bandeja(Mostrar, Recargar, AbrirConfiguracion, Salir);
+
+        _actualizaciones.Descargada += version => Dispatcher.BeginInvoke(() =>
+        {
+            _bandeja.MostrarActualizacion(version, InstalarActualizacion);
+            _bandeja.Avisar($"CFDI Manager {version} está lista",
+                "Se instala al salir, o ahora desde el menú del ícono de la bandeja.");
+        });
+        _actualizaciones.Iniciar();
+    }
+
+    private readonly Actualizaciones _actualizaciones = new();
+
+    /// <summary>Desde la bandeja: detiene lo local (pgsql está en la carpeta que se reemplaza), instala y vuelve a abrir.</summary>
+    private void InstalarActualizacion()
+    {
+        _saliendo = true;
+        GuardarPosicion();
+        DetenerLocal();
+        _bandeja.Dispose();
+        _actualizaciones.InstalarYReiniciar();
     }
 
     /// <summary>Muestra la ventana (desde la bandeja, otra instancia o el arranque) y conecta la primera vez.</summary>
@@ -391,6 +411,7 @@ public partial class MainWindow : Window
     {
         DetenerLocal();
         _bandeja.Dispose();
+        _actualizaciones.InstalarAlSalir();
         base.OnClosed(e);
         Application.Current.Shutdown();
     }

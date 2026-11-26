@@ -7,11 +7,15 @@ namespace CFDIManager.Escritorio;
 public sealed class Bandeja : IDisposable
 {
     private readonly Forms.NotifyIcon _icono;
+    private readonly Forms.ToolStripMenuItem _actualizar;
     private Action? _alHacerClic;
+    private Action? _instalarActualizacion;
 
     public Bandeja(Action abrir, Action recargar, Action configurar, Action salir)
     {
         var menu = new Forms.ContextMenuStrip();
+        _actualizar = new Forms.ToolStripMenuItem("", null, (_, _) => _instalarActualizacion?.Invoke()) { Visible = false };
+        menu.Items.Add(_actualizar);
         menu.Items.Add("Abrir CFDI Manager", null, (_, _) => abrir());
         menu.Items.Add("Recargar", null, (_, _) => recargar());
         menu.Items.Add("Configuración…", null, (_, _) => configurar());
@@ -21,7 +25,7 @@ public sealed class Bandeja : IDisposable
         _icono = new Forms.NotifyIcon
         {
             Icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath!) ?? SystemIcons.Application,
-            Text = "CFDI Manager",
+            Text = $"CFDI Manager {Actualizaciones.VersionActual}",
             ContextMenuStrip = menu,
             Visible = true
         };
@@ -35,6 +39,15 @@ public sealed class Bandeja : IDisposable
     {
         _alHacerClic = alHacerClic;
         _icono.ShowBalloonTip(5000, titulo, texto, Forms.ToolTipIcon.None);
+    }
+
+    /// <summary>Agrega "Instalar la versión X" arriba del menú.</summary>
+    public void MostrarActualizacion(string version, Action instalar)
+    {
+        _instalarActualizacion = instalar;
+        _actualizar.Text = $"Instalar la versión {version} y reiniciar";
+        _actualizar.Font = new Font(_actualizar.Font, System.Drawing.FontStyle.Bold);
+        _actualizar.Visible = true;
     }
 
     public void Dispose()

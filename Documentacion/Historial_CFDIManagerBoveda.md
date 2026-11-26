@@ -12,6 +12,7 @@ Documentos de detalle en esta carpeta:
 | [Proceso_Importacion_XML_SINUBE.md](Proceso_Importacion_XML_SINUBE.md) | Protocolo de HerramientasSinube para subir XML de clientes y proveedores (base de "Importación a SINUBE") y reglas de folios repetidos, series alternas y traslados propios |
 | [Guia_Publicacion_Servicio.md](Guia_Publicacion_Servicio.md) | Publicar la app, instalar y actualizar el servicio de Windows |
 | [Conciliacion_SINUBE_vs_SAT.md](Conciliacion_SINUBE_vs_SAT.md) | Conciliación SAT / bóveda / SINUBE, descarga de XML faltantes, descarga automática por horarios y cierre de mes |
+| [Guia_Escritorio.md](Guia_Escritorio.md) | CFDI Manager Escritorio: publicar versiones (instalador y actualizaciones), instalar, modo Servidor y modo Local |
 
 ## Resumen
 
@@ -325,6 +326,16 @@ Plan aprobado (modo Servidor y modo Local con Storage propio de la PC): https://
 | Servidor local | `ServidorLocal.cs`: la primera vez crea la base con el PostgreSQL portátil (`pgsql`, `initdb` en UTF8 con `Spanish_Mexico.1252` como el servidor, contraseña aleatoria cifrada con DPAPI del equipo en `escritorio.json`); arranca PostgreSQL en 127.0.0.1 (puerto 5433 o el siguiente libre) y la web con `--Modo=Escritorio` en 127.0.0.1:5180, con Storage en `{datos}\Storage`, `pg_dump` del paquete para el respaldo y sin `CFDI_CLAVE_MAESTRA`. Logs en `{datos}\Logs` (web.log en UTF-8) | `b17ab59` |
 | Ciclo de vida | Cerrar la ventana la deja en la bandeja y la descarga del SAT sigue; "Salir" pide confirmación y detiene la web y PostgreSQL; al iniciar con Windows arranca el servidor sin abrir la ventana; al apagar o cerrar sesión se detiene. Un Job Object termina la web si la app se cierra de golpe; PostgreSQL se reutiliza al volver a abrirla | `b17ab59` |
 | Publicación | `herramientas\Publicar-Escritorio.ps1` arma `publish\Escritorio` con la app, `web` y `pgsql` (copiado del PostgreSQL instalado). Probado desde cero en una carpeta temporal: base, esquema y administrador en 14 s, inicio de sesión y menú completo; segundo arranque en 2 s | `b17ab59` |
+
+### 26/11: CFDI Manager Escritorio, fase F3 (instalador y actualizaciones)
+
+| Tema | Qué se hizo | Commit |
+|---|---|---|
+| Instalador | Velopack (`vpk`, herramienta local en `dotnet-tools.json`): `CFDIManager.Escritorio-win-Setup.exe` de 68 MB, sin .NET dentro; si faltan, el Setup instala .NET 10 (Desktop y ASP.NET Core), WebView2 y Visual C++ 2015-2022. Instala por usuario en `%LocalAppData%\CFDIManager.Escritorio` sin pedir administrador, con acceso directo en escritorio y menú Inicio | *sin commit* |
+| Paquete más chico | App y web publicadas solo para Windows x64 y PostgreSQL recortado (sin `.lib`, wxWidgets ni traducciones salvo español): de 291 a 145 MB sin comprimir | *sin commit* |
+| Actualizaciones | `Actualizaciones.cs`: revisa GitHub Releases al iniciar y cada 6 h, baja la nueva versión y la instala al salir o desde la bandeja ("Instalar la versión… y reiniciar"). Antes de actualizar o desinstalar se detiene PostgreSQL (su carpeta se reemplaza); al desinstalar se quita el inicio con Windows y **se conserva la carpeta de datos**. `Publicar-Escritorio.ps1 -Subir` publica la versión con la etiqueta `escritorio-v<versión>` | *sin commit* |
+| Prueba | Setup silencioso en esta PC (4 s), modo Local desde la carpeta instalada (base y administrador en 11 s, inicio de sesión), desinstalación con la app y PostgreSQL corriendo: PostgreSQL detenido, programa y acceso directo borrados, datos conservados | *sin commit* |
+| Guía | [Guia_Escritorio.md](Guia_Escritorio.md): publicar versiones, instalar y cómo funciona cada modo | *sin commit* |
 
 ## Dónde está cada cosa
 

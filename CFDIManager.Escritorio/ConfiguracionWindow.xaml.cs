@@ -13,6 +13,7 @@ public partial class ConfiguracionWindow : Window
     {
         _configuracion = configuracion;
         InitializeComponent();
+        Title = $"Configuración de CFDI Manager {Actualizaciones.VersionActual}";
 
         Servidores.Text = string.Join(Environment.NewLine, configuracion.Servidores);
         CarpetaLocal.Text = configuracion.CarpetaLocal;

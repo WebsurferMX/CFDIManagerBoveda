@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- CFDI Manager Escritorio: ventana WPF + WebView2 que abre CFDIManager.Web (modo Servidor; el modo Local llega en F2). -->
+  <!-- CFDI Manager Escritorio: ventana WPF + WebView2 que abre CFDIManager.Web en otro equipo (modo Servidor) o en esta
+       PC con PostgreSQL portátil (modo Local). Instalador y actualizaciones con Velopack (herramientas\Publicar-Escritorio.ps1). -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -14,7 +15,14 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
     <Product>CFDI Manager Escritorio</Product>
     <Version>0.1.0</Version>
+    <!-- Main propio (Program.cs): Velopack debe correr antes que WPF. -->
+    <StartupObject>CFDIManager.Escritorio.Program</StartupObject>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
+  </ItemGroup>
 
   <!-- WPF y Windows Forms comparten nombres (Application, Clipboard, MessageBox...): se usan los de WPF. -->
   <ItemGroup>
@@ -25,6 +33,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4370.26" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="11.0.0" />
+    <PackageReference Include="Velopack" Version="1.2.161" />
   </ItemGroup>
 
   <ItemGroup>
