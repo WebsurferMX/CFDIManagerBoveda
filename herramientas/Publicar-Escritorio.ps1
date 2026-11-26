@@ -55,6 +55,20 @@ if ($Subir -and -not $token) {
     throw "No hay acceso a GitHub: haz un git push desde este equipo o define GITHUB_TOKEN con un token que pueda escribir releases."
 }
 
+# GitHub no deja publicar dos veces la misma versión: se revisa antes de compilar.
+if ($Subir) {
+    $etiqueta = "escritorio-v$Version"
+    try {
+        Invoke-RestMethod "https://api.github.com/repos/WebsurferMX/CFDIManagerBoveda/releases/tags/$etiqueta" `
+            -Headers @{ Authorization = "Bearer $token"; "User-Agent" = "Publicar-Escritorio" } | Out-Null
+        throw "La versión $Version ya está publicada ($etiqueta). Sube el número en <Version> de CFDIManager.Escritorio.csproj (p. ej. a la siguiente) o usa -Version."
+    }
+    catch [Microsoft.PowerShell.Commands.HttpResponseException] {
+        if ($_.Exception.Response.StatusCode.value__ -ne 404) { throw }
+        # 404: la versión no existe todavía, se puede publicar.
+    }
+}
+
 Write-Host "CFDI Manager Escritorio $Version"
 
 # ---------- app y web (solo Windows x64, sin .NET dentro) ----------
