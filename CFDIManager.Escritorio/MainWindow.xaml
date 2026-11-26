@@ -1,0 +1,24 @@
+<Window x:Class="CFDIManager.Escritorio.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="CFDI Manager" Icon="app.ico"
+        Width="1366" Height="860" MinWidth="900" MinHeight="600"
+        Background="{StaticResource Fondo}" FontFamily="Segoe UI">
+    <Grid>
+        <wv2:WebView2 x:Name="Navegador" Visibility="Hidden" />
+
+        <Border x:Name="Aviso" Background="{StaticResource Fondo}">
+            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="520">
+                <TextBlock x:Name="AvisoTitulo" Text="Conectando…" FontSize="22" FontWeight="SemiBold"
+                           Foreground="{StaticResource Texto}" />
+                <TextBlock x:Name="AvisoTexto" Margin="0,8,0,18" FontSize="14" TextWrapping="Wrap"
+                           Foreground="{StaticResource Tenue}" />
+                <StackPanel x:Name="AvisoBotones" Orientation="Horizontal" Visibility="Collapsed">
+                    <Button Content="Reintentar" Click="Reintentar_Click" IsDefault="True" Margin="0,0,8,0" />
+                    <Button Content="Configuración…" Click="Configuracion_Click" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

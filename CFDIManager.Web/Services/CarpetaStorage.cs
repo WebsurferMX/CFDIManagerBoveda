@@ -17,18 +17,22 @@ public static class CarpetaStorage
     /// <summary>Carpeta en uso (la que se resolvió al arrancar).</summary>
     public static string Raiz { get; private set; } = Path.Combine(AppContext.BaseDirectory, Prefijo);
 
-    /// <summary>La carpeta de omisión: Storage junto a la app.</summary>
-    public static string Predeterminada => Path.GetFullPath(Prefijo, _carpetaApp);
+    private static string _omision = Prefijo;
+
+    /// <summary>La carpeta de omisión: Storage junto a la app (en modo Escritorio, C:\CFDIManagerDatos\Storage).</summary>
+    public static string Predeterminada => Path.GetFullPath(_omision, _carpetaApp);
 
     /// <summary>Se llama al arrancar, antes de registrar servicios. Gana lo definido en Herramientas.</summary>
-    public static void Configurar(IConfiguration configuracion, string carpetaApp, string? definidaEnHerramientas)
+    public static void Configurar(IConfiguration configuracion, string carpetaApp, string? definidaEnHerramientas,
+        string? omision = null)
     {
         _carpetaApp = carpetaApp;
+        _omision = omision ?? Prefijo;
 
         string ruta =
             definidaEnHerramientas is { Length: > 0 } enBase ? enBase
             : configuracion["AppSettings:CarpetaStorage"] is { Length: > 0 } enConfiguracion ? enConfiguracion
-            : Prefijo;
+            : _omision;
 
         Raiz = Path.GetFullPath(ruta, carpetaApp);
     }

@@ -1,0 +1,16 @@
+<Application x:Class="CFDIManager.Escritorio.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <Application.Resources>
+        <SolidColorBrush x:Key="Fondo" Color="#F6F7F5" />
+        <SolidColorBrush x:Key="Texto" Color="#1B2420" />
+        <SolidColorBrush x:Key="Tenue" Color="#5B6862" />
+        <SolidColorBrush x:Key="Acento" Color="#0F6B4F" />
+
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="16,6" />
+            <Setter Property="MinWidth" Value="96" />
+        </Style>
+    </Application.Resources>
+</Application>

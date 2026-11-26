@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="CFDIManager.Escritorio/CFDIManager.Escritorio.csproj" />
   <Project Path="CFDIManager.Web/CFDIManager.Web.csproj" />
   <Project Path="CFDIParser/CFDIParser.csproj" />
 </Solution>

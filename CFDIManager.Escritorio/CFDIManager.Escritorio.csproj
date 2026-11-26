@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- CFDI Manager Escritorio: ventana WPF + WebView2 que abre CFDIManager.Web (modo Servidor; el modo Local llega en F2). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <!-- Solo para el ícono de la bandeja (NotifyIcon). -->
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>CFDIManager.Escritorio</RootNamespace>
+    <AssemblyName>CFDIManagerEscritorio</AssemblyName>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Product>CFDI Manager Escritorio</Product>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+
+  <!-- WPF y Windows Forms comparten nombres (Application, Clipboard, MessageBox...): se usan los de WPF. -->
+  <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4370.26" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="app.ico" />
+  </ItemGroup>
+
+</Project>

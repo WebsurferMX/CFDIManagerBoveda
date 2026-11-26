@@ -833,7 +833,7 @@
         ["xml-abrir-xml"] = ("azul", Sincrona(AbrirXml)),
         ["xml-generar-pdf"] = ("rojo", GenerarPdf),
         ["xml-validar-sat"] = ("azul", ValidarEstadoSat),
-        ["xml-localizar"] = ("azul", Sincrona(Localizar)),
+        ["xml-localizar"] = ("azul", Localizar),
         ["xml-importar"] = ("azul", Sincrona(() => AbrirModal("importar"))),
         ["xml-zip-xml"] = ("ambar", DescargarZipXml),
         ["xml-zip-pdf"] = ("rojo", DescargarZipPdf),
@@ -2121,13 +2121,24 @@
         await JS.InvokeVoidAsync("open", UrlCfdi(ActivaId, "pdf"), "_blank");
     }
 
-    private void Localizar()
+    private async Task Localizar()
     {
         if (!RequiereActiva()) return;
 
         try
         {
-            Admin.Localizar(EmpresaContext.EmpresaActiva!, ActivaId);
+            EmpresaDto empresa = EmpresaContext.EmpresaActiva!;
+
+            // En CFDI Manager Escritorio conectada a otro equipo, el Explorador del servidor no lo vería el usuario:
+            // la app baja el XML a su carpeta local y lo selecciona ahí.
+            if (await JS.InvokeAsync<bool>("cfdiEscritorio.remoto"))
+            {
+                string relativa = Admin.RutaRelativaXml(empresa, ActivaId, Rutas.CarpetaGeneral);
+                await JS.InvokeVoidAsync("cfdiEscritorio.localizar", UrlCfdi(ActivaId, "xml", descargar: true), relativa);
+                return;
+            }
+
+            Admin.Localizar(empresa, ActivaId);
         }
         catch (Exception ex)
         {

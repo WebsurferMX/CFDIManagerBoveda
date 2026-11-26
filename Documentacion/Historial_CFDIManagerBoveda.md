@@ -306,11 +306,23 @@ Desde aquí cada cambio se anota el mismo día en que se hace, con su commit. Lo
 | Enviar por correo (submenú) | El botón abre en el panel un submenú en árbol: **Emitidos**, **Recibidos**, **Emitidos y Recibidos**; cada uno adjunta solo esos reportes (el lado de la pantalla con su pestaña, búsqueda y marcados; el otro con el periodo, y no se adjunta si no tiene comprobantes). En el diálogo la ✕ ya aparece en todos los adjuntos (antes desaparecía al quedar uno) y los archivos llevan ícono de hoja con distintivo (Excel, PDF, XML, ZIP) | `5583a7e` |
 | Diálogos (Modal) | Los diálogos de Bootstrap quedaban debajo de la barra superior de MudBlazor (z-index 1300) y se les cortaba el encabezado; ahora van encima | `5583a7e` |
 
+### 26/11: CFDI Manager Escritorio, fases F0 y F1
+
+Plan aprobado (modo Servidor y modo Local con Storage propio de la PC): https://claude.ai/artifact/Ech9cQ3pfXz39eoFahY6SA
+
+| Tema | Qué se hizo | Commit |
+|---|---|---|
+| Modo Escritorio (web) | `--Modo=Escritorio` (`Services\ModoApp.cs`): sin HTTPS ni HSTS, llaves DPAPI del equipo (no del usuario) y Storage de omisión `C:\CFDIManagerDatos\Storage`. Sin ese argumento el servicio funciona igual que antes | *sin commit* |
+| Base nueva | `Services\Esquema\EsquemaInicial.cs` crea la base si no existe y le aplica `esquema_inicial.sql` (las 35 tablas de `cfdi_manager`, solo estructura) cuando no existe la tabla `cfdi`. Solo en modo Escritorio. Probado con una base que no existía: 35 tablas y administrador inicial | *sin commit* |
+| Puente con la app | `wwwroot\js\escritorio.js`: dentro de la app, copiar texto e imagen del resumen lo hace Windows (también por `http://IP`). "Localizar en carpeta", conectada a otro equipo, baja el XML a la carpeta local de la PC (misma estructura RFC\Emitidos\AAAA\MM) y lo selecciona en el Explorador. En el navegador todo sigue igual | *sin commit* |
+| App de escritorio | Proyecto nuevo `CFDIManager.Escritorio` (WPF + WebView2, `CFDIManagerEscritorio.exe`), modo Servidor: lista de servidores en orden (red, Tailscale) y usa el primero que responde; "Guardar como" de Windows en todas las descargas con la última carpeta recordada; ícono en la bandeja con avisos; ligas a otros sitios en el navegador; una sola instancia; iniciar con Windows. Configuración en `%LocalAppData%\CFDIManagerEscritorio` | *sin commit* |
+
 ## Dónde está cada cosa
 
 | Qué | Dónde |
 |---|---|
-| Código | GitHub `WebsurferMX/CFDIManagerBoveda`, rama `main`; en el servidor, `Desktop\CFDIManagerBoveda` (`CFDIManager.Web` + `CFDIParser`) |
+| Código | GitHub `WebsurferMX/CFDIManagerBoveda`, rama `main`; en el servidor, `Desktop\CFDIManagerBoveda` (`CFDIManager.Web` + `CFDIParser` + `CFDIManager.Escritorio`) |
+| App de escritorio | `CFDIManager.Escritorio`; configuración por usuario en `%LocalAppData%\CFDIManagerEscritorio\configuracion.json`; copias locales de XML en `Documentos\CFDI Manager\XML` |
 | App publicada | Servicio de Windows `CFDIManager` en `C:\CFDIManager`, puerto 5000. La contraseña de PostgreSQL y la clave maestra están en `C:\CFDIManager\appsettings.Production.json` (no se sobrescribe al actualizar) |
 | Acceso remoto | Tailscale (cuenta WebsurferMX): `http://100.104.146.61:5000`; el cliente debe estar en la misma red de Tailscale |
 | App original | `Desktop\CFDIManager`, con git y `CLAUDE.md` (hasta el 28/10) |

@@ -82,6 +82,20 @@ public class AdministracionXmlService
         Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{ruta}\"") { UseShellExecute = false });
     }
 
+    /// <summary>
+    /// Ruta del XML relativa a la carpeta general (RFC\Emitidos\AAAA\MM\archivo.xml): CFDI Manager Escritorio guarda
+    /// su copia local con la misma estructura. Si el XML está fuera de esa carpeta, RFC\archivo.xml.
+    /// </summary>
+    public string RutaRelativaXml(EmpresaDto empresa, long cfdiId, string carpetaGeneral)
+    {
+        string ruta = RutaExistente(Obtener(empresa, cfdiId));
+        string relativa = Path.GetRelativePath(carpetaGeneral, ruta);
+
+        return relativa.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relativa)
+            ? Path.Combine(empresa.Rfc is { Length: > 0 } rfc ? rfc : "XML", Path.GetFileName(ruta))
+            : relativa;
+    }
+
     /// <summary>Abre en el Explorador una carpeta de Storage (reportes, PDF, renombrados).</summary>
     public void AbrirCarpeta(string carpeta)
     {

@@ -24,6 +24,9 @@ var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 
 builder.Services.AddWindowsService(opciones => opciones.ServiceName = "CFDIManager");
 
+// --Modo=Escritorio: la arranca CFDI Manager Escritorio en la PC de un cliente (ver Services\ModoApp.cs).
+ModoApp.Configurar(builder.Configuration);
+
 // Carpeta de datos: la definida en Herramientas para este equipo, AppSettings:CarpetaStorage o "Storage" junto a la app.
 // Al encender el equipo el servicio puede arrancar antes que PostgreSQL: se espera a la base (hasta ~3 min) en vez
 // de caer en silencio a la carpeta de omisión, que dejaría los datos repartidos en dos carpetas.
@@ -33,6 +36,10 @@ for (int intento = 1; ; intento++)
 {
     try
     {
+        // Instalación propia: la base puede no existir todavía o venir vacía.
+        if (ModoApp.Escritorio)
+            CFDIManager.Web.Services.Esquema.EsquemaInicial.Asegurar(CadenaPostgres(builder.Configuration));
+
         carpetaDefinida = new PostgreSqlRepository(CadenaPostgres(builder.Configuration))
             .ObtenerConfiguracionApp(CarpetaStorage.ClaveConfiguracion);
         break;
@@ -48,7 +55,8 @@ for (int intento = 1; ; intento++)
     }
 }
 
-CarpetaStorage.Configurar(builder.Configuration, builder.Environment.ContentRootPath, carpetaDefinida);
+CarpetaStorage.Configurar(builder.Configuration, builder.Environment.ContentRootPath, carpetaDefinida,
+    ModoApp.Escritorio ? ModoApp.StorageEscritorio : null);
 
 // Cultura de la app: fechas dd/MM/yyyy (también para servicios en segundo plano).
 var CulturaMexico = new System.Globalization.CultureInfo("es-MX");
@@ -83,7 +91,8 @@ else
 {
     proteccion
         .PersistKeysToFileSystem(new DirectoryInfo(CarpetaStorage.Ruta("Llaves")))
-        .ProtectKeysWithDpapi();
+        // En Escritorio, DPAPI del equipo: así las lee cualquier usuario de Windows de esa PC.
+        .ProtectKeysWithDpapi(protectToLocalMachine: ModoApp.Escritorio);
 }
 
 // Los paquetes de la descarga masiva pueden pesar decenas de MB.
@@ -431,7 +440,9 @@ if (!app.Environment.IsDevelopment())
         "/Error",
         createScopeForErrors: true);
 
-    app.UseHsts();
+    // En Escritorio solo escucha en 127.0.0.1: sin HTTPS.
+    if (!ModoApp.Escritorio)
+        app.UseHsts();
 }
 
 // Fechas y números con la cultura de México (dd/MM/yyyy) en toda la app, sin depender del servidor ni del navegador.
@@ -442,7 +453,8 @@ app.UseRequestLocalization(new RequestLocalizationOptions
     SupportedUICultures = [CulturaMexico]
 });
 
-app.UseHttpsRedirection();
+if (!ModoApp.Escritorio)
+    app.UseHttpsRedirection();
 
 app.UseAuthentication();
 
