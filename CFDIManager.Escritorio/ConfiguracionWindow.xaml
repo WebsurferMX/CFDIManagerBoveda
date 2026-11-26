@@ -38,7 +38,7 @@
                            Foreground="{StaticResource Tenue}" />
             </DockPanel>
 
-            <TextBlock Text="Carpeta local" Style="{StaticResource Etiqueta}" />
+            <TextBlock Text="Carpeta para localizar XML" Style="{StaticResource Etiqueta}" />
             <DockPanel>
                 <Button Content="…" MinWidth="36" Padding="8,4" DockPanel.Dock="Right" Margin="6,0,0,0"
                         Click="ElegirCarpetaLocal_Click" />
