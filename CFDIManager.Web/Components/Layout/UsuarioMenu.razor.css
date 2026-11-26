@@ -110,7 +110,9 @@
 .icono.naranja { color: #f59f00; }
 .icono.verde { color: #12b886; }
 
+/* Encima del menú lateral y la barra superior (z-index 1400 en MainLayout). */
 .acerca-de {
+    z-index: 1500;
     background: rgb(15 23 42 / 45%);
 }
 

@@ -58,4 +58,5 @@
 
 .vn-busqueda { max-width: 360px; }
 
-.vn-modal { background: transparent; overflow-y: auto; }
+/* Encima del menú lateral y la barra superior (z-index 1400 en MainLayout); si no, la ficha queda tapada. */
+.vn-modal { z-index: 1500; background: rgb(15 23 42 / 35%); overflow-y: auto; }
