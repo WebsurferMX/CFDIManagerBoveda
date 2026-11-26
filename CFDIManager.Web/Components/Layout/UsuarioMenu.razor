@@ -1,5 +1,9 @@
-@* Usuario con sesión: menú con cambiar contraseña y cerrar sesión, y botón Salir a la vista
+@* Usuario con sesión: menú (contraseña, Acerca de, cerrar sesión) y botón Salir a la vista
    (POST a /cuenta/logout con token antiforgery). *@
+@using System.Reflection
+@using System.Security.Claims
+@inject IJSRuntime JS
+
 <AuthorizeView>
     <Authorized>
         <div class="usuario-menu dropdown">
@@ -11,7 +15,7 @@
 
                 <span class="datos">
                     <strong>@Nombre(context)</strong>
-                    <small>@string.Join(", ", Roles.Todos.Where(context.User.IsInRole))</small>
+                    <small>@RolesDe(context)</small>
                 </span>
 
                 <i class="bi bi-chevron-down flecha" aria-hidden="true"></i>
@@ -22,23 +26,28 @@
                 <div class="menu-fondo" @onclick="() => Abierto = false"></div>
 
                 <div class="dropdown-menu dropdown-menu-end show shadow menu-usuario">
-                    <div class="px-3 py-2">
+                    <div class="encabezado">
                         <div class="fw-semibold">@Nombre(context)</div>
-                        <div class="small text-body-secondary">@context.User.Identity?.Name</div>
+                        <div class="small text-body-secondary">@(context.User.FindFirst(ClaimTypes.Email)?.Value ?? context.User.Identity?.Name)</div>
+                        <div class="rol">@RolesDe(context)</div>
                     </div>
 
                     <hr class="dropdown-divider" />
 
-                    <a class="dropdown-item" href="cuenta/cambiar-password">
-                        <i class="bi bi-key me-2"></i>Cambiar contraseña
+                    <a class="dropdown-item" href="cuenta/cambiar-password" @onclick="() => Abierto = false">
+                        <i class="bi bi-key icono naranja"></i>Contraseña
                     </a>
 
                     <hr class="dropdown-divider" />
 
+                    <button type="button" class="dropdown-item" @onclick="AbrirAcercaDe">
+                        <i class="bi bi-info-circle icono azul"></i>Acerca de
+                    </button>
+
                     <form action="cuenta/logout" method="post" class="m-0">
                         <AntiforgeryToken />
                         <button type="submit" class="dropdown-item text-danger">
-                            <i class="bi bi-box-arrow-right me-2"></i>Cerrar sesión
+                            <i class="bi bi-box-arrow-right icono"></i>Cerrar sesión
                         </button>
                     </form>
                 </div>
@@ -51,11 +60,72 @@
                 <i class="bi bi-box-arrow-right me-1"></i>Salir
             </button>
         </form>
+
+        @if (AcercaDeAbierto)
+        {
+            <div class="modal d-block acerca-de" tabindex="-1" role="dialog" @onclick="() => AcercaDeAbierto = false">
+                <div class="modal-dialog modal-dialog-centered" @onclick:stopPropagation>
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title mb-0">CFDI Manager</h5>
+                            <button type="button" class="btn-close" aria-label="Cerrar" @onclick="() => AcercaDeAbierto = false"></button>
+                        </div>
+                        <div class="modal-body">
+                            <dl class="datos-version">
+                                @if (Escritorio is not null)
+                                {
+                                    <dt>App de escritorio</dt>
+                                    <dd>@(string.IsNullOrEmpty(Escritorio.Version) ? "anterior a 0.1.4" : Escritorio.Version)@(Escritorio.Modo switch { "Local" => " · instalación propia", "Servidor" => " · conectada a un servidor", _ => "" })</dd>
+                                }
+                                <dt>Aplicación web</dt>
+                                <dd>@Compilacion</dd>
+                                <dt>Equipo</dt>
+                                <dd>@Environment.MachineName</dd>
+                            </dl>
+                            <div class="small text-body-secondary">© @DateTime.Today.Year NickSoft Inc</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
     </Authorized>
 </AuthorizeView>
 
 @code {
     private bool Abierto;
+    private bool AcercaDeAbierto;
+    private InfoEscritorio? Escritorio;
+
+    private sealed record InfoEscritorio(string? Version, string? Modo);
+
+    /// <summary>Commit y fecha de la compilación publicada (la versión informativa trae "+commit").</summary>
+    private static readonly string Compilacion = LeerCompilacion();
+
+    private async Task AbrirAcercaDe()
+    {
+        Abierto = false;
+        AcercaDeAbierto = true;
+        try
+        {
+            Escritorio = await JS.InvokeAsync<InfoEscritorio?>("cfdiEscritorio.informacion");
+        }
+        catch (JSException)
+        {
+            Escritorio = null;
+        }
+    }
+
+    private static string LeerCompilacion()
+    {
+        Assembly ensamblado = typeof(UsuarioMenu).Assembly;
+        string? informativa = ensamblado.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        string? commit = informativa?.Split('+', 2) is [_, var c] ? c[..Math.Min(7, c.Length)] : null;
+        DateTime fecha = File.GetLastWriteTime(ensamblado.Location);
+        return commit is null ? $"{fecha:dd/MM/yyyy HH:mm}" : $"{commit} · {fecha:dd/MM/yyyy HH:mm}";
+    }
+
+    private static string RolesDe(AuthenticationState estado) =>
+        string.Join(", ", Roles.Todos.Where(estado.User.IsInRole));
 
     private static string Nombre(AuthenticationState estado) =>
         estado.User.FindFirst(UsuarioClaimsFactory.NombreCompleto)?.Value ?? estado.User.Identity?.Name ?? "";

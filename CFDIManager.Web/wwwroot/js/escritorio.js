@@ -55,6 +55,9 @@ window.cfdiEscritorio = (() => {
             return pedir("guardarYMostrar", { ruta: rutaRelativa, base64 });
         },
 
-        notificar: (titulo, mensaje) => pedir("notificar", { titulo, mensaje })
+        notificar: (titulo, mensaje) => pedir("notificar", { titulo, mensaje }),
+
+        // Para "Acerca de": { version, modo } de la app; {} en una app anterior a 0.1.4; null en el navegador.
+        informacion: () => webview ? pedir("informacion", {}).catch(() => ({})) : Promise.resolve(null)
     };
 })();

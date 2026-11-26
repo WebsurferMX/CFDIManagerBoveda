@@ -52,6 +52,7 @@ public sealed class Puente
                 "copiarImagen" => CopiarImagen(Texto(m, "base64"), TextoOpcional(m, "html")),
                 "guardarYMostrar" => GuardarYMostrar(Texto(m, "ruta"), Texto(m, "base64")),
                 "notificar" => Notificar(Texto(m, "titulo"), Texto(m, "mensaje")),
+                "informacion" => new { version = Actualizaciones.VersionActual, modo = _configuracion.EsLocal ? "Local" : "Servidor" },
                 var tipo => throw new InvalidOperationException($"Pedido desconocido: {tipo}.")
             };
 
