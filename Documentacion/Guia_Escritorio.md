@@ -72,7 +72,7 @@ preguntar el modo (los datos no se tocan).
 
 Ya probado en el servidor (26/11): instalación silenciosa, modo Local desde cero, inicio de sesión, desinstalación con
 PostgreSQL corriendo (datos conservados) y actualización 0.1.0 → 0.1.1 (delta de 0.5 MB, PostgreSQL detenido antes,
-la 0.1.1 arranca sobre los mismos datos). Falta en equipos sin nada instalado, uno con Windows 10 y otro con Windows 11:
+la 0.1.1 arranca sobre los mismos datos). El 26/11 pasaron las 14 en una laptop con Windows 11 Home Single Language (instalada desde GitHub, actualizada 0.1.0 → 0.1.1 → 0.1.2; modo Servidor por la red, sin probar Tailscale). Falta, si se ofrece, un equipo con Windows 10:
 
 | # | Prueba | Qué revisar |
 |---|---|---|
