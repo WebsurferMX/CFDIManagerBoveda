@@ -348,6 +348,7 @@ Plan aprobado (modo Servidor y modo Local con Storage propio de la PC): https://
 | Versión ya publicada | `-Subir` revisa en GitHub antes de compilar: si la versión ya existe, se detiene y pide subir `<Version>` | `e949acc` |
 | 0.1.1 no se publicaba | En `publish\Releases` quedaban los paquetes 0.1.1 de la prueba de actualización y Velopack no armaba la 0.1.1 real. Ahora el script vacía esa carpeta en cada corrida y baja de GitHub solo lo publicado (delta 0.1.0 → 0.1.1 de 0.5 MB). `<Version>` pasa a 0.1.1 | `029a80f` |
 | 0.1.1 publicada | GitHub Releases `escritorio-v0.1.1` con Setup, paquete completo y delta (0.5 MB); `releases.win.json` la anuncia, así que las apps con 0.1.0 la toman (prueba 13 de la guía) | — |
+| Buscar actualizaciones | En la prueba no apareció la 0.1.1: cerrar la ventana deja la app en la bandeja y reabrirla no vuelve a revisar (la revisión del arranque fue antes de publicar; la siguiente, 6 horas después). Nuevo "Buscar actualizaciones" en la bandeja con el resultado en un aviso, y cada revisión (o su error) en `%LocalAppData%\CFDIManagerEscritorio\actualizaciones.log`. Sale en la 0.1.2 | `f0df62c` |
 
 ## Dónde está cada cosa
 
