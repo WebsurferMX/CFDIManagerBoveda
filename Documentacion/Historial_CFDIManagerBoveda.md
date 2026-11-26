@@ -345,6 +345,8 @@ Plan aprobado (modo Servidor y modo Local con Storage propio de la PC): https://
 | PCs limpias | No hay Windows Sandbox ni otra PC limpia en el servidor (activarlo requiere reiniciar). Lista de 14 pruebas para Windows 10 y 11 en [Guia_Escritorio.md](Guia_Escritorio.md#pruebas-en-una-pc-limpia-f4) | `2d2b5f3` |
 | Publicar sin token | `Publicar-Escritorio.ps1 -Subir` usa el acceso de `git push` del equipo si no hay `GITHUB_TOKEN` | `5fe6231` |
 | Primera versión publicada | GitHub Releases `escritorio-v0.1.0`: Setup (68 MB), paquete completo y `releases.win.json`, descargables sin iniciar sesión. Instalador: https://github.com/WebsurferMX/CFDIManagerBoveda/releases/download/escritorio-v0.1.0/CFDIManager.Escritorio-win-Setup.exe | — |
+| Versión ya publicada | `-Subir` revisa en GitHub antes de compilar: si la versión ya existe, se detiene y pide subir `<Version>` | `e949acc` |
+| 0.1.1 no se publicaba | En `publish\Releases` quedaban los paquetes 0.1.1 de la prueba de actualización y Velopack no armaba la 0.1.1 real. Ahora el script vacía esa carpeta en cada corrida y baja de GitHub solo lo publicado (delta 0.1.0 → 0.1.1 de 0.5 MB). `<Version>` pasa a 0.1.1 | *sin commit* |
 
 ## Dónde está cada cosa
 

@@ -119,7 +119,9 @@ Push-Location $raiz
 try {
     dotnet tool restore | Out-Null
 
-    # Con la versión anterior a la mano, Velopack arma además el paquete delta (solo lo que cambió).
+    # Se empieza de cero y se baja de GitHub solo lo ya publicado: paquetes armados antes en este equipo (pruebas)
+    # no deben mezclarse con lo publicado. Con la versión anterior a la mano, Velopack arma además el delta.
+    if (Test-Path $versiones) { Remove-Item $versiones -Recurse -Force }
     New-Item -ItemType Directory -Force $versiones | Out-Null
     dotnet vpk download github --repoUrl $repositorio -o $versiones 2>$null | Out-Null
 
