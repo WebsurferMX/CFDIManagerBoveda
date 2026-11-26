@@ -11,7 +11,7 @@ public sealed class Bandeja : IDisposable
     private Action? _alHacerClic;
     private Action? _instalarActualizacion;
 
-    public Bandeja(Action abrir, Action recargar, Action configurar, Action salir)
+    public Bandeja(Action abrir, Action recargar, Action configurar, Action buscarActualizaciones, Action salir)
     {
         var menu = new Forms.ContextMenuStrip();
         _actualizar = new Forms.ToolStripMenuItem("", null, (_, _) => _instalarActualizacion?.Invoke()) { Visible = false };
@@ -19,6 +19,7 @@ public sealed class Bandeja : IDisposable
         menu.Items.Add("Abrir CFDI Manager", null, (_, _) => abrir());
         menu.Items.Add("Recargar", null, (_, _) => recargar());
         menu.Items.Add("Configuración…", null, (_, _) => configurar());
+        menu.Items.Add("Buscar actualizaciones", null, (_, _) => buscarActualizaciones());
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("Salir", null, (_, _) => salir());
 

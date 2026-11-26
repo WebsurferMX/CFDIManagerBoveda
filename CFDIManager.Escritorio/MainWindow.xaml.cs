@@ -27,7 +27,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         RestaurarPosicion();
 
-        _bandeja = new Bandeja(Mostrar, Recargar, AbrirConfiguracion, Salir);
+        _bandeja = new Bandeja(Mostrar, Recargar, AbrirConfiguracion, BuscarActualizaciones, Salir);
 
         _actualizaciones.Descargada += version => Dispatcher.BeginInvoke(() =>
         {
@@ -39,6 +39,17 @@ public partial class MainWindow : Window
     }
 
     private readonly Actualizaciones _actualizaciones = new();
+
+    /// <summary>Desde la bandeja: revisa ya; si hay versión nueva avisa el evento Descargada, si no se dice el resultado.</summary>
+    private async void BuscarActualizaciones()
+    {
+        _bandeja.Avisar("Buscando actualizaciones…", $"Versión instalada: {Actualizaciones.VersionActual}");
+        var antes = _actualizaciones.Lista;
+        var resultado = await _actualizaciones.RevisarAsync();
+        // Si se acaba de descargar, el aviso ya lo dio Descargada.
+        if (_actualizaciones.Lista is null || _actualizaciones.Lista == antes)
+            _bandeja.Avisar("CFDI Manager", resultado);
+    }
 
     /// <summary>Desde la bandeja: detiene lo local (pgsql está en la carpeta que se reemplaza), instala y vuelve a abrir.</summary>
     private void InstalarActualizacion()

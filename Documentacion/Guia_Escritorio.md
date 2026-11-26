@@ -21,8 +21,11 @@ Plan y decisiones: https://claude.ai/artifact/Ech9cQ3pfXz39eoFahY6SA
    ```
 
    Sin `-Subir` solo arma el instalador en `publish\Releases` para probarlo.
-3. Queda en GitHub Releases con la etiqueta `escritorio-v<versión>`. Las apps instaladas la encuentran sola (al
-   iniciar y cada 6 horas), la bajan y se instala al salir o desde el ícono de la bandeja ("Instalar la versión…").
+3. Queda en GitHub Releases con la etiqueta `escritorio-v<versión>`. Las apps instaladas la encuentran sola (un minuto
+   después de abrirlas, cada 6 horas o con "Buscar actualizaciones" de la bandeja), la bajan y se instala al salir o
+   desde el ícono de la bandeja ("Instalar la versión…"). Cerrar la ventana no cierra la app (queda en la bandeja): para
+   que revise al abrir hay que usar Salir. Cada revisión queda en
+   `%LocalAppData%\CFDIManagerEscritorio\actualizaciones.log`.
 
 Qué hace el script:
 
@@ -85,7 +88,7 @@ la 0.1.1 arranca sobre los mismos datos). Falta en equipos sin nada instalado, u
 | 10 | Bandeja e inicio con Windows | Cerrar la ventana (sigue la descarga), "Iniciar con Windows", reiniciar la PC: arranca en la bandeja |
 | 11 | Salir | Pide confirmación; no quedan procesos `postgres` ni `CFDIManager.Web` |
 | 12 | Modo Servidor | En una PC de la oficina: servidor de la red y de Tailscale; Localizar en carpeta baja el XML a `Documentos\CFDI Manager\XML` |
-| 13 | Actualización | Publicar una versión mayor con `-Subir`; la app la baja sola y la instala al salir |
+| 13 | Actualización | Publicar una versión mayor con `-Subir`; Salir y abrir la app (o "Buscar actualizaciones" en la bandeja, desde 0.1.2): la baja sola y la instala al salir |
 | 14 | Desinstalar | Desde Configuración de Windows → Aplicaciones; la carpeta de datos se conserva |
 
 Una PC limpia puede ser Windows Sandbox (Windows 10/11 Pro: "Características de Windows" → "Espacio aislado de
