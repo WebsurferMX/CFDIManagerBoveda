@@ -1,4 +1,4 @@
-@* Usuario con sesión: menú (contraseña, Acerca de, cerrar sesión) y botón Salir a la vista
+@* Usuario con sesión: menú con Ayuda, Contraseña, Idioma, Registro de cambios, Acerca de y Cerrar sesión
    (POST a /cuenta/logout con token antiforgery). *@
 @using System.Reflection
 @using System.Security.Claims
@@ -34,8 +34,20 @@
 
                     <hr class="dropdown-divider" />
 
+                    <a class="dropdown-item" href="ayuda" @onclick="() => Abierto = false">
+                        <i class="bi bi-book icono azul"></i>Ayuda
+                    </a>
+
                     <a class="dropdown-item" href="cuenta/cambiar-password" @onclick="() => Abierto = false">
-                        <i class="bi bi-key icono naranja"></i>Contraseña
+                        <i class="bi bi-three-dots icono naranja"></i>Contraseña
+                    </a>
+
+                    <span class="dropdown-item disabled" aria-disabled="true">
+                        <i class="bi bi-translate icono"></i>Idioma: Español
+                    </span>
+
+                    <a class="dropdown-item" href="novedades" @onclick="() => Abierto = false">
+                        <i class="bi bi-clock-history icono verde"></i>Registro de cambios
                     </a>
 
                     <hr class="dropdown-divider" />
@@ -53,13 +65,6 @@
                 </div>
             }
         </div>
-
-        <form action="cuenta/logout" method="post" class="m-0">
-            <AntiforgeryToken />
-            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Cerrar sesión">
-                <i class="bi bi-box-arrow-right me-1"></i>Salir
-            </button>
-        </form>
 
         @if (AcercaDeAbierto)
         {

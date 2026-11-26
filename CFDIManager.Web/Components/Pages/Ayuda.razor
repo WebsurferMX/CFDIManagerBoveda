@@ -1,0 +1,43 @@
+@page "/ayuda"
+@page "/novedades"
+@attribute [Authorize]
+@using CFDIManager.Web.Services.Ayuda
+@inject NavigationManager Navigation
+
+@* Manual de usuario (/ayuda) y Registro de cambios (/novedades): Markdown de CFDIManager.Web\Ayuda. *@
+
+<PageTitle>@Documento.Titulo</PageTitle>
+
+<div class="ayuda">
+    @if (Documento.Secciones.Count > 1)
+    {
+        <nav class="indice" aria-label="Contenido">
+            <div class="indice-titulo">Contenido</div>
+            @foreach (var (id, titulo) in Documento.Secciones)
+            {
+                <a href="@($"{Ruta}#{id}")">@titulo</a>
+            }
+        </nav>
+    }
+
+    <article class="documento">
+        @((MarkupString)Documento.Html)
+    </article>
+</div>
+
+@implements IDisposable
+
+@code {
+    // Las dos rutas usan esta misma página: al pasar de una a otra Blazor la reutiliza sin volver a dibujarla.
+    protected override void OnInitialized() => Navigation.LocationChanged += Cambio;
+
+    private void Cambio(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Navigation.LocationChanged -= Cambio;
+
+    private string Ruta => Navigation.ToBaseRelativePath(Navigation.Uri).Split('#', '?')[0];
+
+    private DocumentoAyuda Documento => DocumentosAyuda.Obtener(
+        Ruta.StartsWith("novedades", StringComparison.OrdinalIgnoreCase) ? DocumentosAyuda.Novedades : DocumentosAyuda.Manual);
+}
