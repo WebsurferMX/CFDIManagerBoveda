@@ -15,6 +15,8 @@ public partial class MainWindow : Window
     private readonly Configuracion _configuracion;
     private readonly Bandeja _bandeja;
     private Uri? _servidor;
+    private ServidorLocal? _local;
+    private Task<Uri>? _arranqueLocal;
     private bool _iniciada;
     private bool _saliendo;
     private bool _avisoBandejaMostrado;
@@ -79,9 +81,18 @@ public partial class MainWindow : Window
 
     // ---------- conexión ----------
 
-    /// <summary>Prueba los servidores en orden (red, Tailscale...) y abre el primero que responde.</summary>
+    /// <summary>
+    /// Modo Local: arranca PostgreSQL y la web en esta PC. Modo Servidor: prueba los servidores en orden (red,
+    /// Tailscale...) y abre el primero que responde.
+    /// </summary>
     private async Task ConectarAsync()
     {
+        if (_configuracion.EsLocal)
+        {
+            await ConectarLocalAsync();
+            return;
+        }
+
         MostrarAviso("Conectando…", "", botones: false);
 
         List<Uri> servidores = _configuracion.Servidores
@@ -107,6 +118,65 @@ public partial class MainWindow : Window
                 ? "No hay servidores configurados."
                 : "Sin respuesta de " + string.Join(", ", servidores.Select(s => s.Authority)) + ".",
             botones: true);
+    }
+
+    private async Task ConectarLocalAsync()
+    {
+        MostrarAviso("Iniciando CFDI Manager…", "", botones: false);
+
+        try
+        {
+            Uri uri = await IniciarLocalAsync(new Progress<string>(texto => AvisoTexto.Text = texto));
+            _servidor = uri;
+            Navegador.Source = uri;
+        }
+        catch (Exception ex)
+        {
+            _servidor = null;
+            MostrarAviso("No se pudo iniciar CFDI Manager", ex.Message, botones: true);
+        }
+    }
+
+    /// <summary>Un solo arranque a la vez (el de la bandeja al iniciar Windows y el de la ventana comparten el mismo).</summary>
+    private async Task<Uri> IniciarLocalAsync(IProgress<string>? avance = null)
+    {
+        if (_arranqueLocal is { IsCompleted: false })
+            return await _arranqueLocal;
+
+        _local ??= new ServidorLocal(_configuracion.CarpetaDatos);
+        _arranqueLocal = _local.IniciarAsync(
+            _configuracion.AdministradorUsuario, _configuracion.AdministradorPassword, avance ?? new Progress<string>());
+
+        Uri uri = await _arranqueLocal;
+
+        // Ya se creó el administrador: la contraseña no se queda en memoria.
+        _configuracion.AdministradorUsuario = null;
+        _configuracion.AdministradorPassword = null;
+        return uri;
+    }
+
+    /// <summary>Al iniciar con Windows en modo Local: el servidor arranca sin abrir la ventana (la descarga del SAT corre).</summary>
+    public async void IniciarEnSegundoPlano()
+    {
+        if (!_configuracion.EsLocal)
+            return;
+
+        try
+        {
+            await IniciarLocalAsync();
+        }
+        catch (Exception ex)
+        {
+            _bandeja.Avisar("No se pudo iniciar CFDI Manager", ex.Message, Mostrar);
+        }
+    }
+
+    /// <summary>Detiene la web y PostgreSQL de esta PC (al salir, al cerrar la sesión o al cambiar de modo).</summary>
+    public void DetenerLocal()
+    {
+        _local?.Detener();
+        _local = null;
+        _arranqueLocal = null;
     }
 
     public static async Task<bool> RespondeAsync(Uri servidor)
@@ -252,23 +322,54 @@ public partial class MainWindow : Window
 
     private async void AbrirConfiguracion()
     {
+        bool eraLocal = _configuracion.EsLocal;
+        string carpetaDatos = _configuracion.CarpetaDatos;
+
         var ventana = new ConfiguracionWindow(_configuracion);
         if (IsVisible)
             ventana.Owner = this;
 
-        if (ventana.ShowDialog() == true && Navegador.CoreWebView2 is not null)
+        if (ventana.ShowDialog() != true)
+            return;
+
+        // Se dejó la instalación propia o se cambió su carpeta: se detiene la de antes.
+        if (eraLocal && (!_configuracion.EsLocal ||
+                         !string.Equals(carpetaDatos, _configuracion.CarpetaDatos, StringComparison.OrdinalIgnoreCase)))
+        {
+            _servidor = null;
+            DetenerLocal();
+        }
+
+        if (Navegador.CoreWebView2 is not null)
             await ConectarAsync();
+        else if (!IsVisible)
+            IniciarEnSegundoPlano();
     }
 
     private void Salir()
     {
+        if (!ConfirmarSalida())
+            return;
+
         _saliendo = true;
         Close();
     }
 
+    /// <summary>En modo Local, salir detiene CFDI Manager en esta PC (y la descarga automática del SAT).</summary>
+    private bool ConfirmarSalida() =>
+        !_configuracion.EsLocal || _local is null ||
+        MessageBox.Show("Se detendrá CFDI Manager en esta PC, también la descarga automática del SAT.",
+            "Salir de CFDI Manager", MessageBoxButton.OKCancel, MessageBoxImage.Question) == MessageBoxResult.OK;
+
     protected override void OnClosing(CancelEventArgs e)
     {
         GuardarPosicion();
+
+        if (!_saliendo && !_configuracion.CerrarABandeja && !ConfirmarSalida())
+        {
+            e.Cancel = true;
+            return;
+        }
 
         if (!_saliendo && _configuracion.CerrarABandeja)
         {
@@ -288,6 +389,7 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        DetenerLocal();
         _bandeja.Dispose();
         base.OnClosed(e);
         Application.Current.Shutdown();

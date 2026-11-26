@@ -22,6 +22,20 @@ public sealed class Configuracion
     /// <summary>Direcciones del servidor en orden (p. ej. la de la red y la de Tailscale): se usa la primera que responde.</summary>
     public List<string> Servidores { get; set; } = [];
 
+    /// <summary>Modo Local: carpeta con Storage, la base de PostgreSQL y los logs de esta PC.</summary>
+    public string CarpetaDatos { get; set; } =
+        Path.Combine(Path.GetPathRoot(Environment.SystemDirectory) ?? @"C:\", "CFDIManagerDatos");
+
+    /// <summary>Administrador capturado en el asistente; solo en memoria hasta que la web arranca con él.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? AdministradorUsuario { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? AdministradorPassword { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool EsLocal => Modo == "Local";
+
     /// <summary>Carpeta de esta PC para las copias de XML que se localizan en el Explorador.</summary>
     public string CarpetaLocal { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "CFDI Manager");

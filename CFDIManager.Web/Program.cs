@@ -27,6 +27,10 @@ builder.Services.AddWindowsService(opciones => opciones.ServiceName = "CFDIManag
 // --Modo=Escritorio: la arranca CFDI Manager Escritorio en la PC de un cliente (ver Services\ModoApp.cs).
 ModoApp.Configurar(builder.Configuration);
 
+// La app de escritorio guarda esta salida en Logs\web.log: en UTF-8 para que los acentos se lean bien.
+if (ModoApp.Escritorio)
+    Console.OutputEncoding = System.Text.Encoding.UTF8;
+
 // Carpeta de datos: la definida en Herramientas para este equipo, AppSettings:CarpetaStorage o "Storage" junto a la app.
 // Al encender el equipo el servicio puede arrancar antes que PostgreSQL: se espera a la base (hasta ~3 min) en vez
 // de caer en silencio a la carpeta de omisión, que dejaría los datos repartidos en dos carpetas.

@@ -5,27 +5,79 @@
         Width="560" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterScreen" ShowInTaskbar="True"
         Background="{StaticResource Fondo}" FontFamily="Segoe UI" FontSize="13">
+    <Window.Resources>
+        <Style x:Key="Etiqueta" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,16,0,6" />
+            <Setter Property="Foreground" Value="{StaticResource Texto}" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Padding" Value="4" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style TargetType="PasswordBox">
+            <Setter Property="Padding" Value="4" />
+        </Style>
+    </Window.Resources>
+
     <StackPanel Margin="24,20,24,20">
         <TextBlock Text="Modo" FontWeight="SemiBold" Foreground="{StaticResource Texto}" />
-        <RadioButton x:Name="ModoServidor" Content="Conectar a un servidor" IsChecked="True" Margin="0,6,0,0" />
-        <RadioButton x:Name="ModoLocal" Content="Instalación propia en esta PC" IsEnabled="False" Margin="0,4,0,0"
-                     ToolTipService.ShowOnDisabled="True" ToolTip="Disponible en la siguiente versión." />
+        <RadioButton x:Name="ModoServidor" Content="Conectar a un servidor" GroupName="Modo" Margin="0,6,0,0"
+                     Checked="Modo_Checked" />
+        <RadioButton x:Name="ModoLocal" Content="Instalación propia en esta PC" GroupName="Modo" Margin="0,4,0,0"
+                     Checked="Modo_Checked" />
 
-        <TextBlock Text="Servidores (uno por renglón, en orden)" FontWeight="SemiBold" Margin="0,18,0,6"
-                   Foreground="{StaticResource Texto}" />
-        <TextBox x:Name="Servidores" AcceptsReturn="True" Height="72" VerticalScrollBarVisibility="Auto"
-                 FontFamily="Consolas" Padding="4" />
-        <DockPanel Margin="0,6,0,0">
-            <Button Content="Probar" Click="Probar_Click" DockPanel.Dock="Left" />
-            <TextBlock x:Name="ResultadoPrueba" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"
-                       Foreground="{StaticResource Tenue}" />
-        </DockPanel>
+        <!-- Conectar a un servidor -->
+        <StackPanel x:Name="PanelServidor">
+            <TextBlock Text="Servidores (uno por renglón, en orden)" Style="{StaticResource Etiqueta}" />
+            <TextBox x:Name="Servidores" AcceptsReturn="True" Height="72" VerticalScrollBarVisibility="Auto"
+                     VerticalContentAlignment="Top" FontFamily="Consolas" />
+            <DockPanel Margin="0,6,0,0">
+                <Button Content="Probar" Click="Probar_Click" DockPanel.Dock="Left" />
+                <TextBlock x:Name="ResultadoPrueba" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"
+                           Foreground="{StaticResource Tenue}" />
+            </DockPanel>
 
-        <TextBlock Text="Carpeta local" FontWeight="SemiBold" Margin="0,18,0,6" Foreground="{StaticResource Texto}" />
-        <DockPanel>
-            <Button Content="…" MinWidth="36" Padding="8,4" DockPanel.Dock="Right" Margin="6,0,0,0" Click="ElegirCarpeta_Click" />
-            <TextBox x:Name="CarpetaLocal" Padding="4" VerticalContentAlignment="Center" />
-        </DockPanel>
+            <TextBlock Text="Carpeta local" Style="{StaticResource Etiqueta}" />
+            <DockPanel>
+                <Button Content="…" MinWidth="36" Padding="8,4" DockPanel.Dock="Right" Margin="6,0,0,0"
+                        Click="ElegirCarpetaLocal_Click" />
+                <TextBox x:Name="CarpetaLocal" />
+            </DockPanel>
+        </StackPanel>
+
+        <!-- Instalación propia -->
+        <StackPanel x:Name="PanelLocal" Visibility="Collapsed">
+            <TextBlock Text="Carpeta de datos" Style="{StaticResource Etiqueta}" />
+            <DockPanel>
+                <Button Content="…" MinWidth="36" Padding="8,4" DockPanel.Dock="Right" Margin="6,0,0,0"
+                        Click="ElegirCarpetaDatos_Click" />
+                <TextBox x:Name="CarpetaDatos" TextChanged="CarpetaDatos_TextChanged" />
+            </DockPanel>
+            <TextBlock x:Name="EstadoDatos" Margin="0,6,0,0" Foreground="{StaticResource Tenue}" TextWrapping="Wrap" />
+
+            <Grid x:Name="PanelAdministrador" Margin="0,4,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="Usuario administrador" Style="{StaticResource Etiqueta}" Grid.ColumnSpan="3" />
+                <TextBox x:Name="AdminUsuario" Grid.Row="1" Grid.ColumnSpan="3" Text="admin" />
+
+                <TextBlock Text="Contraseña" Style="{StaticResource Etiqueta}" Grid.Row="2" />
+                <PasswordBox x:Name="AdminPassword" Grid.Row="3" />
+                <TextBlock Text="Confirmar" Style="{StaticResource Etiqueta}" Grid.Row="2" Grid.Column="2" />
+                <PasswordBox x:Name="AdminConfirmar" Grid.Row="3" Grid.Column="2" />
+            </Grid>
+        </StackPanel>
 
         <CheckBox x:Name="CerrarABandeja" Content="Al cerrar la ventana, seguir en la bandeja" Margin="0,18,0,0" />
         <CheckBox x:Name="IniciarConWindows" Content="Iniciar con Windows" Margin="0,6,0,0" />

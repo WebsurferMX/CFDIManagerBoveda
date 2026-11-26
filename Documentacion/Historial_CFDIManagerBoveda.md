@@ -317,6 +317,15 @@ Plan aprobado (modo Servidor y modo Local con Storage propio de la PC): https://
 | Puente con la app | `wwwroot\js\escritorio.js`: dentro de la app, copiar texto e imagen del resumen lo hace Windows (también por `http://IP`). "Localizar en carpeta", conectada a otro equipo, baja el XML a la carpeta local de la PC (misma estructura RFC\Emitidos\AAAA\MM) y lo selecciona en el Explorador. En el navegador todo sigue igual | `63f1178` |
 | App de escritorio | Proyecto nuevo `CFDIManager.Escritorio` (WPF + WebView2, `CFDIManagerEscritorio.exe`), modo Servidor: lista de servidores en orden (red, Tailscale) y usa el primero que responde; "Guardar como" de Windows en todas las descargas con la última carpeta recordada; ícono en la bandeja con avisos; ligas a otros sitios en el navegador; una sola instancia; iniciar con Windows. Configuración en `%LocalAppData%\CFDIManagerEscritorio` | `63f1178` |
 
+### 26/11: CFDI Manager Escritorio, fase F2 (modo Local)
+
+| Tema | Qué se hizo | Commit |
+|---|---|---|
+| Instalación propia | El asistente de la app ya ofrece "Instalación propia en esta PC": carpeta de datos (por omisión `C:\CFDIManagerDatos`; si en el equipo está el servicio `CFDIManager`, esa carpeta no se permite) y usuario administrador con las reglas de contraseña de la web. El cliente empieza de cero dando de alta sus empresas | *sin commit* |
+| Servidor local | `ServidorLocal.cs`: la primera vez crea la base con el PostgreSQL portátil (`pgsql`, `initdb` en UTF8 con `Spanish_Mexico.1252` como el servidor, contraseña aleatoria cifrada con DPAPI del equipo en `escritorio.json`); arranca PostgreSQL en 127.0.0.1 (puerto 5433 o el siguiente libre) y la web con `--Modo=Escritorio` en 127.0.0.1:5180, con Storage en `{datos}\Storage`, `pg_dump` del paquete para el respaldo y sin `CFDI_CLAVE_MAESTRA`. Logs en `{datos}\Logs` (web.log en UTF-8) | *sin commit* |
+| Ciclo de vida | Cerrar la ventana la deja en la bandeja y la descarga del SAT sigue; "Salir" pide confirmación y detiene la web y PostgreSQL; al iniciar con Windows arranca el servidor sin abrir la ventana; al apagar o cerrar sesión se detiene. Un Job Object termina la web si la app se cierra de golpe; PostgreSQL se reutiliza al volver a abrirla | *sin commit* |
+| Publicación | `herramientas\Publicar-Escritorio.ps1` arma `publish\Escritorio` con la app, `web` y `pgsql` (copiado del PostgreSQL instalado). Probado desde cero en una carpeta temporal: base, esquema y administrador en 14 s, inicio de sesión y menú completo; segundo arranque en 2 s | *sin commit* |
+
 ## Dónde está cada cosa
 
 | Qué | Dónde |

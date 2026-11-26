@@ -46,6 +46,11 @@ public partial class App : Application
         // --bandeja: al iniciar con Windows se queda en la bandeja hasta que el usuario la abre.
         if (!e.Args.Contains("--bandeja", StringComparer.OrdinalIgnoreCase))
             ventana.Mostrar();
+        else
+            ventana.IniciarEnSegundoPlano();
+
+        // Al apagar o cerrar sesión Windows no pasa por Salir: se detienen la web y PostgreSQL locales.
+        SessionEnding += (_, _) => ventana.DetenerLocal();
 
         ThreadPool.RegisterWaitForSingleObject(_mostrar, (_, _) => Dispatcher.BeginInvoke(ventana.Mostrar), null, -1, false);
     }
