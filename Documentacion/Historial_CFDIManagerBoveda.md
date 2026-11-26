@@ -343,6 +343,8 @@ Plan aprobado (modo Servidor y modo Local con Storage propio de la PC): https://
 |---|---|---|
 | Actualización probada | 0.1.0 instalada en modo Local con PostgreSQL corriendo; bajó la 0.1.1 (paquete delta de 0.5 MB: 5 de 1,338 archivos), al salir se detuvo PostgreSQL y se instaló; la 0.1.1 arrancó en 3 s sobre los mismos datos y entró con el administrador de la 0.1.0. Para probar sin GitHub: variable `CFDI_ESCRITORIO_ACTUALIZACIONES` con la carpeta `publish\Releases` | `2d2b5f3` |
 | PCs limpias | No hay Windows Sandbox ni otra PC limpia en el servidor (activarlo requiere reiniciar). Lista de 14 pruebas para Windows 10 y 11 en [Guia_Escritorio.md](Guia_Escritorio.md#pruebas-en-una-pc-limpia-f4) | `2d2b5f3` |
+| Publicar sin token | `Publicar-Escritorio.ps1 -Subir` usa el acceso de `git push` del equipo si no hay `GITHUB_TOKEN` | `5fe6231` |
+| Primera versión publicada | GitHub Releases `escritorio-v0.1.0`: Setup (68 MB), paquete completo y `releases.win.json`, descargables sin iniciar sesión. Instalador: https://github.com/WebsurferMX/CFDIManagerBoveda/releases/download/escritorio-v0.1.0/CFDIManager.Escritorio-win-Setup.exe | — |
 
 ## Dónde está cada cosa
 
