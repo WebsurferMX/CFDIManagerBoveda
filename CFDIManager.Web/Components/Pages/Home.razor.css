@@ -130,11 +130,34 @@
     color: rgb(255 255 255 / 68%);
 }
 
+/* El importe no se corta en laptops ni en mosaicos chicos: la letra se reduce solo si no cabe. La tarjeta es un
+   contenedor (100cqi = su ancho útil) y cada importe trae su número de caracteres (--caracteres, ≈ 0.62 em cada uno). */
+.resumen .kpi-degradado {
+    --ancho-icono: 3.6rem;
+    --letra: 1.25rem;
+    container-type: inline-size;
+}
+
 .resumen .kpi-degradado .kpi-valor {
-    font-size: 1.25rem;
+    font-size: clamp(.8rem, calc((100cqi - var(--ancho-icono)) / (var(--caracteres, 10) * .62)), var(--letra));
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+}
+
+/* Mosaicos angostos (los de cada tipo de CFDI): sin ícono, el texto usa todo el ancho. */
+@container (max-width: 170px) {
+    .resumen .kpi-degradado .kpi-icono {
+        display: none;
+    }
+
+    .resumen .kpi-degradado > * {
+        grid-column: 1 / -1;
+    }
+
+    .resumen .kpi-degradado .kpi-valor {
+        font-size: clamp(.8rem, calc(100cqi / (var(--caracteres, 10) * .62)), var(--letra));
+    }
 }
 
 .resumen .kpi-degradado .kpi-detalle {
@@ -205,6 +228,5 @@
 .resumen .paginas .nav-link { font-weight: 600; }
 
 /* Indicadores principales: un poco más grandes que los de cada tipo. */
-.resumen .kpis-principales .kpi-degradado { padding: 1rem 1.15rem; }
-.resumen .kpis-principales .kpi-valor { font-size: 1.6rem; }
+.resumen .kpis-principales .kpi-degradado { padding: 1rem 1.15rem; --ancho-icono: 3.9rem; --letra: 1.6rem; }
 .resumen .kpis-principales .kpi-icono { width: 3rem; height: 3rem; font-size: 1.6rem; }

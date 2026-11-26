@@ -251,7 +251,7 @@
         <div class="kpi-degradado tono-@tono @(apagado ? "apagado" : "")" title="@ayuda">
             <div class="kpi-icono"><i class="ti @icono"></i></div>
             <div class="kpi-titulo">@titulo</div>
-            <div class="kpi-valor">@valor</div>
+            <div class="kpi-valor" style="--caracteres: @Math.Max(6, valor.Length)">@valor</div>
             <div class="kpi-detalle">@detalle</div>
         </div>
     };
