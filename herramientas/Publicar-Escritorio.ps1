@@ -133,7 +133,7 @@ try {
         --packDir $carpeta `
         --mainExe CFDIManagerEscritorio.exe `
         --packTitle "CFDI Manager" `
-        --packAuthors "WebsurferMX" `
+        --packAuthors "NickSoft Inc" `
         --icon (Join-Path $raiz "CFDIManager.Escritorio\app.ico") `
         --framework "net10-x64-desktop,net10-x64-aspnetcore,webview2,vcredist143-x64" `
         --outputDir $versiones
