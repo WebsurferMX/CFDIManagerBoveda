@@ -12,6 +12,10 @@ del usuario → **Acerca de**.
 - El botón **Salir** de la barra superior se quitó: para terminar tu sesión usa **Cerrar sesión** en el mismo menú.
 - El círculo con tus iniciales ya no se deforma en pantallas pequeñas.
 
+### Administración de XML
+
+- En las pestañas de **Nómina** hay una columna nueva, **Fecha de pago**, entre la fecha de emisión y la de timbrado.
+
 ### Correcciones
 
 - **Resumen**: los importes de las tarjetas ya no se cortan en laptops; la letra se ajusta sola al espacio.

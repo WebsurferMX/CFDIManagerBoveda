@@ -44,6 +44,8 @@ public class AdminXmlFilaDto
     public string Version { get; set; } = "";
     public DateTime FechaEmision { get; set; }
     public DateTime? FechaTimbrado { get; set; }
+    /// <summary>FechaPago del complemento de nómina (solo recibos de nómina).</summary>
+    public DateTime? FechaPagoNomina { get; set; }
     public string Serie { get; set; } = "";
     public string Folio { get; set; } = "";
     public string RfcEmisor { get; set; } = "";

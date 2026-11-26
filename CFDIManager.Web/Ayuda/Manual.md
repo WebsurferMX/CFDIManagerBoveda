@@ -325,8 +325,9 @@ Es la pantalla para trabajar con los XML: buscarlos, revisarlos, sacar reportes,
 3. **Día**: **Todo el mes** o un día (con <kbd>Ctrl</kbd> + clic, varios).
 4. Las pestañas de la tabla separan por tipo: **Facturas**, **Nómina 1.2**, **Notas de crédito**, **Traslados** y
    **Pagos**.
-5. **Buscar por** encuentra un UUID, RFC, nombre, serie o folio dentro de lo filtrado.
-6. **Filtrar** (abajo de la tabla) deja solo **Vigentes**, **Cancelados**, **Sin validar en SAT**, **Duplicados**,
+5. En las pestañas de **Nómina** aparece además la **Fecha de pago** de cada recibo.
+6. **Buscar por** encuentra un UUID, RFC, nombre, serie o folio dentro de lo filtrado.
+7. **Filtrar** (abajo de la tabla) deja solo **Vigentes**, **Cancelados**, **Sin validar en SAT**, **Duplicados**,
    **PPD** o **Relacionados**.
 
 Al dar clic en un renglón, arriba aparece la **vista previa**: el XML y la primera hoja del PDF (doble clic para

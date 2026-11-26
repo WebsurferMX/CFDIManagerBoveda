@@ -94,7 +94,10 @@ public partial class PostgreSqlRepository
             );
 
             -- Filtro Relacionados y recuadro de relacionados: buscan quién relaciona a un UUID sin importar mayúsculas.
-            CREATE INDEX IF NOT EXISTS ix_cfdi_relacionados_uuid_upper ON cfdi_relacionados (UPPER(uuid_relacionado));", conn);
+            CREATE INDEX IF NOT EXISTS ix_cfdi_relacionados_uuid_upper ON cfdi_relacionados (UPPER(uuid_relacionado));
+
+            -- Fecha de pago de los recibos de nómina (columna de la pestaña Nómina); NULL = todavía no se lee del XML.
+            ALTER TABLE cfdi ADD COLUMN IF NOT EXISTS fecha_pago_nomina DATE;", conn);
 
         cmd.ExecuteNonQuery();
 
@@ -210,6 +213,12 @@ public partial class PostgreSqlRepository
         using var conn = new NpgsqlConnection(_connectionString);
         conn.Open();
 
+        // En las pestañas de nómina se muestra (y se puede ordenar por) la fecha de pago: antes se lee la que falte.
+        if (filtro.Pestana is "nomina" or "nomina11" or "nomina12")
+        {
+            LlenarFechaPagoNomina(conn, filtro.EmpresaId);
+        }
+
         using var cmd = new NpgsqlCommand();
         cmd.Connection = conn;
 
@@ -224,6 +233,7 @@ public partial class PostgreSqlRepository
                 COALESCE(c.version_cfdi, '') AS version_cfdi,
                 c.fecha_emision,
                 c.fecha_timbrado,
+                c.fecha_pago_nomina,
                 COALESCE(c.serie, '') AS serie,
                 COALESCE(c.folio, '') AS folio,
                 emisor.rfc AS rfc_emisor,
@@ -273,6 +283,7 @@ public partial class PostgreSqlRepository
                 Version = Texto(dr, "version_cfdi"),
                 FechaEmision = dr.GetDateTime(dr.GetOrdinal("fecha_emision")),
                 FechaTimbrado = dr.IsDBNull(dr.GetOrdinal("fecha_timbrado")) ? null : dr.GetDateTime(dr.GetOrdinal("fecha_timbrado")),
+                FechaPagoNomina = dr.IsDBNull(dr.GetOrdinal("fecha_pago_nomina")) ? null : dr.GetDateTime(dr.GetOrdinal("fecha_pago_nomina")),
                 Serie = Texto(dr, "serie"),
                 Folio = Texto(dr, "folio"),
                 RfcEmisor = Texto(dr, "rfc_emisor"),
@@ -303,6 +314,59 @@ public partial class PostgreSqlRepository
         return filas;
     }
 
+    /// <summary>
+    /// Lee del XML la FechaPago de los recibos de nómina de la empresa que todavía no la tienen (una sola vez por recibo;
+    /// los que no tienen XML se vuelven a intentar la siguiente vez).
+    /// </summary>
+    private static void LlenarFechaPagoNomina(NpgsqlConnection conn, long empresaId)
+    {
+        var pendientes = new List<(long CfdiId, string Ruta)>();
+
+        using (var cmd = new NpgsqlCommand(@"
+            SELECT cfdi_id, COALESCE(ruta_xml, '')
+            FROM cfdi
+            WHERE empresa_id = @empresa_id
+              AND tipo_cfdi = 'N'
+              AND fecha_pago_nomina IS NULL;", conn))
+        {
+            cmd.Parameters.AddWithValue("@empresa_id", empresaId);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                pendientes.Add((reader.GetInt64(0), reader.GetString(1)));
+            }
+        }
+
+        foreach ((long cfdiId, string ruta) in pendientes)
+        {
+            string archivo = RutaXmlLocal.Resolver(ruta);
+            if (!File.Exists(archivo))
+            {
+                continue;
+            }
+
+            DateTime? fecha;
+            try
+            {
+                fecha = XmlCfdiParser.LeerFechaPagoNomina(archivo);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (fecha is null)
+            {
+                continue;
+            }
+
+            using var cmd = new NpgsqlCommand("UPDATE cfdi SET fecha_pago_nomina = @fecha WHERE cfdi_id = @cfdi_id;", conn);
+            cmd.Parameters.AddWithValue("@cfdi_id", cfdiId);
+            cmd.Parameters.AddWithValue("@fecha", fecha.Value.Date);
+            cmd.ExecuteNonQuery();
+        }
+    }
+
     // Solo claves conocidas llegan al SQL. Son alias del SELECT, salvo folio, que se ordena por su número.
     private static readonly Dictionary<string, string> ColumnasOrdenAdminXml = new()
     {
@@ -313,6 +377,7 @@ public partial class PostgreSqlRepository
         ["tipo"] = "tipo_cfdi",
         ["fecha"] = "fecha_emision",
         ["timbrado"] = "fecha_timbrado",
+        ["fecha_pago"] = "fecha_pago_nomina",
         ["serie"] = "serie",
         ["folio"] = "NULLIF(regexp_replace(COALESCE(c.folio, ''), '\\D', '', 'g'), '')::numeric {0}, COALESCE(c.folio, '')",
         ["uuid"] = "uuid",

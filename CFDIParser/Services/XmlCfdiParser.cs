@@ -315,6 +315,18 @@ public class XmlCfdiParser
                 Valor("TotalRetencionesISR"));
     }
 
+    /// <summary>FechaPago del complemento de nómina (1.1 o 1.2); null si el XML no trae nómina.</summary>
+    public static DateTime? LeerFechaPagoNomina(string rutaXml)
+    {
+        XElement comprobante = XDocument.Load(rutaXml).Root
+            ?? throw new InvalidOperationException("El XML no tiene nodo raíz.");
+
+        string? fecha = Atributo(Descendiente(comprobante, "Nomina"), "FechaPago");
+
+        return DateTime.TryParseExact(fecha?.Trim(), "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out DateTime valor) ? valor : null;
+    }
+
     private static XElement? Descendiente(
         XElement padre,
         string nombreLocal)

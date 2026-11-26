@@ -1261,6 +1261,7 @@
             "I" => "azul", "E" => "mal", "T" => "ambar", "P" => "morado", "N" => "verde", _ => "todos"
         }),
         new("fecha", "Fecha emisión", x => x.FechaEmision.ToString("dd/MM/yyyy")),
+        new("fecha_pago", "Fecha de pago", x => x.FechaPagoNomina?.ToString("dd/MM/yyyy") ?? "", Pestanas: new[] { "nomina11", "nomina12" }),
         new("timbrado", "Fecha timbrado", x => x.FechaTimbrado?.ToString("dd/MM/yyyy HH:mm:ss") ?? ""),
         new("rfc_emisor", "RFC emisor", x => x.RfcEmisor),
         new("nombre_emisor", "Nombre emisor", x => x.NombreEmisor, ClaseFn: _ => "largo"),
