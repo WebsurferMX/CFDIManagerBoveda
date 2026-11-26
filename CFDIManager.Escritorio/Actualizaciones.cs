@@ -11,7 +11,12 @@ public sealed class Actualizaciones
 {
     private const string Repositorio = "https://github.com/WebsurferMX/CFDIManagerBoveda";
 
-    private readonly UpdateManager _manager = new(new GithubSource(Repositorio, accessToken: null, prerelease: false));
+    /// <summary>Solo pruebas: CFDI_ESCRITORIO_ACTUALIZACIONES = carpeta con los paquetes (publish\Releases) en vez de GitHub.</summary>
+    private static readonly string? CarpetaPrueba = Environment.GetEnvironmentVariable("CFDI_ESCRITORIO_ACTUALIZACIONES");
+
+    private readonly UpdateManager _manager = new(CarpetaPrueba is { Length: > 0 }
+        ? new SimpleFileSource(new System.IO.DirectoryInfo(CarpetaPrueba))
+        : new GithubSource(Repositorio, accessToken: null, prerelease: false));
     private readonly System.Windows.Threading.DispatcherTimer _reloj = new() { Interval = TimeSpan.FromHours(6) };
 
     /// <summary>Versión ya descargada, lista para instalarse.</summary>
@@ -39,7 +44,7 @@ public sealed class Actualizaciones
     private async Task RevisarConRetrasoAsync()
     {
         // Que primero arranque la app (y en modo Local, PostgreSQL y la web).
-        await Task.Delay(TimeSpan.FromMinutes(1));
+        await Task.Delay(CarpetaPrueba is { Length: > 0 } ? TimeSpan.FromSeconds(5) : TimeSpan.FromMinutes(1));
         await RevisarAsync();
     }
 

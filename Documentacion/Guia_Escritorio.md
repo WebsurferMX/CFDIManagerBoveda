@@ -65,11 +65,38 @@ Qué hace el script:
 "Guardar como", bandeja, inicio con Windows y tamaño de la ventana. Borrarlo hace que el siguiente arranque vuelva a
 preguntar el modo (los datos no se tocan).
 
+## Pruebas en una PC limpia (F4)
+
+Ya probado en el servidor (26/11): instalación silenciosa, modo Local desde cero, inicio de sesión, desinstalación con
+PostgreSQL corriendo (datos conservados) y actualización 0.1.0 → 0.1.1 (delta de 0.5 MB, PostgreSQL detenido antes,
+la 0.1.1 arranca sobre los mismos datos). Falta en equipos sin nada instalado, uno con Windows 10 y otro con Windows 11:
+
+| # | Prueba | Qué revisar |
+|---|---|---|
+| 1 | Ejecutar el Setup | Aviso de SmartScreen; instala .NET 10, WebView2 y Visual C++ si faltan; acceso directo en escritorio |
+| 2 | Asistente, instalación propia | Rechaza contraseña débil o que no coincide; crea la base y abre el login (≈ 15 s) |
+| 3 | Alta de empresa | e.firma y CIEC se validan y guardan; reabrir la app y que sigan ahí |
+| 4 | Descarga SAT | Descargar ahora un mes; XML en `{datos}\Storage\XML\<RFC>\...` |
+| 5 | Administración de XML | Vista previa, PDF (abre ventana), Excel General, ZIP de XML: "Guardar como" y aviso en la bandeja |
+| 6 | Localizar en carpeta | Abre el Explorador en la PC con el XML seleccionado |
+| 7 | Imagen del resumen | Copiar para correo (pegar en Outlook) y para WhatsApp |
+| 8 | Correo | Configuración → Correo y Enviar por correo |
+| 9 | Respaldo | Herramientas → respaldo a una carpeta; se genera el ZIP con la base |
+| 10 | Bandeja e inicio con Windows | Cerrar la ventana (sigue la descarga), "Iniciar con Windows", reiniciar la PC: arranca en la bandeja |
+| 11 | Salir | Pide confirmación; no quedan procesos `postgres` ni `CFDIManager.Web` |
+| 12 | Modo Servidor | En una PC de la oficina: servidor de la red y de Tailscale; Localizar en carpeta baja el XML a `Documentos\CFDI Manager\XML` |
+| 13 | Actualización | Publicar una versión mayor con `-Subir`; la app la baja sola y la instala al salir |
+| 14 | Desinstalar | Desde Configuración de Windows → Aplicaciones; la carpeta de datos se conserva |
+
+Una PC limpia puede ser Windows Sandbox (Windows 10/11 Pro: "Características de Windows" → "Espacio aislado de
+Windows", requiere administrador y reiniciar; no activarlo en el servidor).
+
 ## Desarrollo
 
 - `pwsh -File .\herramientas\Publicar-Escritorio.ps1` arma `publish\Escritorio` (app + `web` + `pgsql`) y el
   instalador en `publish\Releases`, sin subir nada.
 - Para correr la app desde `bin` en modo Local: variables `CFDI_ESCRITORIO_WEB` (carpeta con `CFDIManager.Web.exe`
   publicado) y `CFDI_ESCRITORIO_PGSQL` (carpeta de PostgreSQL). `CFDI_ESCRITORIO_ADMIN_PASSWORD` crea el
-  administrador `admin` sin el asistente (solo pruebas).
+  administrador `admin` sin el asistente (solo pruebas). `CFDI_ESCRITORIO_ACTUALIZACIONES` (carpeta, p. ej.
+  `publish\Releases`) busca actualizaciones ahí en vez de GitHub, a los 5 segundos de abrir.
 - No usar como carpeta de datos `C:\CFDIManagerDatos` en el servidor: es la del servicio.

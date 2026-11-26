@@ -337,6 +337,13 @@ Plan aprobado (modo Servidor y modo Local con Storage propio de la PC): https://
 | Prueba | Setup silencioso en esta PC (4 s), modo Local desde la carpeta instalada (base y administrador en 11 s, inicio de sesión), desinstalación con la app y PostgreSQL corriendo: PostgreSQL detenido, programa y acceso directo borrados, datos conservados | `7458098` |
 | Guía | [Guia_Escritorio.md](Guia_Escritorio.md): publicar versiones, instalar y cómo funciona cada modo | `7458098` |
 
+### 26/11: CFDI Manager Escritorio, fase F4 (pruebas, primera parte)
+
+| Tema | Qué se hizo | Commit |
+|---|---|---|
+| Actualización probada | 0.1.0 instalada en modo Local con PostgreSQL corriendo; bajó la 0.1.1 (paquete delta de 0.5 MB: 5 de 1,338 archivos), al salir se detuvo PostgreSQL y se instaló; la 0.1.1 arrancó en 3 s sobre los mismos datos y entró con el administrador de la 0.1.0. Para probar sin GitHub: variable `CFDI_ESCRITORIO_ACTUALIZACIONES` con la carpeta `publish\Releases` | *sin commit* |
+| PCs limpias | No hay Windows Sandbox ni otra PC limpia en el servidor (activarlo requiere reiniciar). Lista de 14 pruebas para Windows 10 y 11 en [Guia_Escritorio.md](Guia_Escritorio.md#pruebas-en-una-pc-limpia-f4) | *sin commit* |
+
 ## Dónde está cada cosa
 
 | Qué | Dónde |
