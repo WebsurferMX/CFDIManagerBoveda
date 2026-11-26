@@ -12,6 +12,13 @@ del usuario → **Acerca de**.
 - El botón **Salir** de la barra superior se quitó: para terminar tu sesión usa **Cerrar sesión** en el mismo menú.
 - El círculo con tus iniciales ya no se deforma en pantallas pequeñas.
 
+### Correcciones
+
+- **Resumen**: los importes de las tarjetas ya no se cortan en laptops; la letra se ajusta sola al espacio.
+- **Visor de nóminas**: la ficha de cada trabajador ya no queda tapada por el menú.
+- **Importaciones**: el título ya se ve con el tema claro.
+- **Manual de usuario** con imágenes, en el menú de tu nombre → **Ayuda**.
+
 ### CFDI Manager para Windows (app de escritorio)
 
 CFDI Manager ya se puede instalar como programa de Windows. Se usa de dos formas:

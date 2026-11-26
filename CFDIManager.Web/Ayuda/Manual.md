@@ -1,8 +1,10 @@
 # Manual de usuario
 
 CFDI Manager guarda y organiza los comprobantes fiscales (CFDI) de tus empresas: los descarga del SAT, los
-clasifica y te da reportes, PDF y Excel. Este manual empieza por la configuración inicial, en el orden en que se
-hace la primera vez.
+clasifica y te da reportes, PDF y Excel. Este manual tiene dos partes: la **configuración inicial**, en el orden en
+que se hace la primera vez, y el **uso diario**, a partir de [La pantalla principal](#la-pantalla-principal).
+
+> Las imágenes son de una empresa de demostración con datos ficticios.
 
 ## Antes de empezar
 
@@ -246,6 +248,227 @@ Clic derecho en el ícono de CFDI Manager junto al reloj de Windows:
 
 CFDI Manager revisa solo si hay una versión nueva al abrirse y cada 6 horas. Cuando la encuentra, avisa y la instala
 al salir, o en ese momento con **Instalar la versión… y reiniciar** en el menú del ícono. Tus datos no se tocan.
+
+## La pantalla principal
+
+Arriba de cada pantalla está la barra con lo que usas todo el tiempo:
+
+| Elemento | Para qué |
+|---|---|
+| **Empresa activa** | Elige con qué empresa trabajas. Escribe parte del RFC o del nombre para buscarla. Todas las pantallas muestran solo esa empresa |
+| **Descarga SAT automática** | Enciende o apaga la descarga del SAT de la empresa activa (ver [Descargar tus CFDI del SAT](#descargar-tus-cfdi-del-sat)) |
+| **XML indexados** | Cuántos XML de la empresa tiene registrados CFDI Manager |
+| **Actualizar índice** | Lee otra vez la carpeta de XML de la empresa y registra los nuevos. Se hace solo cada 10 minutos; úsalo si acabas de copiar XML a la carpeta |
+| Luna / sol | Cambia entre tema claro y oscuro |
+
+A la izquierda está el menú. Solo ves las opciones que el administrador te asignó; con el botón ☰ lo haces más angosto.
+
+## Resumen
+
+Es la primera pantalla: los totales del periodo de la empresa activa. Cambia **Fecha inicial** y **Fecha final** y da
+clic en **Consultar**.
+
+![Resumen fiscal](ayuda/img/resumen.png)
+
+- Arriba, los cuatro totales: **Facturación neta** (facturas menos notas de crédito), **Compras netas**, **Ventas −
+  compras** y **CFDI del periodo**.
+- **Emitidos (Facturación y ventas)**: lo que la empresa facturó. **Recibidos (Compras y gastos)**: lo que le
+  facturaron.
+- La barra de colores muestra cuántos CFDI hay de cada tipo, y las tarjetas su importe: **Facturas**, **Nómina**,
+  **Notas de crédito**, **Traslados** y **Pagos**.
+
+### Proyección de IVA
+
+En la pestaña **Proyección de IVA** ves un cálculo estimado del IVA del periodo:
+
+![Proyección de IVA](ayuda/img/proyeccion-iva.png)
+
+- **Emitidos**: el **IVA trasladado** a tus clientes y lo que ellos te retuvieron.
+- **Recibidos**: el **IVA acreditable** de tus proveedores y lo que tú les retuviste.
+- **Proyección**: **IVA cobrado** − **IVA acreditable** = **IVA por pagar** (o **Saldo a favor de IVA**), más las
+  **Retenciones por enterar** = **Total estimado a pagar**.
+
+Toma en cuenta las facturas pagadas en una sola exhibición (PUE), las notas de crédito y los complementos de pago. Es
+una estimación para planear; la declaración la hace tu contador.
+
+## CFDI de ingresos y egresos
+
+**CFDI de ingresos** muestra lo que la empresa emitió y **CFDI de egresos** lo que recibió. Las dos funcionan igual.
+
+![CFDI emitidos](ayuda/img/cfdi-ingresos.png)
+
+1. Filtra por **Tipo CFDI** (facturas, nómina, notas de crédito, traslados o pagos), por fechas, o escribe en
+   **Búsqueda** un UUID, RFC, razón social, serie o folio. Da clic en **Consultar**.
+2. Las tarjetas de colores también filtran: da clic en **Notas de crédito** para ver solo esas.
+3. En cada renglón, los íconos de **Acciones** abren el XML, generan el PDF o consultan el estado en el SAT.
+4. Da clic en un renglón para ver su detalle:
+
+![Detalle de un CFDI](ayuda/img/cfdi-detalle.png)
+
+### Estado SAT
+
+La columna **Estado SAT** dice si el CFDI está vigente o cancelado según el SAT, y cuándo se revisó. Para revisar
+varios a la vez usa **Validar pendientes SAT**; con **Lote SAT** eliges cuántos revisa en cada vuelta. El avance se ve
+en la tarjeta **Validación SAT por lote** (vigentes, cancelados, no encontrados y errores).
+
+## Administración de XML
+
+Es la pantalla para trabajar con los XML: buscarlos, revisarlos, sacar reportes, PDF, ZIP y enviarlos por correo.
+
+![Administración de XML](ayuda/img/administracion-xml.png)
+
+### Elegir qué XML ver
+
+1. **Tipo**: **Emitidos** o **Recibidos**.
+2. **Año** y **Mes**. Con <kbd>Ctrl</kbd> + clic eliges varios meses, o enciende **Acumular** para sumar los meses
+   anteriores.
+3. **Día**: **Todo el mes** o un día (con <kbd>Ctrl</kbd> + clic, varios).
+4. Las pestañas de la tabla separan por tipo: **Facturas**, **Nómina 1.2**, **Notas de crédito**, **Traslados** y
+   **Pagos**.
+5. **Buscar por** encuentra un UUID, RFC, nombre, serie o folio dentro de lo filtrado.
+6. **Filtrar** (abajo de la tabla) deja solo **Vigentes**, **Cancelados**, **Sin validar en SAT**, **Duplicados**,
+   **PPD** o **Relacionados**.
+
+Al dar clic en un renglón, arriba aparece la **vista previa**: el XML y la primera hoja del PDF (doble clic para
+abrirlos). Abajo, **Conceptos**, **Impuestos**, **Impuestos locales** y **Complemento** muestran el detalle.
+
+### Marcar comprobantes
+
+Las herramientas trabajan sobre los renglones **marcados**; si no marcas ninguno, sobre **todo lo filtrado**.
+
+- <kbd>Ctrl</kbd> + clic marca o desmarca un renglón.
+- <kbd>Shift</kbd> + clic marca un rango.
+- La casilla del encabezado marca todo el filtro, en todas las páginas.
+
+Con **Columnas** eliges qué columnas ver.
+
+### Herramientas
+
+El panel **Herramientas**, a la derecha de la pantalla:
+
+| Herramienta | Qué hace |
+|---|---|
+| **Exportar a Excel** | El reporte elegido en **Nvo. reporte de** (general, conceptos, agrupado por cliente o proveedor, por mes, Pareto 80-20…) |
+| **Imagen del resumen** | Una imagen con los totales para pegar en un correo o en WhatsApp |
+| **Enviar por correo** | Manda los reportes en Excel y la imagen del resumen |
+| **Enviar CFDI** | Manda a cada cliente o proveedor el PDF y XML de sus comprobantes (hasta 200 a la vez) |
+| **Abrir XML** / **Generar PDF** | El XML o el PDF del renglón elegido |
+| **Valida Estado SAT** | Revisa en el SAT si siguen vigentes |
+| **Localizar XML** | Abre el Explorador de Windows con el archivo marcado |
+| **Importar XML** | Agrega XML desde tu PC o desde una carpeta |
+| **Descargar XML (ZIP)** / **Descargar PDF (ZIP)** | Todos los XML o PDF en un ZIP |
+| **Agrupaciones** | Totales por emisor, receptor, mes, uso de CFDI, método de pago o tipo |
+| **Renombrar XML's** | Copias de los XML con el nombre que elijas (por ejemplo Serie_Folio_UUID), en un ZIP; los originales no cambian |
+| **Catálogo de logos** | El logo que aparece en los PDF de cada RFC emisor |
+| **Verifica series** | Folios faltantes o repetidos de cada serie |
+| **Leer complemento** | El complemento del XML (pagos, nómina…) en forma de árbol |
+| **Dirección de datos** | En qué carpeta están los XML de la empresa |
+
+Si no ves alguna, el administrador no te la asignó.
+
+### Imagen del resumen
+
+Elige **Solo emitidos**, **Solo recibidos** o **Emitidos y recibidos**, y después **Copiar para correo**, **Copiar para
+WhatsApp** o **Descargar imagen**. Pégala con <kbd>Ctrl</kbd> + <kbd>V</kbd> en el correo o en el chat.
+
+![Imagen del resumen](ayuda/img/imagen-resumen.png)
+
+## Visor de nóminas
+
+En **Administración de XML** → **Visor de nóminas** ves los acumulados de la nómina que timbró la empresa, por fecha
+de pago. Los recibos cancelados no se cuentan.
+
+![Visor de nóminas](ayuda/img/visor-nominas.png)
+
+1. Elige el **Ejercicio** y el **Mes** (o **Todo el año**).
+2. **Acumulado anual**: sueldos, ISR retenido, subsidio, PTU y neto pagado, con el detalle de la nómina y el
+   **ISR retenido y enterado**.
+3. **Detalle mensual**: los mismos datos mes por mes. Aquí capturas el **ISR enterado** de cada mes y das clic en
+   **Guardar ISR enterado**; así ves la diferencia contra lo retenido.
+4. **Trabajadores**: un renglón por trabajador. Da clic en uno para ver sus recibos, con el PDF y XML de cada uno:
+
+![Recibos de un trabajador](ayuda/img/visor-nominas-trabajador.png)
+
+Con **Excel** descargas todo el visor.
+
+## Importar XML
+
+Si tienes XML que no llegaron por la descarga del SAT (por ejemplo, de otro sistema), en **Importaciones**:
+
+![Importación de XML](ayuda/img/importaciones.png)
+
+1. **Elegir archivos**: hasta 500 XML por vez.
+2. **Clasificar e importar**. CFDI Manager decide solo si cada XML es emitido o recibido según el RFC.
+3. Los contadores dicen cuántos fueron **Correctos**, **Emitidos**, **Recibidos**, **Actualizados** (ya existían),
+   **No identificados** (de otro RFC) y **Errores**. La tabla de abajo da el detalle de cada archivo.
+
+Para importar una carpeta completa con subcarpetas usa **Administración de XML** → **Importar XML** → **Importar
+carpeta**.
+
+## Exportaciones
+
+Para sacar un Excel de un periodo sin entrar a Administración de XML:
+
+![Exportaciones](ayuda/img/exportaciones.png)
+
+1. **Fecha inicial** y **Fecha final**.
+2. **Reporte a generar**: **Emitidos y recibidos**, **Solo CFDI emitidos** o **Solo CFDI recibidos**.
+3. **Tipo de CFDI**: todos o uno.
+4. **Generar Excel**. Emitidos y recibidos salen en archivos separados, con una hoja de resumen y una por tipo de
+   CFDI. Desde el resultado puedes **Enviar por correo**.
+
+## EFOS / EDOS
+
+Revisa si tus proveedores o clientes están en la lista del artículo 69-B del SAT (empresas que facturan operaciones
+simuladas).
+
+![EFOS / EDOS](ayuda/img/efos.png)
+
+1. La primera vez, y de vez en cuando para tenerla al día, da clic en **Descargar del SAT** para bajar la lista.
+2. CFDI Manager cruza la lista con tus CFDI y muestra el semáforo: **Riesgo alto**, **Riesgo medio**, **Riesgo bajo** o
+   **Sin coincidencias**.
+3. Las tarjetas separan por situación: **Presunto**, **Definitivo**, **Desvirtuado** y **Sentencia favorable**.
+4. La tabla **Proveedores en la lista 69-B** dice qué hacer con cada uno en **Acción requerida**. Con 🔍 ves sus CFDI.
+
+> Un proveedor en situación **Definitivo** es el caso grave: sus CFDI no tienen efectos fiscales. Revísalo con tu
+> contador.
+
+## SINUBE
+
+Si tu empresa usa SINUBE para la contabilidad, CFDI Manager le envía las facturas y concilia lo que tiene cada uno.
+El administrador captura primero el acceso en **Importación a SINUBE** → **Herramientas** (**Probar acceso** y
+**Guardar**).
+
+### Importación a SINUBE
+
+1. Elige la pestaña: **Importar facturas de Clientes**, **Importar facturas de Proveedores** o **Importar facturas de
+   Clientes sin folio**.
+2. Elige el **Periodo**.
+3. **Revisar en SINUBE**: compara con lo que SINUBE ya tiene. Las tarjetas dicen cuántos **Ya en SINUBE**, cuántos
+   **Por subir** y cuáles tienen el folio ocupado.
+4. **Importar a SINUBE**. Al terminar, la tabla de resultados dice qué se insertó, qué ya existía y qué tuvo error.
+
+Si un folio ya existe en SINUBE con otra factura, en **Herramientas** → **Series alternas cuando el folio ya existe**
+se indica qué serie usar en su lugar.
+
+### Conciliación SINUBE
+
+Cruza por UUID lo que tiene el SAT, los XML de CFDI Manager y lo registrado en SINUBE:
+
+1. Elige **Proveedores** o **Clientes**, el **Año** y el **Mes**, y da clic en **Carga y analiza**.
+2. Las tarjetas filtran la tabla: **Conciliados**, **Faltan en SINUBE**, **No están en el SAT**, **Falta XML en
+   bóveda**, **Estatus distinto**, **Sin póliza** y **Mes distinto**.
+3. Con **Descargar XML faltantes** bajas del SAT los que no están en CFDI Manager.
+4. **Excel** o **Enviar por correo** para compartir el resultado.
+
+## XML Azulejeras (Clientes)
+
+Utilería para las empresas que facturan en mostrador al público en general: cambia la serie y el nombre del cliente de
+esas facturas según la sucursal, para subirlas a SINUBE. Solo aparece en las empresas que la tienen configurada.
+
+1. Elige el periodo (**Desde** y **Hasta**) y da clic en **Analizar**.
+2. Marca las series a convertir y da clic en **Generar XML Azulejeras**.
+3. En **Importación a SINUBE**, **Revisar en SINUBE** y después **Subir a SINUBE**.
 
 ## Problemas frecuentes
 
