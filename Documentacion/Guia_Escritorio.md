@@ -65,7 +65,8 @@ Qué hace el script:
 ## Configuración por usuario
 
 `%LocalAppData%\CFDIManagerEscritorio\configuracion.json`: modo, servidores, carpeta de datos, última carpeta de
-"Guardar como", bandeja, inicio con Windows y tamaño de la ventana. Borrarlo hace que el siguiente arranque vuelva a
+"Guardar como", bandeja, inicio con Windows, tamaño de la ventana y zoom. El zoom es automático según el ancho de la
+pantalla (85 % en una laptop de 1366); si el usuario lo cambia con Ctrl + rueda o Ctrl +/-, se recuerda el suyo. Borrarlo hace que el siguiente arranque vuelva a
 preguntar el modo (los datos no se tocan).
 
 ## Pruebas en una PC limpia (F4)
