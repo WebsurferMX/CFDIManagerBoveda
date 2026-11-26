@@ -40,6 +40,28 @@ public partial class MainWindow : Window
 
     private readonly Actualizaciones _actualizaciones = new();
 
+    /// <summary>Ancho (en píxeles lógicos) para el que está pensada la web; en pantallas más angostas se aleja la vista.</summary>
+    private const double AnchoDiseno = 1600;
+
+    /// <summary>
+    /// En laptops (1366 o 1280 de ancho) la web no cabe al 100 %: se aleja sola en proporción al ancho de la pantalla.
+    /// Si el usuario cambia el zoom (Ctrl + rueda, Ctrl +/-, Ctrl 0), se recuerda el suyo.
+    /// </summary>
+    private void AplicarZoom()
+    {
+        double automatico = Math.Clamp(Math.Floor(SystemParameters.WorkArea.Width / AnchoDiseno * 20) / 20, 0.7, 1.0);
+        Navegador.ZoomFactor = _configuracion.Zoom ?? automatico;
+
+        Navegador.ZoomFactorChanged += (_, _) =>
+        {
+            double zoom = Math.Round(Navegador.ZoomFactor, 2);
+            if (_configuracion.Zoom == zoom || (_configuracion.Zoom is null && Math.Abs(zoom - automatico) < 0.01))
+                return;
+            _configuracion.Zoom = zoom;
+            _configuracion.Guardar();
+        };
+    }
+
     /// <summary>Desde la bandeja: revisa ya; si hay versión nueva avisa el evento Descargada, si no se dice el resultado.</summary>
     private async void BuscarActualizaciones()
     {
@@ -104,6 +126,8 @@ public partial class MainWindow : Window
 
         Navegador.NavigationStarting += NavegacionIniciando;
         Navegador.NavigationCompleted += NavegacionTerminada;
+
+        AplicarZoom();
 
         _ = new Puente(core, _configuracion, _bandeja, () => _servidor);
 

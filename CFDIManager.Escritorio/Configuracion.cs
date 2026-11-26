@@ -53,6 +53,9 @@ public sealed class Configuracion
     public double? Alto { get; set; }
     public bool Maximizada { get; set; } = true;
 
+    /// <summary>Zoom de la vista elegido con Ctrl + rueda o Ctrl +/-; null = automático según el ancho de la pantalla.</summary>
+    public double? Zoom { get; set; }
+
     /// <summary>La configuración guardada, o null en el primer arranque.</summary>
     public static Configuracion? Cargar()
     {
