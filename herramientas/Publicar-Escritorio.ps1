@@ -11,7 +11,8 @@
 
 .PARAMETER Subir
     Publica la versión en GitHub Releases (WebsurferMX/CFDIManagerBoveda) con la etiqueta escritorio-v{Version};
-    de ahí se actualizan las apps instaladas. Requiere un token de GitHub en la variable GITHUB_TOKEN.
+    de ahí se actualizan las apps instaladas. Usa el acceso a GitHub con el que se hace git push en este equipo, o el
+    token de la variable GITHUB_TOKEN si está definida.
 
 .EXAMPLE
     pwsh -File .\herramientas\Publicar-Escritorio.ps1
@@ -42,7 +43,17 @@ if (-not $Pgsql) {
         Select-Object -First 1 -ExpandProperty FullName
 }
 if (-not $Pgsql -or -not (Test-Path (Join-Path $Pgsql "bin\initdb.exe"))) { throw "No se encontró PostgreSQL; indícalo con -Pgsql." }
-if ($Subir -and -not $env:GITHUB_TOKEN) { throw "Para -Subir define GITHUB_TOKEN con un token de GitHub con permiso de escribir releases." }
+$token = $env:GITHUB_TOKEN
+if ($Subir -and -not $token) {
+    # Sin GITHUB_TOKEN: el mismo acceso con el que se hace git push (Administrador de credenciales de Git), sin preguntar.
+    $env:GIT_TERMINAL_PROMPT = "0"
+    $env:GCM_INTERACTIVE = "never"
+    $credencial = "protocol=https`nhost=github.com`n`n" | git credential fill 2>$null
+    $token = ($credencial | Where-Object { $_ -like "password=*" } | Select-Object -First 1) -replace '^password=', ''
+}
+if ($Subir -and -not $token) {
+    throw "No hay acceso a GitHub: haz un git push desde este equipo o define GITHUB_TOKEN con un token que pueda escribir releases."
+}
 
 Write-Host "CFDI Manager Escritorio $Version"
 
@@ -117,7 +128,7 @@ try {
 
     if ($Subir) {
         Write-Host "Publicando en GitHub Releases (escritorio-v$Version)..."
-        dotnet vpk upload github --repoUrl $repositorio --token $env:GITHUB_TOKEN -o $versiones `
+        dotnet vpk upload github --repoUrl $repositorio --token $token -o $versiones `
             --publish --releaseName "CFDI Manager Escritorio $Version" --tag "escritorio-v$Version"
         if ($LASTEXITCODE -ne 0) { throw "Falló la publicación en GitHub." }
         Write-Host "Publicada: $repositorio/releases/tag/escritorio-v$Version"
