@@ -14,7 +14,7 @@
     <AssemblyName>CFDIManagerEscritorio</AssemblyName>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <Product>CFDI Manager Escritorio</Product>
-    <Version>0.1.1</Version>
+    <Version>0.1.2</Version>
     <!-- Main propio (Program.cs): Velopack debe correr antes que WPF. -->
     <StartupObject>CFDIManager.Escritorio.Program</StartupObject>
   </PropertyGroup>
