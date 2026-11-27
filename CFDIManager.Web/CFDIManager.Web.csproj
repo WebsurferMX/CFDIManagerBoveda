@@ -28,6 +28,8 @@
     <EmbeddedResource Include="Services\Esquema\esquema_inicial.sql" />
     <!-- Manual de usuario y Registro de cambios (menú del usuario → Ayuda, Registro de cambios). -->
     <EmbeddedResource Include="Ayuda\*.md" />
+    <!-- Bitácora y guías técnicas del repositorio, para el Manual técnico (se editan solo en Documentacion). -->
+    <EmbeddedResource Include="..\Documentacion\*.md" LogicalName="CFDIManager.Web.Ayuda.Documentacion.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <PropertyGroup>

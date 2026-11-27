@@ -1,0 +1,30 @@
+@* Un documento de ayuda (Markdown ya convertido): índice de secciones a la izquierda y el texto. *@
+@using CFDIManager.Web.Services.Ayuda
+
+<div class="ayuda">
+    @if (Documento.Secciones.Count > 1)
+    {
+        <nav class="indice" aria-label="Contenido">
+            <div class="indice-titulo">Contenido</div>
+            @foreach (var (id, titulo) in Documento.Secciones)
+            {
+                <a href="@($"{Ruta}#{id}")">@titulo</a>
+            }
+        </nav>
+    }
+
+    <article class="documento">
+        @Encabezado
+        @((MarkupString)Documento.Html)
+    </article>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public DocumentoAyuda Documento { get; set; } = default!;
+
+    /// <summary>Ruta de la página (sin "/" inicial), para las ligas del índice.</summary>
+    [Parameter, EditorRequired] public string Ruta { get; set; } = "";
+
+    /// <summary>Contenido arriba del documento (por ejemplo, el menú de documentos del Manual técnico).</summary>
+    [Parameter] public RenderFragment? Encabezado { get; set; }
+}

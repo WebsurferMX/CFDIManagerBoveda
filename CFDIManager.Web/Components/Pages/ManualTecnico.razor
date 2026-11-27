@@ -1,0 +1,46 @@
+@page "/manual-tecnico"
+@page "/manual-tecnico/{Nombre}"
+@attribute [Authorize(Roles = Roles.Administrador)]
+@using CFDIManager.Web.Components.Ayuda
+@using CFDIManager.Web.Services.Ayuda
+
+@* Manual técnico (CFDIManager.Web\Ayuda\ManualTecnico.md) y los documentos de Documentacion del repositorio
+   (bitácora de cambios y guías), solo para el Administrador. *@
+
+<PageTitle>@Documento.Titulo</PageTitle>
+
+<VistaDocumento Documento="Documento" Ruta="@Ruta">
+    <Encabezado>
+        <nav class="documentos-tecnicos" aria-label="Documentos técnicos">
+            <a href="@DocumentosAyuda.RutaTecnica" class="@(Nombre is null ? "activo" : "")">Manual técnico</a>
+            @foreach (string documento in DocumentosAyuda.DocumentosTecnicos.OrderBy(d => d == Bitacora ? 0 : 1))
+            {
+                <a href="@($"{DocumentosAyuda.RutaTecnica}/{documento}")" class="@(documento == Nombre ? "activo" : "")">@Titulo(documento)</a>
+            }
+        </nav>
+    </Encabezado>
+</VistaDocumento>
+
+@code {
+    private const string Bitacora = "Historial_CFDIManagerBoveda";
+
+    /// <summary>Documento de Documentacion (nombre sin .md); null = el Manual técnico.</summary>
+    [Parameter] public string? Nombre { get; set; }
+
+    private string Ruta => Nombre is null ? DocumentosAyuda.RutaTecnica : $"{DocumentosAyuda.RutaTecnica}/{Nombre}";
+
+    private DocumentoAyuda Documento => Nombre is not null && DocumentosAyuda.Existe($"{DocumentosAyuda.Documentacion}{Nombre}.md")
+        ? DocumentosAyuda.Obtener($"{DocumentosAyuda.Documentacion}{Nombre}.md", Ruta)
+        : DocumentosAyuda.Obtener(DocumentosAyuda.ManualTecnico, DocumentosAyuda.RutaTecnica);
+
+    // Historial_CFDIManagerBoveda → "Bitácora de cambios"; Guia_Publicacion_Servicio → "Guia Publicacion Servicio".
+    private static string Titulo(string documento) => documento switch
+    {
+        Bitacora => "Bitácora de cambios",
+        "Guia_Publicacion_Servicio" => "Publicar el servicio",
+        "Guia_Escritorio" => "App de escritorio",
+        "Proceso_Importacion_XML_SINUBE" => "Importación a SINUBE",
+        "Conciliacion_SINUBE_vs_SAT" => "Conciliación SINUBE",
+        _ => documento.Replace('_', ' ')
+    };
+}

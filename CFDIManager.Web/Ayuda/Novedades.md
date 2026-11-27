@@ -22,6 +22,8 @@ del usuario → **Acerca de**.
 - **Visor de nóminas**: la ficha de cada trabajador ya no queda tapada por el menú.
 - **Importaciones**: el título ya se ve con el tema claro.
 - **Manual de usuario** con imágenes, en el menú de tu nombre → **Ayuda**.
+- **Manual técnico** para el Administrador, en el menú de tu nombre → **Manual técnico**: cómo está hecho el sistema,
+  cómo se publica y la bitácora de todos los cambios.
 
 ### CFDI Manager para Windows (app de escritorio)
 

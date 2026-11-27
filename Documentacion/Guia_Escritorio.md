@@ -4,23 +4,24 @@ App de Windows (`CFDIManager.Escritorio`, WPF + WebView2) que se usa de dos form
 
 | Modo | Para quién | Datos |
 |---|---|---|
-| **Conectar a un servidor** | Equipos de la oficina | Los del servidor (`http://<IP>:5000` o Tailscale). En la PC solo quedan las copias de XML de "Localizar en carpeta" (`Documentos\CFDI Manager\XML`) |
+| **Conectar a un servidor** | Equipos de la oficina | Los del servidor (`http://<IP>:5000` o Tailscale). En la PC solo quedan las copias de XML de "Localizar en carpeta" (en la "Carpeta para localizar XML" de la configuración; por omisión `Documentos\CFDI Manager\XML`) |
 | **Instalación propia en esta PC** | Clientes | Propios de la PC en la carpeta de datos (por omisión `C:\CFDIManagerDatos`): `Storage`, `PostgreSQL` y `Logs` |
 
-Plan y decisiones: https://claude.ai/artifact/Ech9cQ3pfXz39eoFahY6SA
+Plan y decisiones: https://claude.ai/artifact/5Bqjxfgbw5pP3DztupzRjU
 
 ## Publicar una versión
 
 1. Sube el número en `<Version>` de `CFDIManager.Escritorio\CFDIManager.Escritorio.csproj` (p. ej. `0.2.0`) y haz
    commit. Las apps instaladas solo se actualizan a un número mayor.
-2. Desde la carpeta raíz del proyecto, con un token de GitHub que pueda escribir releases:
+2. Desde la carpeta raíz del proyecto:
 
    ```powershell
-   $env:GITHUB_TOKEN = "<token>"
    pwsh -File .\herramientas\Publicar-Escritorio.ps1 -Subir
    ```
 
-   Sin `-Subir` solo arma el instalador en `publish\Releases` para probarlo.
+   Usa el acceso de `git push` de este equipo (o `GITHUB_TOKEN` si está definida). Antes de compilar revisa en GitHub
+   que esa versión no esté publicada; si ya existe, se detiene y pide subir `<Version>`. Sin `-Subir` solo arma el
+   instalador en `publish\Releases` para probarlo (la carpeta se vacía en cada corrida).
 3. Queda en GitHub Releases con la etiqueta `escritorio-v<versión>`. Las apps instaladas la encuentran sola (un minuto
    después de abrirlas, cada 6 horas o con "Buscar actualizaciones" de la bandeja), la bajan y se instala al salir o
    desde el ícono de la bandeja ("Instalar la versión…"). Cerrar la ventana no cierra la app (queda en la bandeja): para
@@ -36,6 +37,16 @@ Qué hace el script:
 | Instalador | `vpk pack` (Velopack, herramienta local en `dotnet-tools.json`): `CFDIManager.Escritorio-win-Setup.exe` (≈ 68 MB) y el paquete de actualización |
 | Prerrequisitos | No van en el instalador: si faltan, el Setup baja e instala .NET 10 (Desktop y ASP.NET Core), WebView2 y Visual C++ 2015-2022 (lo necesita PostgreSQL) |
 
+## Versiones publicadas
+
+| Versión | Qué trae |
+|---|---|
+| 0.1.0 | Primera versión: modo Servidor y modo Local, instalador y actualizaciones |
+| 0.1.1 | Prueba de actualización (delta de 0.5 MB) |
+| 0.1.2 | "Buscar actualizaciones" en la bandeja y registro de cada revisión en `actualizaciones.log` |
+| 0.1.3 | Editor "NickSoft Inc" (Panel de Control y propiedades del programa); "Carpeta para localizar XML" en la configuración |
+| 0.1.4 | Zoom automático según el ancho de la pantalla (laptops) y zoom del usuario recordado; versión y modo en **Acerca de** del menú del usuario |
+
 ## Instalar
 
 - Ejecutar `CFDIManager.Escritorio-win-Setup.exe`. No pide administrador: se instala para el usuario en
@@ -47,6 +58,10 @@ Qué hace el script:
     empieza de cero dando de alta sus empresas. En un equipo con el servicio `CFDIManager` no deja usar la carpeta
     del servicio.
 - Las opciones del menú de cada usuario se controlan con la Asignación de tareas (Configuración → Usuarios).
+- En Panel de Control → Programas aparece como **CFDI Manager**, editor **NickSoft Inc**. La versión instalada se ve
+  en el menú del usuario → **Acerca de** y al pasar el mouse sobre el ícono de la bandeja.
+- Menú del ícono de la bandeja: Abrir CFDI Manager, Recargar, Configuración…, Buscar actualizaciones, Salir (y
+  "Instalar la versión… y reiniciar" cuando hay una descargada).
 
 ## Cómo funciona la instalación propia
 
@@ -66,8 +81,8 @@ Qué hace el script:
 
 `%LocalAppData%\CFDIManagerEscritorio\configuracion.json`: modo, servidores, carpeta de datos, última carpeta de
 "Guardar como", bandeja, inicio con Windows, tamaño de la ventana y zoom. El zoom es automático según el ancho de la
-pantalla (85 % en una laptop de 1366); si el usuario lo cambia con Ctrl + rueda o Ctrl +/-, se recuerda el suyo. Borrarlo hace que el siguiente arranque vuelva a
-preguntar el modo (los datos no se tocan).
+pantalla (85 % en una laptop de 1366); si el usuario lo cambia con Ctrl + rueda o Ctrl +/-, se recuerda el suyo. Borrarlo hace que el siguiente
+arranque vuelva a preguntar el modo (los datos no se tocan).
 
 ## Pruebas en una PC limpia (F4)
 

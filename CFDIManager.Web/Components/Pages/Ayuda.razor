@@ -1,6 +1,8 @@
 @page "/ayuda"
 @page "/novedades"
 @attribute [Authorize]
+@implements IDisposable
+@using CFDIManager.Web.Components.Ayuda
 @using CFDIManager.Web.Services.Ayuda
 @inject NavigationManager Navigation
 
@@ -8,24 +10,7 @@
 
 <PageTitle>@Documento.Titulo</PageTitle>
 
-<div class="ayuda">
-    @if (Documento.Secciones.Count > 1)
-    {
-        <nav class="indice" aria-label="Contenido">
-            <div class="indice-titulo">Contenido</div>
-            @foreach (var (id, titulo) in Documento.Secciones)
-            {
-                <a href="@($"{Ruta}#{id}")">@titulo</a>
-            }
-        </nav>
-    }
-
-    <article class="documento">
-        @((MarkupString)Documento.Html)
-    </article>
-</div>
-
-@implements IDisposable
+<VistaDocumento Documento="Documento" Ruta="@Ruta" />
 
 @code {
     // Las dos rutas usan esta misma página: al pasar de una a otra Blazor la reutiliza sin volver a dibujarla.
@@ -39,5 +24,6 @@
     private string Ruta => Navigation.ToBaseRelativePath(Navigation.Uri).Split('#', '?')[0];
 
     private DocumentoAyuda Documento => DocumentosAyuda.Obtener(
-        Ruta.StartsWith("novedades", StringComparison.OrdinalIgnoreCase) ? DocumentosAyuda.Novedades : DocumentosAyuda.Manual);
+        Ruta.StartsWith("novedades", StringComparison.OrdinalIgnoreCase) ? DocumentosAyuda.Novedades : DocumentosAyuda.Manual,
+        Ruta.StartsWith("novedades", StringComparison.OrdinalIgnoreCase) ? "novedades" : "ayuda");
 }

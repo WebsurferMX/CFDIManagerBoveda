@@ -109,6 +109,7 @@
 .icono.azul { color: #0d6efd; }
 .icono.naranja { color: #f59f00; }
 .icono.verde { color: #12b886; }
+.icono.morado { color: #7048e8; }
 
 /* Encima del menú lateral y la barra superior (z-index 1400 en MainLayout). */
 .acerca-de {

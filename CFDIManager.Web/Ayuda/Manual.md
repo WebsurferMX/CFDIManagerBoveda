@@ -89,7 +89,9 @@ Arriba a la derecha aparece tu nombre. Al darle clic:
 |---|---|
 | **Ayuda** | Este manual |
 | **Contraseña** | Cambiar tu contraseña: escribe la actual, la nueva y su confirmación |
+| **Idioma: Español** | Por ahora CFDI Manager solo está en español |
 | **Registro de cambios** | Lo nuevo en cada versión |
+| **Manual técnico** | Solo el Administrador: cómo está hecho el sistema, cómo se publica y la bitácora de cambios |
 | **Acerca de** | La versión de CFDI Manager que estás usando |
 | **Cerrar sesión** | Salir de tu usuario (CFDI Manager sigue abierto) |
 

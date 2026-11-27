@@ -43,7 +43,8 @@
     line-height: 1.65;
 }
 
-.documento ::deep > :not(p:has(> img)) {
+/* Texto a 75 caracteres; capturas y tablas (la bitácora) a todo el ancho. */
+.documento ::deep > :not(p:has(> img)):not(table) {
     max-width: 75ch;
 }
 
@@ -116,6 +117,36 @@
 
 .documento ::deep blockquote p:last-child {
     margin-bottom: 0;
+}
+
+/* Menú de documentos del Manual técnico (llega como Encabezado). */
+.documento ::deep .documentos-tecnicos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: .9rem;
+    border-bottom: 1px solid rgb(127 127 127 / 25%);
+}
+
+.documento ::deep .documentos-tecnicos a {
+    padding: .3rem .75rem;
+    border: 1px solid rgb(127 127 127 / 30%);
+    border-radius: 999px;
+    color: inherit;
+    font-size: .82rem;
+    text-decoration: none;
+}
+
+.documento ::deep .documentos-tecnicos a:hover {
+    background: rgb(127 127 127 / 12%);
+}
+
+.documento ::deep .documentos-tecnicos a.activo {
+    border-color: #7048e8;
+    background: rgb(112 72 232 / 12%);
+    color: #7048e8;
+    font-weight: 600;
 }
 
 /* Capturas de pantalla: a todo el ancho del texto, con borde y sombra suave. */

@@ -50,6 +50,13 @@
                         <i class="bi bi-clock-history icono verde"></i>Registro de cambios
                     </a>
 
+                    @if (context.User.IsInRole(Roles.Administrador))
+                    {
+                        <a class="dropdown-item" href="manual-tecnico" @onclick="() => Abierto = false">
+                            <i class="bi bi-journal-code icono morado"></i>Manual técnico
+                        </a>
+                    }
+
                     <hr class="dropdown-divider" />
 
                     <button type="button" class="dropdown-item" @onclick="AbrirAcercaDe">
