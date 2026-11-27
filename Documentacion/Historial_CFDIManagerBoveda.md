@@ -361,6 +361,8 @@ Plan aprobado (modo Servidor y modo Local con Storage propio de la PC): https://
 | Versión 0.1.3 | Editor "NickSoft Inc" en lugar de "WebsurferMX": `--packAuthors` del script (Panel de Control → Desinstalar un programa) y `<Company>`, `<Authors>` y `<Copyright>` del exe. Publicada | `ab3128f` |
 | Versión 0.1.4 (zoom) | En la laptop (1366 × 768 al 100 %) el Resumen cortaba importes: la app aleja la vista sola según el ancho de la pantalla (ancho ÷ 1600, en pasos de 5 %, entre 70 % y 100 %: 1366 → 85 %, 1280 → 80 %) y recuerda el zoom del usuario (Ctrl + rueda o Ctrl +/-; `Zoom` en configuracion.json); también trae lo que usa **Acerca de**. Publicada (`escritorio-v0.1.4`) | `97a11e8` |
 
+| **App de escritorio terminada** | Se da por terminada con la 0.1.4: fases F0 a F4 completas y 14 de 14 pruebas correctas. Quedan como opcionales para cuando haya más clientes (en Pendientes conocidos): firma de código, prueba en Windows 10 y Tailscale. Al instalarla a un cliente en modo Local se deja configurado el respaldo fuera de la PC | — |
+
 ### 26/11: menú de usuario, manuales y correcciones de pantalla
 
 | Tema | Qué se hizo | Commit |
@@ -404,5 +406,8 @@ Plan aprobado (modo Servidor y modo Local con Storage propio de la PC): https://
   correos en Outlook de escritorio.
 - SINUBE: la consulta de `DbEmpresa` regresa una contraseña en texto plano (campo `pwd`); no se usa ni se guarda.
 - Migrar a Bootstrap 6 cuando salga estable.
+- App de escritorio (opcional, terminada el 26/11): firma de código para quitar el aviso de SmartScreen (Azure Trusted
+  Signing, ≈ 10 USD al mes) cuando haya más clientes; probar en Windows 10 si algún cliente lo usa; probar el cambio
+  a Tailscale cuando un equipo entre desde fuera de la oficina.
 - De `CLAUDE.md` de CFDIManager: limpiar servicios sin uso (`CfdiPdfService`, `ImportacionXmlService`) y revisar el
   estado de pago PPD. (La licencia de QuestPDF se revisó el 26/11: Community mientras no se facture 1 millón USD al año.)
